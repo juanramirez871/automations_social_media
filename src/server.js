@@ -24,10 +24,16 @@ app.use(limiter);
 // Healthcheck
 app.get('/health', (req, res) => res.json({ ok: true }));
 
-// Webhook de WhatsApp
-app.get('/webhook/whatsapp', verifyWhatsApp);
-app.post('/webhook/whatsapp', receiveWhatsApp);
+// Webhook de WhatsApp (solo necesario para provider cloud)
+if (config.whatsapp.provider === 'cloud') {
+  app.get('/webhook/whatsapp', verifyWhatsApp);
+  app.post('/webhook/whatsapp', receiveWhatsApp);
+}
 
-app.listen(config.port, () => {
+app.listen(config.port, async () => {
   logger.info({ port: config.port }, `Server running on port ${config.port}`);
+  if (config.whatsapp.provider === 'baileys') {
+    const { initBaileys } = await import('./whatsapp_baileys.js');
+    await initBaileys();
+  }
 });

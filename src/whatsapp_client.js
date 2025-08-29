@@ -1,7 +1,19 @@
 import http from './http.js';
 import config from './config.js';
+import { sendBaileysMessage } from './whatsapp_baileys.js';
+import { logger } from './logger.js';
 
 async function sendWhatsAppMessage({ waNumberId, to, text }) {
+  if (config.whatsapp.provider === 'baileys') {
+    try {
+      await sendBaileysMessage({ to, text });
+      return;
+    } catch (err) {
+      logger.error({ err }, 'Error sending WhatsApp message via Baileys');
+      return;
+    }
+  }
+
   const url = `https://graph.facebook.com/v19.0/${waNumberId}/messages`;
   try {
     await http.post(
@@ -20,7 +32,7 @@ async function sendWhatsAppMessage({ waNumberId, to, text }) {
       }
     );
   } catch (err) {
-    console.error('Error sending WhatsApp message:', err?.response?.data || err.message);
+    logger.error({ err: err?.response?.data || err.message }, 'Error sending WhatsApp message via Cloud API');
   }
 }
 

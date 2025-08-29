@@ -3,6 +3,7 @@ import 'dotenv/config';
 const config = {
   port: process.env.PORT || 3030,
   whatsapp: {
+    provider: process.env.WHATSAPP_PROVIDER || 'cloud',
     verifyToken: process.env.WHATSAPP_VERIFY_TOKEN,
     phoneNumberId: process.env.WHATSAPP_PHONE_NUMBER_ID,
     accessToken: process.env.META_ACCESS_TOKEN,
