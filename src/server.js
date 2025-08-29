@@ -30,6 +30,22 @@ if (config.whatsapp.provider === 'cloud') {
   app.post('/webhook/whatsapp', receiveWhatsApp);
 }
 
+// Endpoint para obtener posts de Instagram cuando provider=web
+if (config.instagram.provider === 'web') {
+  app.get('/instagram/:username/posts', async (req, res) => {
+    try {
+      const { getInstagramPosts } = await import('./platforms/instagram.js');
+      const { username } = req.params;
+      const first = Number.parseInt(req.query.first, 10) || 12;
+      const posts = await getInstagramPosts({ username, first });
+      res.json({ ok: true, username, count: posts.length, posts });
+    } catch (err) {
+      logger.error({ err }, 'Error fetching Instagram posts');
+      res.status(500).json({ ok: false, error: err?.message || 'Unknown error' });
+    }
+  });
+}
+
 app.listen(config.port, async () => {
   logger.info({ port: config.port }, `Server running on port ${config.port}`);
   if (config.whatsapp.provider === 'baileys') {

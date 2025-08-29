@@ -16,8 +16,12 @@ const config = {
     accessToken: process.env.META_ACCESS_TOKEN,
   },
   instagram: {
+    provider: process.env.INSTAGRAM_PROVIDER || 'graph',
     businessAccountId: process.env.INSTAGRAM_BUSINESS_ACCOUNT_ID,
     accessToken: process.env.META_ACCESS_TOKEN,
+    username: process.env.INSTAGRAM_USERNAME,
+    password: process.env.INSTAGRAM_PASSWORD,
+    cookieFile: process.env.INSTAGRAM_COOKIE_FILE || './instagram_cookies.json',
   },
   x: {
     bearerToken: process.env.X_BEARER_TOKEN,

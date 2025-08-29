@@ -1,21 +1,29 @@
 import config from '../config.js';
+import { Client } from 'twitter-api-sdk';
+import { logger } from '../logger.js';
 
-// Nota: La API de X (Twitter) para publicar medios requiere OAuth 1.0a y endpoints específicos.
-// Aquí dejamos un stub que espera URLs de medios ya hosteadas (no upload) y usa tweet simple vía v2 Tweet create (requiere Elevated access).
-async function postToX({ text }) {
-  // Placeholder: normalmente usarías OAuth 1.0a y el endpoint POST /2/tweets
-  // Aquí simulamos llamada. Implementación real requiere librería oauth-1.0a o el SDK oficial.
-  try {
-    // TODO: Implementación real usando tokens de X
-    // Lanzamos error si no hay credenciales mínimas
-    if (!config.x.bearerToken) {
-      throw new Error('Configurar credenciales de X en .env');
+let twClient = null;
+function getTwitterClient() {
+  if (!twClient) {
+    const token = config.x.bearerToken;
+    if (!token) {
+      throw new Error('Configurar X_BEARER_TOKEN con permisos tweet.write');
     }
-    // Simulación de éxito
-    return { platform: 'x', id: 'simulated_tweet_id', url: 'https://x.com/your_user/status/simulated_tweet_id' };
+    twClient = new Client(token);
+  }
+  return twClient;
+}
+
+// Publicar un tweet de texto usando Twitter API v2
+async function postToX({ text }) {
+  try {
+    const client = getTwitterClient();
+    const res = await client.tweets.createTweet({ text });
+    const id = res?.data?.id;
+    return { platform: 'x', id, url: id ? `https://x.com/i/web/status/${id}` : undefined };
   } catch (err) {
-    const error = err?.response?.data || err.message;
-    console.error('X post error:', error);
+    const error = err?.errors || err?.response?.data || err?.message || err;
+    logger.error({ err: error }, 'X post error');
     throw new Error(typeof error === 'string' ? error : JSON.stringify(error));
   }
 }
