@@ -1,9 +1,11 @@
-const { planPost } = require('./openai');
-const { postToFacebook, postToInstagram } = require('./platforms/facebook');
-const { postToX } = require('./platforms/x');
-const { sendWhatsAppMessage, getMediaMeta, downloadMediaBuffer } = require('./whatsapp_client');
-const { uploadFromUrl, uploadBuffer, deleteMedia } = require('./media_store');
-const config = require('./config');
+import { planPost } from './openai.js';
+import { postToFacebook } from './platforms/facebook.js';
+import { postToInstagram } from './platforms/instagram.js';
+import { postToX } from './platforms/x.js';
+import { sendWhatsAppMessage, getMediaMeta, downloadMediaBuffer } from './whatsapp_client.js';
+import { uploadFromUrl, uploadBuffer, deleteMedia } from './media_store.js';
+import { logger } from './logger.js';
+import config from './config.js';
 
 /*
   Entradas desde WhatsApp:
@@ -12,7 +14,7 @@ const config = require('./config');
     a) media_id nativo (WhatsApp Cloud API) -> hay que obtener URL temporal y descargar con token.
     b) URL pública (incluida en el texto o en el objeto) -> subir directo a Cloudinary por URL.
 */
-async function handleIncomingWhatsAppMessage({ message, from, waNumberId }) {
+export async function handleIncomingWhatsAppMessage({ message, from, waNumberId }) {
   try {
     const fromNumber = message.from;
 
@@ -34,6 +36,8 @@ async function handleIncomingWhatsAppMessage({ message, from, waNumberId }) {
       mediaUrl = message.video?.link || message.video?.url || null;
       userText = message.video?.caption || '';
     }
+
+    logger.debug({ from: fromNumber, mediaType, hasMediaId: !!mediaId, hasMediaUrl: !!mediaUrl }, 'Incoming WhatsApp message');
 
     // Extraer plataformas explícitas del texto
     const explicitPlatforms = [];
@@ -66,7 +70,7 @@ async function handleIncomingWhatsAppMessage({ message, from, waNumberId }) {
             publishMediaUrl = uploaded.secureUrl;
           }
         } catch (e) {
-          console.error('Error obteniendo/subiendo media de WhatsApp:', e.message);
+          logger.error({ err: e }, 'Error obteniendo/subiendo media de WhatsApp');
         }
       }
 
@@ -76,7 +80,7 @@ async function handleIncomingWhatsAppMessage({ message, from, waNumberId }) {
           uploaded = await uploadFromUrl({ url: mediaUrl, resourceType: mediaType });
           publishMediaUrl = uploaded.secureUrl;
         } catch (e) {
-          console.error('Error subiendo media por URL pública a Cloudinary:', e.message);
+          logger.error({ err: e }, 'Error subiendo media por URL pública a Cloudinary');
         }
       }
     }
@@ -117,22 +121,22 @@ async function handleIncomingWhatsAppMessage({ message, from, waNumberId }) {
 
     // Respuesta por WhatsApp
     if (results.length === 0) {
-      await sendWhatsAppMessage({ waNumberId, to: fromNumber, text: 'No se pudo publicar en ninguna plataforma. Revisa tu configuración.' });
-    } else {
-      const ok = results.filter(r => !r.error);
-      const ko = results.filter(r => r.error);
-      const lines = [];
-      if (ok.length) {
-        lines.push('Publicaciones exitosas:\n' + ok.map(r => `- ${r.platform}: ${r.url || r.id || 'sin URL'}`).join('\n'));
-      }
-      if (ko.length) {
-        lines.push('Con errores:\n' + ko.map(r => `- ${r.platform}: ${r.error}`).join('\n'));
-      }
-      await sendWhatsAppMessage({ waNumberId, to: fromNumber, text: lines.join('\n\n') });
+      await sendWhatsAppMessage({ waNumberId, to: fromNumber, text: 'No se detectaron plataformas válidas para publicar.' });
+      return;
     }
+
+    const lines = results.map(r =>
+      r.error ? `❌ ${r.platform}: ${r.error}` : `✅ ${r.platform}: ${r.url || r.id}`
+    );
+    const response = `Resumen de publicaciones:\n${lines.join('\n')}`;
+    await sendWhatsAppMessage({ waNumberId, to: fromNumber, text: response });
   } catch (err) {
-    console.error('Orchestrator error:', err);
+    logger.error({ err }, 'Error en handleIncomingWhatsAppMessage');
+    try {
+      const to = from || message?.from;
+      if (to && waNumberId) {
+        await sendWhatsAppMessage({ waNumberId, to, text: 'Ocurrió un error procesando tu solicitud. Inténtalo más tarde.' });
+      }
+    } catch {}
   }
 }
-
-module.exports = { handleIncomingWhatsAppMessage };

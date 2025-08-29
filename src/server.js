@@ -1,21 +1,33 @@
-const express = require('express');
-const config = require('./config');
-const whatsapp = require('./whatsapp');
+import express from 'express';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
+import config from './config.js';
+import { httpLogger, logger } from './logger.js';
+import { verify as verifyWhatsApp, receive as receiveWhatsApp } from './whatsapp_router.js';
 
 const app = express();
+
+// Seguridad básica
+app.use(helmet());
+
+// Logging HTTP estructurado
+app.use(httpLogger);
 
 // Middlewares de parsing
 app.use(express.json({ limit: '25mb' }));
 app.use(express.urlencoded({ extended: true, limit: '25mb' }));
 
+// Rate limiting (p. ej., 300 req/5min por IP)
+const limiter = rateLimit({ windowMs: 5 * 60 * 1000, max: 300 });
+app.use(limiter);
+
 // Healthcheck
 app.get('/health', (req, res) => res.json({ ok: true }));
 
-// Webhook de WhatsApp (verificación)
-app.get('/webhook/whatsapp', whatsapp.verify);
-// Webhook de WhatsApp (eventos)
-app.post('/webhook/whatsapp', whatsapp.receive);
+// Webhook de WhatsApp
+app.get('/webhook/whatsapp', verifyWhatsApp);
+app.post('/webhook/whatsapp', receiveWhatsApp);
 
 app.listen(config.port, () => {
-  console.log(`Server running on port ${config.port}`);
+  logger.info({ port: config.port }, `Server running on port ${config.port}`);
 });

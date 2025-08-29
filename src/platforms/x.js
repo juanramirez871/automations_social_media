@@ -1,5 +1,4 @@
-const axios = require('axios');
-const config = require('../config');
+import config from '../config.js';
 
 // Nota: La API de X (Twitter) para publicar medios requiere OAuth 1.0a y endpoints específicos.
 // Aquí dejamos un stub que espera URLs de medios ya hosteadas (no upload) y usa tweet simple vía v2 Tweet create (requiere Elevated access).
@@ -21,4 +20,4 @@ async function postToX({ text }) {
   }
 }
 
-module.exports = { postToX };
+export { postToX };

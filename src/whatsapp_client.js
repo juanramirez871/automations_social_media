@@ -1,10 +1,10 @@
-const axios = require('axios');
-const config = require('./config');
+import http from './http.js';
+import config from './config.js';
 
 async function sendWhatsAppMessage({ waNumberId, to, text }) {
   const url = `https://graph.facebook.com/v19.0/${waNumberId}/messages`;
   try {
-    await axios.post(
+    await http.post(
       url,
       {
         messaging_product: 'whatsapp',
@@ -27,7 +27,7 @@ async function sendWhatsAppMessage({ waNumberId, to, text }) {
 // Obtener metadatos del media (incluye URL temporal) a partir de media_id
 async function getMediaMeta(mediaId) {
   const url = `https://graph.facebook.com/v19.0/${mediaId}`;
-  const { data } = await axios.get(url, {
+  const { data } = await http.get(url, {
     params: { access_token: config.whatsapp.accessToken }
   });
   // data: { url, mime_type, sha256, file_size, id }
@@ -36,11 +36,11 @@ async function getMediaMeta(mediaId) {
 
 // Descargar el binario del media usando la URL y el token
 async function downloadMediaBuffer(mediaUrl) {
-  const res = await axios.get(mediaUrl, {
+  const res = await http.get(mediaUrl, {
     responseType: 'arraybuffer',
     headers: { Authorization: `Bearer ${config.whatsapp.accessToken}` }
   });
   return Buffer.from(res.data, 'binary');
 }
 
-module.exports = { sendWhatsAppMessage, getMediaMeta, downloadMediaBuffer };
+export { sendWhatsAppMessage, getMediaMeta, downloadMediaBuffer };

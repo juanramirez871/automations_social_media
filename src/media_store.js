@@ -1,6 +1,6 @@
-const cloudinary = require('cloudinary').v2;
-const axios = require('axios');
-const config = require('./config');
+import { v2 as cloudinary } from 'cloudinary';
+import http from './http.js';
+import config from './config.js';
 
 // Config Cloudinary
 if (config.cloudinary.cloudName && config.cloudinary.apiKey && config.cloudinary.apiSecret) {
@@ -14,7 +14,7 @@ if (config.cloudinary.cloudName && config.cloudinary.apiKey && config.cloudinary
 
 // Descarga binaria desde una URL pública (sin cabeceras)
 async function downloadBinary(url) {
-  const res = await axios.get(url, { responseType: 'arraybuffer' });
+  const res = await http.get(url, { responseType: 'arraybuffer' });
   return Buffer.from(res.data, 'binary');
 }
 
@@ -47,4 +47,4 @@ async function deleteMedia(publicId, resourceType = 'image') {
   }
 }
 
-module.exports = { uploadFromUrl, uploadBuffer, deleteMedia };
+export { uploadFromUrl, uploadBuffer, deleteMedia, downloadBinary };

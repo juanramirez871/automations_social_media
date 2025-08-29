@@ -1,5 +1,5 @@
-const OpenAI = require('openai');
-const config = require('./config');
+import OpenAI from 'openai';
+import config from './config.js';
 
 let client = null;
 function getClient() {
@@ -62,4 +62,4 @@ async function planPost({ userPrompt, mediaType }) {
   }
 }
 
-module.exports = { planPost };
+export { planPost };
