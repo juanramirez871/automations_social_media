@@ -6,62 +6,78 @@ const { uploadFromUrl, uploadBuffer, deleteMedia } = require('./media_store');
 const config = require('./config');
 
 /*
-  Se espera que el usuario envíe por WhatsApp:
-  - Un mensaje de texto indicando: redes destino (facebook, instagram, x) y una breve descripción/prompt
-  - Opcionalmente, una imagen o video. Podemos recibir:
-    a) una URL pública en el texto, o
-    b) un media_id nativo de WhatsApp (desc
-  - Eventualmente, una imagen o video. En esta primera versión, asumimos que el usuario nos envía una URL pública del medio en el texto (p. ej. https://...)
-
-  Mejoras futuras: descargar el medio de WhatsApp y subirlo a un storage público (S3, Cloudinary) para obtener URL pública y luego publicar en redes.
+  Entradas desde WhatsApp:
+  - Texto con redes destino y brief.
+  - Medios opcionales (imagen/video) que pueden llegar como:
+    a) media_id nativo (WhatsApp Cloud API) -> hay que obtener URL temporal y descargar con token.
+    b) URL pública (incluida en el texto o en el objeto) -> subir directo a Cloudinary por URL.
 */
 async function handleIncomingWhatsAppMessage({ message, from, waNumberId }) {
   try {
-    const fromNumber = message.from; // número de teléfono del usuario
+    const fromNumber = message.from;
 
     let userText = '';
-    let mediaType = null;
-    let mediaUrl = null;
+    let mediaType = null; // 'image' | 'video' | null
+    let mediaUrl = null;  // URL pública si existiera
+    let mediaId = null;   // media_id de WhatsApp si existiera
 
     if (message.type === 'text') {
       userText = message.text?.body || '';
     } else if (message.type === 'image') {
       mediaType = 'image';
-      mediaUrl = message.image?.link || message.image?.url || null; // para WhatsApp Cloud, suele venir como id; necesitaríamos descargar con Graph API
-      userText = message.caption || '';
+      mediaId = message.image?.id || null;
+      mediaUrl = message.image?.link || message.image?.url || null;
+      userText = message.image?.caption || '';
     } else if (message.type === 'video') {
       mediaType = 'video';
+      mediaId = message.video?.id || null;
       mediaUrl = message.video?.link || message.video?.url || null;
-      userText = message.caption || '';
+      userText = message.video?.caption || '';
     }
 
-    // Extraer plataformas explícitas si el usuario las menciona, p. ej. "Subir a facebook, instagram"
+    // Extraer plataformas explícitas del texto
     const explicitPlatforms = [];
     const textLower = (userText || '').toLowerCase();
     if (textLower.includes('facebook')) explicitPlatforms.push('facebook');
     if (textLower.includes('instagram')) explicitPlatforms.push('instagram');
     if (textLower.includes('twitter') || textLower.includes('x')) explicitPlatforms.push('x');
 
-    // Pedir a OpenAI que planifique (si no hay explícitas, decide; si hay, respétalas)
+    // Plan con OpenAI
     const aiPlan = await planPost({ userPrompt: userText, mediaType });
     let platforms = explicitPlatforms.length ? explicitPlatforms : aiPlan.platforms;
-    // Normalizar y deduplicar
     platforms = Array.from(new Set((platforms || []).map(p => String(p).toLowerCase()))).filter(p => ['facebook','instagram','x'].includes(p));
 
     const captionBase = aiPlan.caption || userText || '';
     const hashtags = (aiPlan.hashtags || []).join(' ');
     const finalCaption = [captionBase, hashtags].filter(Boolean).join('\n\n');
 
-    // Si viene media URL pública, la subimos temporalmente a Cloudinary y usamos esa URL para publicar.
+    // Hosting temporal en Cloudinary
     let uploaded = null;
     let publishMediaUrl = null;
-    if ((mediaType === 'image' || mediaType === 'video') && mediaUrl && /^https?:\/\//i.test(mediaUrl)) {
-      try {
-        uploaded = await uploadFromUrl({ url: mediaUrl, resourceType: mediaType });
-        publishMediaUrl = uploaded.secureUrl;
-      } catch (e) {
-        // Si falla el hosting, continuamos publicando lo que se pueda (texto)
-        console.error('Error subiendo media a Cloudinary:', e.message);
+
+    if (mediaType === 'image' || mediaType === 'video') {
+      // Prioridad: media_id (WhatsApp) -> URL temporal -> descarga binaria -> uploadBuffer
+      if (mediaId) {
+        try {
+          const meta = await getMediaMeta(mediaId); // { url, mime_type, ... }
+          if (meta?.url) {
+            const bin = await downloadMediaBuffer(meta.url);
+            uploaded = await uploadBuffer({ buffer: bin, resourceType: mediaType });
+            publishMediaUrl = uploaded.secureUrl;
+          }
+        } catch (e) {
+          console.error('Error obteniendo/subiendo media de WhatsApp:', e.message);
+        }
+      }
+
+      // Fallback: URL pública
+      if (!publishMediaUrl && mediaUrl && /^https?:\/\//i.test(mediaUrl)) {
+        try {
+          uploaded = await uploadFromUrl({ url: mediaUrl, resourceType: mediaType });
+          publishMediaUrl = uploaded.secureUrl;
+        } catch (e) {
+          console.error('Error subiendo media por URL pública a Cloudinary:', e.message);
+        }
       }
     }
 
@@ -77,7 +93,6 @@ async function handleIncomingWhatsAppMessage({ message, from, waNumberId }) {
           });
           results.push(fbRes);
         } else if (p === 'instagram') {
-          // Instagram requiere media; si no hay, saltamos
           if (!publishMediaUrl) throw new Error('No hay media disponible para Instagram');
           const igRes = await postToInstagram({
             caption: finalCaption,
@@ -94,13 +109,13 @@ async function handleIncomingWhatsAppMessage({ message, from, waNumberId }) {
       }
     }
 
-    // Si hubo al menos una publicación exitosa y subimos a Cloudinary, borramos el media
+    // Limpieza: borrar el media temporal si hubo al menos una publicación exitosa
     const anySuccess = results.some(r => !r.error);
     if (anySuccess && uploaded?.publicId) {
       await deleteMedia(uploaded.publicId, mediaType === 'video' ? 'video' : 'image');
     }
 
-    // Responder por WhatsApp con el resultado
+    // Respuesta por WhatsApp
     if (results.length === 0) {
       await sendWhatsAppMessage({ waNumberId, to: fromNumber, text: 'No se pudo publicar en ninguna plataforma. Revisa tu configuración.' });
     } else {
