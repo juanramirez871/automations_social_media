@@ -1,4 +1,4 @@
-import { IgApiClient } from 'instagram-api-web-node';
+import { IgApiClient } from 'instagram-private-api';
 import fs from 'fs';
 import config from '../config.js';
 import { logger } from '../logger.js';
@@ -36,56 +36,47 @@ function loadSession() {
   return null;
 }
 
-// Publicar en Instagram usando instagram-api-web-node
+// Publicar en Instagram usando instagram-private-api
 async function postToInstagram({ caption, imageUrl, videoUrl }) {
   logger.info({ 
     hasCaption: !!caption,
     hasImageUrl: !!imageUrl,
     hasVideoUrl: !!videoUrl,
     username: config.instagram.username
-  }, 'postToInstagram: instagram-api-web-node');
+  }, 'postToInstagram: instagram-private-api');
 
   if (!imageUrl && !videoUrl) {
     throw new Error('Instagram requiere imageUrl o videoUrl');
   }
 
   try {
-    const instagram = getInstagramClient();
+    const ig = getInstagramClient();
     
-    // Configurar callback para guardar sesión después de cada request
-    instagram.request.end$.subscribe(async () => {
-      try {
-        const serialized = await instagram.state.serialize();
-        saveSession(serialized);
-      } catch (err) {
-        logger.error({ err }, 'Error serializando estado de Instagram');
-      }
-    });
-
     // Cargar sesión existente o hacer login
     const savedSession = loadSession();
     if (savedSession) {
       logger.info('Cargando sesión existente de Instagram');
       try {
-        await instagram.state.deserialize(savedSession);
+        await ig.state.deserialize(savedSession);
         logger.info('Sesión de Instagram restaurada');
       } catch (err) {
         logger.warn({ err }, 'Error restaurando sesión, haciendo login nuevo');
-        await doLogin(instagram);
+        await doLogin(ig);
       }
     } else {
-      await doLogin(instagram);
+      await doLogin(ig);
     }
 
     // Publicar contenido
     let result;
     if (imageUrl) {
       logger.info({ imageUrl }, 'Subiendo imagen a Instagram');
-      // Descargar imagen y subirla
+      // Descargar imagen
       const response = await fetch(imageUrl);
       const buffer = Buffer.from(await response.arrayBuffer());
       
-      result = await instagram.ig.publish.photo({
+      // Publicar imagen
+      result = await ig.publish.photo({
         file: buffer,
         caption: caption || ''
       });
@@ -93,16 +84,25 @@ async function postToInstagram({ caption, imageUrl, videoUrl }) {
       logger.info({ mediaId: result.media?.id }, 'Imagen publicada en Instagram');
     } else if (videoUrl) {
       logger.info({ videoUrl }, 'Subiendo video a Instagram');
-      // Descargar video y subirlo
+      // Descargar video
       const response = await fetch(videoUrl);
       const buffer = Buffer.from(await response.arrayBuffer());
       
-      result = await instagram.ig.publish.video({
+      // Publicar video
+      result = await ig.publish.video({
         video: buffer,
         caption: caption || ''
       });
       
       logger.info({ mediaId: result.media?.id }, 'Video publicado en Instagram');
+    }
+
+    // Guardar sesión después de publicar
+    try {
+      const serialized = await ig.state.serialize();
+      saveSession(serialized);
+    } catch (err) {
+      logger.error({ err }, 'Error guardando sesión después de publicar');
     }
 
     const mediaId = result?.media?.id;
@@ -125,7 +125,7 @@ async function postToInstagram({ caption, imageUrl, videoUrl }) {
 }
 
 // Función auxiliar para hacer login
-async function doLogin(instagram) {
+async function doLogin(ig) {
   const { username, password } = config.instagram;
   if (!username || !password) {
     throw new Error('INSTAGRAM_USERNAME e INSTAGRAM_PASSWORD son requeridos');
@@ -133,10 +133,35 @@ async function doLogin(instagram) {
 
   logger.info({ username }, 'Iniciando login en Instagram');
   
-  await instagram.state.generateDevice(username);
-  await instagram.ig.account.login(username, password);
-  
-  logger.info('Login exitoso en Instagram');
+  try {
+    // Generar dispositivo basado en el username
+    ig.state.generateDevice(username);
+    
+    // Ejecutar flujo pre-login (recomendado)
+    await ig.simulate.preLoginFlow();
+    
+    // Hacer login
+    const loggedInUser = await ig.account.login(username, password);
+    
+    // Ejecutar flujo post-login (opcional pero recomendado)
+    process.nextTick(async () => {
+      try {
+        await ig.simulate.postLoginFlow();
+      } catch (err) {
+        logger.warn({ err }, 'Error en post-login flow');
+      }
+    });
+    
+    logger.info({ userId: loggedInUser.pk, username: loggedInUser.username }, 'Login exitoso en Instagram');
+    
+    // Guardar sesión
+    const serialized = await ig.state.serialize();
+    saveSession(serialized);
+    
+  } catch (err) {
+    logger.error({ err: err.message, stack: err.stack }, 'Error en login de Instagram');
+    throw err;
+  }
 }
 
 export { postToInstagram };
