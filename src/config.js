@@ -21,6 +21,10 @@ const config = {
   facebook: {
     pageId: process.env.FACEBOOK_PAGE_ID,
     accessToken: process.env.META_ACCESS_TOKEN,
+    // Opcional: para auto refrescar el token cuando expira
+    appId: process.env.FACEBOOK_APP_ID,
+    appSecret: process.env.FACEBOOK_APP_SECRET,
+    userAccessToken: process.env.FACEBOOK_USER_ACCESS_TOKEN, // idealmente long-lived
   },
   instagram: {
     username: process.env.INSTAGRAM_USERNAME,
