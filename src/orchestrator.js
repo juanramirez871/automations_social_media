@@ -7,11 +7,13 @@ import { uploadFromUrl, uploadBuffer, deleteMedia } from './media_store.js';
 import { logger } from './logger.js';
 import config from './config.js';
 
+// Sesiones en memoria por usuario (JID/numero) para flujo en 2 pasos
+const pendingSessions = new Map(); // key = fromNumber, value = { mediaType, publishMediaUrl, uploaded, createdAt }
+
 /*
-  Entradas desde WhatsApp:
-  - Texto con redes destino y brief.
-  - Medios opcionales (imagen/video) que pueden llegar como:
-    a) Buffer binario desde Baileys (_mediaBuffer)
+  Nueva lógica de flujo (2 pasos):
+  1) Usuario envía imagen o video -> subimos a Cloudinary, guardamos en sesión y respondemos: "✅ Recibido. Escribe tu prompt..."
+  2) Usuario envía sólo texto con plataformas y brief -> generamos caption/hashtags y publicamos usando el media guardado.
 */
 export async function handleIncomingWhatsAppMessage({ message, from, waNumberId }) {
   logger.info({ from, waNumberId, type: message?.type }, 'handleIncomingWhatsAppMessage: inicio');
@@ -33,12 +35,12 @@ export async function handleIncomingWhatsAppMessage({ message, from, waNumberId 
 
     logger.debug({ from: fromNumber, mediaType }, 'Incoming WhatsApp message');
 
-    // Hosting temporal en Cloudinary
-    let uploaded = null;
-    let publishMediaUrl = null;
-
+    // CASO 1: Llega media (imagen/video) -> subir, guardar sesión y pedir prompt
     if (mediaType === 'image' || mediaType === 'video') {
-      // Solo desde Baileys con buffer binario
+      let uploaded = null;
+      let publishMediaUrl = null;
+
+      // Sólo disponible automáticamente con Baileys (buffer binario)
       const buffer = message._mediaBuffer;
       logger.debug({ bufLen: buffer?.length || 0 }, 'Baileys media buffer length');
       if (buffer && Buffer.isBuffer(buffer) && buffer.length) {
@@ -49,85 +51,146 @@ export async function handleIncomingWhatsAppMessage({ message, from, waNumberId 
         } catch (e) {
           logger.error({ err: e }, 'Error subiendo media desde buffer de Baileys');
         }
-      }
-
-      if (!publishMediaUrl) {
-        logger.warn('No se logró obtener/subir media. Verifique configuración de Cloudinary.');
-      }
-    }
-
-    // Extraer plataformas explícitas del texto
-    const explicitPlatforms = [];
-    const textLower = (userText || '').toLowerCase();
-    if (textLower.includes('facebook')) explicitPlatforms.push('facebook');
-    if (textLower.includes('instagram')) explicitPlatforms.push('instagram');
-    if (textLower.includes('twitter') || textLower.includes('x')) explicitPlatforms.push('x');
-
-    // Plan con OpenAI
-    const aiPlan = await planPost({ userPrompt: userText, mediaType });
-    let platforms = explicitPlatforms.length ? explicitPlatforms : aiPlan.platforms;
-    platforms = Array.from(new Set((platforms || []).map(p => String(p).toLowerCase()))).filter(p => ['facebook','instagram','x'].includes(p));
-    logger.info({ platforms, mediaType, hasPublishMediaUrl: !!publishMediaUrl }, 'Plataformas seleccionadas');
-
-    const captionBase = aiPlan.caption || userText || '';
-    const hashtags = (aiPlan.hashtags || []).join(' ');
-    const finalCaption = [captionBase, hashtags].filter(Boolean).join('\n\n');
-
-    const results = [];
-
-    for (const p of platforms) {
-      try {
-        if (p === 'facebook') {
-          const fbRes = await postToFacebook({
-            message: finalCaption,
-            imageUrl: mediaType === 'image' ? publishMediaUrl : undefined,
-            videoUrl: mediaType === 'video' ? publishMediaUrl : undefined,
-          });
-          results.push(fbRes);
-        } else if (p === 'instagram') {
-          if (!publishMediaUrl) throw new Error('No hay media disponible para Instagram');
-          const igRes = await postToInstagram({
-            caption: finalCaption,
-            imageUrl: mediaType === 'image' ? publishMediaUrl : undefined,
-            videoUrl: mediaType === 'video' ? publishMediaUrl : undefined,
-          });
-          results.push(igRes);
-        } else if (p === 'x') {
-          const xRes = await postToX({ text: finalCaption });
-          results.push(xRes);
-        }
-      } catch (e) {
-        results.push({ platform: p, error: e.message });
-      }
-    }
-
-    logger.info({ results }, 'Resultados de publicación');
-
-    // Limpieza: borrar el media temporal si hubo al menos una publicación exitosa
-    const anySuccess = results.some(r => !r.error);
-    if (anySuccess && uploaded?.publicId) {
-      if (config.cloudinary.keepUploads) {
-        logger.info({ publicId: uploaded.publicId, url: uploaded.secureUrl }, 'Conservando media en Cloudinary (keepUploads=true)');
       } else {
-        await deleteMedia(uploaded.publicId, mediaType === 'video' ? 'video' : 'image');
-        logger.info({ publicId: uploaded.publicId }, 'Media eliminado de Cloudinary tras publicar');
+        logger.warn('No se detectó buffer de media (este flujo requiere Baileys para subir el archivo)');
       }
+
+      if (publishMediaUrl) {
+        // Si ya había una sesión, la reemplazamos por la nueva
+        const hadPrev = pendingSessions.has(fromNumber);
+        pendingSessions.set(fromNumber, {
+          mediaType,
+          publishMediaUrl,
+          uploaded,
+          createdAt: Date.now(),
+        });
+        const replaceNote = hadPrev ? '\n(Nueva media recibida: se reemplazó la anterior.)' : '';
+        try {
+          await sendBaileysMessage({
+            to: fromNumber,
+            text: `✅ Media recibida exitosamente.${replaceNote}\n\nAhora escribe tu prompt: indica plataformas (instagram, facebook, x) y una breve descripción del post.`,
+          });
+        } catch (e) {
+          logger.error({ err: e }, 'Error enviando confirmación por WhatsApp');
+        }
+      } else {
+        try {
+          await sendBaileysMessage({
+            to: fromNumber,
+            text: '❌ No se pudo procesar el media. Por favor reenvía la imagen o el video.',
+          });
+        } catch (e) {
+          logger.error({ err: e }, 'Error enviando fallo de recepción por WhatsApp');
+        }
+      }
+
+      logger.info('handleIncomingWhatsAppMessage: fin (esperando prompt de texto)');
+      return; // No publicamos aún, esperamos el prompt de texto
     }
 
-    // Respuesta por WhatsApp (solo Baileys)
-    if (results.length === 0) {
-      await sendBaileysMessage({ to: fromNumber, text: 'No se detectaron plataformas válidas para publicar.' });
-      logger.info('handleIncomingWhatsAppMessage: fin (sin plataformas)');
+    // CASO 2: Llega texto
+    if (message.type === 'text') {
+      const session = pendingSessions.get(fromNumber);
+      if (!session) {
+        // No hay media pendiente -> pedimos que envíe primero imagen/video
+        try {
+          await sendBaileysMessage({
+            to: fromNumber,
+            text: 'Para publicar, primero envía una imagen o un video. Luego te pediré el prompt (plataformas y breve descripción).',
+          });
+        } catch (e) { logger.error({ err: e }, 'Error enviando instrucción inicial'); }
+        logger.info('handleIncomingWhatsAppMessage: fin (sin sesión de media)');
+        return;
+      }
+
+      // Usamos el media previamente subido desde la sesión
+      const { mediaType: sessMediaType, publishMediaUrl, uploaded } = session;
+      const promptText = userText || '';
+
+      // Extraer plataformas explícitas del texto
+      const explicitPlatforms = [];
+      const textLower = (promptText || '').toLowerCase();
+      if (textLower.includes('facebook')) explicitPlatforms.push('facebook');
+      if (textLower.includes('instagram')) explicitPlatforms.push('instagram');
+      if (textLower.includes('twitter') || textLower.includes('x')) explicitPlatforms.push('x');
+
+      // Plan con OpenAI usando el prompt del usuario y el tipo de media almacenado
+      const aiPlan = await planPost({ userPrompt: promptText, mediaType: sessMediaType });
+      let platforms = explicitPlatforms.length ? explicitPlatforms : aiPlan.platforms;
+      platforms = Array.from(new Set((platforms || []).map(p => String(p).toLowerCase()))).filter(p => ['facebook','instagram','x'].includes(p));
+      logger.info({ platforms, mediaType: sessMediaType, hasPublishMediaUrl: !!publishMediaUrl }, 'Plataformas seleccionadas');
+
+      const captionBase = aiPlan.caption || promptText || '';
+      const hashtags = (aiPlan.hashtags || []).join(' ');
+      const finalCaption = [captionBase, hashtags].filter(Boolean).join('\n\n');
+
+      const results = [];
+
+      for (const p of platforms) {
+        try {
+          if (p === 'facebook') {
+            const fbRes = await postToFacebook({
+              message: finalCaption,
+              imageUrl: sessMediaType === 'image' ? publishMediaUrl : undefined,
+              videoUrl: sessMediaType === 'video' ? publishMediaUrl : undefined,
+            });
+            results.push(fbRes);
+          } else if (p === 'instagram') {
+            if (!publishMediaUrl) throw new Error('No hay media disponible para Instagram');
+            const igRes = await postToInstagram({
+              caption: finalCaption,
+              imageUrl: sessMediaType === 'image' ? publishMediaUrl : undefined,
+              videoUrl: sessMediaType === 'video' ? publishMediaUrl : undefined,
+            });
+            results.push(igRes);
+          } else if (p === 'x') {
+            const xRes = await postToX({ text: finalCaption });
+            results.push(xRes);
+          }
+        } catch (e) {
+          results.push({ platform: p, error: e.message });
+        }
+      }
+
+      logger.info({ results }, 'Resultados de publicación');
+
+      // Limpieza: borrar el media temporal si hubo al menos una publicación exitosa
+      const anySuccess = results.some(r => !r.error);
+      if (anySuccess && uploaded?.publicId) {
+        if (config.cloudinary.keepUploads) {
+          logger.info({ publicId: uploaded.publicId, url: uploaded.secureUrl }, 'Conservando media en Cloudinary (keepUploads=true)');
+        } else {
+          await deleteMedia(uploaded.publicId, sessMediaType === 'video' ? 'video' : 'image');
+          logger.info({ publicId: uploaded.publicId }, 'Media eliminado de Cloudinary tras publicar');
+        }
+      }
+
+      // Respuesta por WhatsApp con resumen
+      if (results.length === 0) {
+        try { await sendBaileysMessage({ to: fromNumber, text: 'No se detectaron plataformas válidas para publicar.' }); } catch {}
+        logger.info('handleIncomingWhatsAppMessage: fin (sin plataformas)');
+        pendingSessions.delete(fromNumber); // limpiar sesión aunque no haya plataformas
+        return;
+      }
+
+      const lines = results.map(r =>
+        r.error ? `❌ ${r.platform}: ${r.error}` : `✅ ${r.platform}: ${r.url || r.id}`
+      );
+      const mediaInfo = uploaded?.publicId ? `\nCloudinary: publicId=${uploaded.publicId}\nURL=${uploaded.secureUrl}` : '';
+      const response = `Resumen de publicaciones:\n${lines.join('\n')}${mediaInfo}`;
+      try { await sendBaileysMessage({ to: fromNumber, text: response }); } catch {}
+
+      // Limpiar sesión tras publicar
+      pendingSessions.delete(fromNumber);
+      logger.info('handleIncomingWhatsAppMessage: fin (publicación y limpieza de sesión)');
       return;
     }
 
-    const lines = results.map(r =>
-      r.error ? `❌ ${r.platform}: ${r.error}` : `✅ ${r.platform}: ${r.url || r.id}`
-    );
-    const mediaInfo = uploaded?.publicId ? `\nCloudinary: publicId=${uploaded.publicId}\nURL=${uploaded.secureUrl}` : '';
-    const response = `Resumen de publicaciones:\n${lines.join('\n')}${mediaInfo}`;
-    await sendBaileysMessage({ to: fromNumber, text: response });
-    logger.info('handleIncomingWhatsAppMessage: fin (respuesta enviada)');
+    // Otros tipos no soportados
+    try {
+      await sendBaileysMessage({ to: fromNumber, text: 'Envía una imagen o un video para comenzar.' });
+    } catch {}
+    logger.info('handleIncomingWhatsAppMessage: fin (tipo no soportado)');
   } catch (err) {
     logger.error({ err }, 'Error en handleIncomingWhatsAppMessage');
     try {
