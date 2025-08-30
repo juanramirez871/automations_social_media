@@ -89,6 +89,7 @@ export async function handleIncomingWhatsAppMessage({ message, from, waNumberId 
           const igRes = await postToInstagram({
             caption: finalCaption,
             imageUrl: mediaType === 'image' ? publishMediaUrl : undefined,
+            videoUrl: mediaType === 'video' ? publishMediaUrl : undefined,
           });
           results.push(igRes);
         } else if (p === 'x') {
