@@ -1,62 +1,84 @@
-import config from '../config.js';
 import FB from 'fb';
+import config from '../config.js';
 import { logger } from '../logger.js';
 
-function getFbClient() {
-  const fb = new FB.Facebook({ version: 'v19.0' });
-  if (config.facebook.accessToken) {
-    fb.setAccessToken(config.facebook.accessToken);
-  }
-  return fb;
-}
-
-function fbApi(fb, path, method, params) {
-  return new Promise((resolve, reject) => {
-    fb.api(path, method, params, (res) => {
-      if (!res || res.error) {
-        return reject(res?.error || new Error('Facebook API error'));
-      }
-      resolve(res);
-    });
-  });
-}
-
-// Publicar en Facebook Page. Si hay imagen/video, se sube el medio y se crea post.
-async function postToFacebook({ message, link, imageUrl, videoUrl }) {
+// Publicar en Facebook usando Graph API
+async function postToFacebook({ message, imageUrl, videoUrl, link }) {
   const pageId = config.facebook.pageId;
+  const accessToken = config.facebook.accessToken;
+
+  logger.info({ 
+    hasMessage: !!message,
+    hasImageUrl: !!imageUrl,
+    hasVideoUrl: !!videoUrl,
+    hasLink: !!link,
+    pageId,
+    hasAccessToken: !!accessToken
+  }, 'postToFacebook: Graph API');
+
+  if (!pageId) {
+    throw new Error('FACEBOOK_PAGE_ID es requerido');
+  }
+  if (!accessToken) {
+    throw new Error('META_ACCESS_TOKEN es requerido');
+  }
+
+  const fb = new FB.Facebook({ accessToken });
 
   try {
-    const fb = getFbClient();
+    let result;
 
     if (imageUrl) {
-      // Subir foto por URL remota
-      const res = await fbApi(fb, `${pageId}/photos`, 'post', {
-        caption: message,
+      logger.info({ imageUrl }, 'Publicando imagen en Facebook');
+      // Subir y publicar imagen
+      const photoResult = await fb.api(`${pageId}/photos`, 'POST', {
         url: imageUrl,
+        caption: message || '',
       });
-      const postId = res.post_id || res.id;
-      return { platform: 'facebook', id: postId, url: postId ? `https://facebook.com/${pageId}/posts/${postId}` : undefined };
-    }
-
-    if (videoUrl) {
-      // Subir video por URL remota
-      const res = await fbApi(fb, `${pageId}/videos`, 'post', {
-        description: message,
+      
+      result = {
+        platform: 'facebook',
+        id: photoResult.id,
+        url: `https://facebook.com/${photoResult.id}`
+      };
+    } else if (videoUrl) {
+      logger.info({ videoUrl }, 'Publicando video en Facebook');
+      // Subir y publicar video
+      const videoResult = await fb.api(`${pageId}/videos`, 'POST', {
         file_url: videoUrl,
+        description: message || '',
       });
-      return { platform: 'facebook', id: res.id, url: res.id ? `https://facebook.com/${pageId}/videos/${res.id}` : undefined };
+      
+      result = {
+        platform: 'facebook',
+        id: videoResult.id,
+        url: `https://facebook.com/${videoResult.id}`
+      };
+    } else {
+      logger.info('Publicando texto en Facebook');
+      // Publicar solo texto (con link opcional)
+      const postData = { message: message || '' };
+      if (link) postData.link = link;
+      
+      const postResult = await fb.api(`${pageId}/feed`, 'POST', postData);
+      
+      result = {
+        platform: 'facebook',
+        id: postResult.id,
+        url: `https://facebook.com/${postResult.id}`
+      };
     }
 
-    // Solo texto (opcionalmente con link)
-    const res = await fbApi(fb, `${pageId}/feed`, 'post', {
-      message,
-      link,
-    });
-    return { platform: 'facebook', id: res.id, url: res.id ? `https://facebook.com/${pageId}/posts/${res.id}` : undefined };
+    logger.info({ result }, 'Publicado exitosamente en Facebook');
+    return result;
   } catch (err) {
-    const error = err?.response?.data || err?.message || err;
-    logger.error({ err: error }, 'Facebook post error');
-    throw new Error(typeof error === 'string' ? error : JSON.stringify(error));
+    logger.error({ 
+      err: err.message,
+      stack: err.stack,
+      response: err?.response
+    }, 'Error en postToFacebook');
+    
+    throw new Error(err.message || 'Error publicando en Facebook');
   }
 }
 

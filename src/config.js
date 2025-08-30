@@ -3,10 +3,7 @@ import 'dotenv/config';
 const config = {
   port: process.env.PORT || 3030,
   whatsapp: {
-    provider: process.env.WHATSAPP_PROVIDER || 'cloud',
-    verifyToken: process.env.WHATSAPP_VERIFY_TOKEN,
-    phoneNumberId: process.env.WHATSAPP_PHONE_NUMBER_ID,
-    accessToken: process.env.META_ACCESS_TOKEN,
+    // Solo Baileys (no oficial)
   },
   ai: {
     provider: process.env.AI_PROVIDER || 'openai', // 'openai' | 'gemini'
@@ -26,9 +23,6 @@ const config = {
     accessToken: process.env.META_ACCESS_TOKEN,
   },
   instagram: {
-    provider: process.env.INSTAGRAM_PROVIDER || 'graph',
-    businessAccountId: process.env.INSTAGRAM_BUSINESS_ACCOUNT_ID,
-    accessToken: process.env.META_ACCESS_TOKEN,
     username: process.env.INSTAGRAM_USERNAME,
     password: process.env.INSTAGRAM_PASSWORD,
     cookieFile: process.env.INSTAGRAM_COOKIE_FILE || './instagram_cookies.json',

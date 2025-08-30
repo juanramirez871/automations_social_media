@@ -2,7 +2,7 @@ import { planPost } from './ai.js';
 import { postToFacebook } from './platforms/facebook.js';
 import { postToInstagram } from './platforms/instagram.js';
 import { postToX } from './platforms/x.js';
-import { sendWhatsAppMessage, getMediaMeta, downloadMediaBuffer } from './whatsapp_client.js';
+import { sendBaileysMessage } from './whatsapp_baileys.js';
 import { uploadFromUrl, uploadBuffer, deleteMedia } from './media_store.js';
 import { logger } from './logger.js';
 import config from './config.js';
@@ -11,8 +11,7 @@ import config from './config.js';
   Entradas desde WhatsApp:
   - Texto con redes destino y brief.
   - Medios opcionales (imagen/video) que pueden llegar como:
-    a) media_id nativo (WhatsApp Cloud API) -> hay que obtener URL temporal y descargar con token.
-    b) URL pública (incluida en el texto o en el objeto) -> subir directo a Cloudinary por URL.
+    a) Buffer binario desde Baileys (_mediaBuffer)
 */
 export async function handleIncomingWhatsAppMessage({ message, from, waNumberId }) {
   logger.info({ from, waNumberId, type: message?.type }, 'handleIncomingWhatsAppMessage: inicio');
@@ -21,31 +20,25 @@ export async function handleIncomingWhatsAppMessage({ message, from, waNumberId 
 
     let userText = '';
     let mediaType = null; // 'image' | 'video' | null
-    let mediaUrl = null;  // URL pública si existiera
-    let mediaId = null;   // media_id de WhatsApp si existiera
 
     if (message.type === 'text') {
       userText = message.text?.body || '';
     } else if (message.type === 'image') {
       mediaType = 'image';
-      mediaId = message.image?.id || null;
-      mediaUrl = message.image?.link || message.image?.url || null;
       userText = message.image?.caption || '';
     } else if (message.type === 'video') {
       mediaType = 'video';
-      mediaId = message.video?.id || null;
-      mediaUrl = message.video?.link || message.video?.url || null;
       userText = message.video?.caption || '';
     }
 
-    logger.debug({ from: fromNumber, mediaType, hasMediaId: !!mediaId, hasMediaUrl: !!mediaUrl }, 'Incoming WhatsApp message');
+    logger.debug({ from: fromNumber, mediaType }, 'Incoming WhatsApp message');
 
     // Hosting temporal en Cloudinary
     let uploaded = null;
     let publishMediaUrl = null;
 
     if (mediaType === 'image' || mediaType === 'video') {
-      // Si viene de Baileys y ya descargamos el binario, nos lo pasan en _mediaBuffer
+      // Solo desde Baileys con buffer binario
       const buffer = message._mediaBuffer;
       logger.debug({ bufLen: buffer?.length || 0 }, 'Baileys media buffer length');
       if (buffer && Buffer.isBuffer(buffer) && buffer.length) {
@@ -58,34 +51,8 @@ export async function handleIncomingWhatsAppMessage({ message, from, waNumberId 
         }
       }
 
-      // Prioridad: media_id (WhatsApp Cloud API)
-      if (!publishMediaUrl && mediaId) {
-        try {
-          const meta = await getMediaMeta(mediaId); // { url, mime_type, ... }
-          if (meta?.url) {
-            const bin = await downloadMediaBuffer(meta.url);
-            uploaded = await uploadBuffer({ buffer: bin, resourceType: mediaType });
-            publishMediaUrl = uploaded.secureUrl;
-            logger.info({ publishMediaUrl, publicId: uploaded?.publicId }, 'Media subido desde media_id a Cloudinary');
-          }
-        } catch (e) {
-          logger.error({ err: e }, 'Error obteniendo/subiendo media de WhatsApp');
-        }
-      }
-
-      // Fallback: URL pública
-      if (!publishMediaUrl && mediaUrl && /^https?:\/\//i.test(mediaUrl)) {
-        try {
-          uploaded = await uploadFromUrl({ url: mediaUrl, resourceType: mediaType });
-          publishMediaUrl = uploaded.secureUrl;
-          logger.info({ publishMediaUrl, publicId: uploaded?.publicId }, 'Media subido desde URL pública a Cloudinary');
-        } catch (e) {
-          logger.error({ err: e }, 'Error subiendo media por URL pública a Cloudinary');
-        }
-      }
-
       if (!publishMediaUrl) {
-        logger.warn('No se logró obtener/subir media. Verifique configuración de Cloudinary y/o token de WhatsApp Cloud si usa media_id.');
+        logger.warn('No se logró obtener/subir media. Verifique configuración de Cloudinary.');
       }
     }
 
@@ -122,7 +89,6 @@ export async function handleIncomingWhatsAppMessage({ message, from, waNumberId 
           const igRes = await postToInstagram({
             caption: finalCaption,
             imageUrl: mediaType === 'image' ? publishMediaUrl : undefined,
-            videoUrl: mediaType === 'video' ? publishMediaUrl : undefined,
           });
           results.push(igRes);
         } else if (p === 'x') {
@@ -147,9 +113,9 @@ export async function handleIncomingWhatsAppMessage({ message, from, waNumberId 
       }
     }
 
-    // Respuesta por WhatsApp
+    // Respuesta por WhatsApp (solo Baileys)
     if (results.length === 0) {
-      await sendWhatsAppMessage({ waNumberId, to: fromNumber, text: 'No se detectaron plataformas válidas para publicar.' });
+      await sendBaileysMessage({ to: fromNumber, text: 'No se detectaron plataformas válidas para publicar.' });
       logger.info('handleIncomingWhatsAppMessage: fin (sin plataformas)');
       return;
     }
@@ -159,14 +125,14 @@ export async function handleIncomingWhatsAppMessage({ message, from, waNumberId 
     );
     const mediaInfo = uploaded?.publicId ? `\nCloudinary: publicId=${uploaded.publicId}\nURL=${uploaded.secureUrl}` : '';
     const response = `Resumen de publicaciones:\n${lines.join('\n')}${mediaInfo}`;
-    await sendWhatsAppMessage({ waNumberId, to: fromNumber, text: response });
+    await sendBaileysMessage({ to: fromNumber, text: response });
     logger.info('handleIncomingWhatsAppMessage: fin (respuesta enviada)');
   } catch (err) {
     logger.error({ err }, 'Error en handleIncomingWhatsAppMessage');
     try {
       const to = from || message?.from;
-      if (to && waNumberId) {
-        await sendWhatsAppMessage({ waNumberId, to, text: 'Ocurrió un error procesando tu solicitud. Inténtalo más tarde.' });
+      if (to) {
+        await sendBaileysMessage({ to, text: 'Ocurrió un error procesando tu solicitud. Inténtalo más tarde.' });
       }
     } catch (e2) {
       logger.error({ err: e2 }, 'Error enviando mensaje de error por WhatsApp');

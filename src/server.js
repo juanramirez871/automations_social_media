@@ -3,7 +3,6 @@ import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import config from './config.js';
 import { httpLogger, logger } from './logger.js';
-import { verify as verifyWhatsApp, receive as receiveWhatsApp } from './whatsapp_router.js';
 
 const app = express();
 
@@ -24,12 +23,6 @@ app.use(limiter);
 // Healthcheck
 app.get('/health', (req, res) => res.json({ ok: true }));
 
-// Webhook de WhatsApp (solo necesario para provider cloud)
-if (config.whatsapp.provider === 'cloud') {
-  app.get('/webhook/whatsapp', verifyWhatsApp);
-  app.post('/webhook/whatsapp', receiveWhatsApp);
-}
-
 // Endpoint para obtener posts de Instagram cuando provider=web
 if (config.instagram.provider === 'web') {
   app.get('/instagram/:username/posts', async (req, res) => {
@@ -48,8 +41,7 @@ if (config.instagram.provider === 'web') {
 
 app.listen(config.port, async () => {
   logger.info({ port: config.port }, `Server running on port ${config.port}`);
-  if (config.whatsapp.provider === 'baileys') {
-    const { initBaileys } = await import('./whatsapp_baileys.js');
-    await initBaileys();
-  }
+  // Inicializar Baileys (único proveedor de WhatsApp)
+  const { initBaileys } = await import('./whatsapp_baileys.js');
+  await initBaileys();
 });
