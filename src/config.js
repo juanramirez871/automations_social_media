@@ -8,6 +8,16 @@ const config = {
     phoneNumberId: process.env.WHATSAPP_PHONE_NUMBER_ID,
     accessToken: process.env.META_ACCESS_TOKEN,
   },
+  ai: {
+    provider: process.env.AI_PROVIDER || 'openai', // 'openai' | 'gemini'
+    openai: {
+      apiKey: process.env.OPENAI_API_KEY,
+    },
+    gemini: {
+      apiKey: process.env.GEMINI_API_KEY,
+    },
+  },
+  // Deprecated: mantener por compatibilidad
   openai: {
     apiKey: process.env.OPENAI_API_KEY,
   },
@@ -34,6 +44,7 @@ const config = {
     cloudName: process.env.CLOUDINARY_CLOUD_NAME,
     apiKey: process.env.CLOUDINARY_API_KEY,
     apiSecret: process.env.CLOUDINARY_API_SECRET,
+    keepUploads: String(process.env.CLOUDINARY_KEEP_UPLOADS || '').toLowerCase() === 'true',
   }
 };
 

@@ -18,9 +18,13 @@ export async function verify(req, res) {
     const token = parsed['hub.verify_token'];
     const challenge = parsed['hub.challenge'];
 
+    logger.info({ mode, token: token ? '***' : undefined }, 'Verificando webhook WhatsApp');
+
     if (mode && token && mode === 'subscribe' && token === VERIFY_TOKEN) {
+      logger.info('Webhook verificado correctamente');
       return res.status(200).send(challenge);
     }
+    logger.warn('Webhook verificación fallida');
     return res.sendStatus(403);
   } catch (err) {
     logger.error({ err }, 'Error on verify webhook');
@@ -44,9 +48,11 @@ const bodySchema = z.object({
 
 export async function receive(req, res) {
   try {
+    logger.info({ bodyKeys: Object.keys(req.body || {}) }, 'Recibido webhook WhatsApp');
     const parsed = bodySchema.parse(req.body);
 
     if (parsed.object !== 'whatsapp_business_account') {
+      logger.warn({ object: parsed.object }, 'Objeto no esperado en webhook');
       return res.sendStatus(404);
     }
 
@@ -54,14 +60,18 @@ export async function receive(req, res) {
     res.sendStatus(200);
 
     const entries = parsed.entry || [];
+    logger.info({ entries: entries.length }, 'Procesando entries de webhook');
     for (const entry of entries) {
       const changes = entry.changes || [];
+      logger.info({ changes: changes.length }, 'Procesando changes');
       for (const change of changes) {
         const value = change.value || {};
-        const messages = (value.messages || []).filter(m => m.type === 'text' || m.type === 'image' || m.type === 'video');
+        const msgs = (value.messages || []).filter(m => m.type === 'text' || m.type === 'image' || m.type === 'video');
         const waNumberId = value.metadata?.phone_number_id || config.whatsapp.phoneNumberId;
+        logger.info({ waNumberId, mensajes: msgs.length }, 'Mensajes filtrados para orquestador');
 
-        for (const msg of messages) {
+        for (const msg of msgs) {
+          logger.info({ type: msg.type, from: msg.from }, 'Enviando mensaje al orquestador');
           await orchestrator.handleIncomingWhatsAppMessage({
             message: msg,
             from: msg.from,

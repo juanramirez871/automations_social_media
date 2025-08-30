@@ -1,4 +1,4 @@
-import { planPost } from './openai.js';
+import { planPost } from './ai.js';
 import { postToFacebook } from './platforms/facebook.js';
 import { postToInstagram } from './platforms/instagram.js';
 import { postToX } from './platforms/x.js';
@@ -15,8 +15,9 @@ import config from './config.js';
     b) URL pública (incluida en el texto o en el objeto) -> subir directo a Cloudinary por URL.
 */
 export async function handleIncomingWhatsAppMessage({ message, from, waNumberId }) {
+  logger.info({ from, waNumberId, type: message?.type }, 'handleIncomingWhatsAppMessage: inicio');
   try {
-    const fromNumber = message.from;
+    const fromNumber = message.from || from;
 
     let userText = '';
     let mediaType = null; // 'image' | 'video' | null
@@ -39,35 +40,33 @@ export async function handleIncomingWhatsAppMessage({ message, from, waNumberId 
 
     logger.debug({ from: fromNumber, mediaType, hasMediaId: !!mediaId, hasMediaUrl: !!mediaUrl }, 'Incoming WhatsApp message');
 
-    // Extraer plataformas explícitas del texto
-    const explicitPlatforms = [];
-    const textLower = (userText || '').toLowerCase();
-    if (textLower.includes('facebook')) explicitPlatforms.push('facebook');
-    if (textLower.includes('instagram')) explicitPlatforms.push('instagram');
-    if (textLower.includes('twitter') || textLower.includes('x')) explicitPlatforms.push('x');
-
-    // Plan con OpenAI
-    const aiPlan = await planPost({ userPrompt: userText, mediaType });
-    let platforms = explicitPlatforms.length ? explicitPlatforms : aiPlan.platforms;
-    platforms = Array.from(new Set((platforms || []).map(p => String(p).toLowerCase()))).filter(p => ['facebook','instagram','x'].includes(p));
-
-    const captionBase = aiPlan.caption || userText || '';
-    const hashtags = (aiPlan.hashtags || []).join(' ');
-    const finalCaption = [captionBase, hashtags].filter(Boolean).join('\n\n');
-
     // Hosting temporal en Cloudinary
     let uploaded = null;
     let publishMediaUrl = null;
 
     if (mediaType === 'image' || mediaType === 'video') {
-      // Prioridad: media_id (WhatsApp) -> URL temporal -> descarga binaria -> uploadBuffer
-      if (mediaId) {
+      // Si viene de Baileys y ya descargamos el binario, nos lo pasan en _mediaBuffer
+      const buffer = message._mediaBuffer;
+      logger.debug({ bufLen: buffer?.length || 0 }, 'Baileys media buffer length');
+      if (buffer && Buffer.isBuffer(buffer) && buffer.length) {
+        try {
+          uploaded = await uploadBuffer({ buffer, resourceType: mediaType });
+          publishMediaUrl = uploaded.secureUrl;
+          logger.info({ publishMediaUrl, publicId: uploaded?.publicId }, 'Media subido desde buffer a Cloudinary');
+        } catch (e) {
+          logger.error({ err: e }, 'Error subiendo media desde buffer de Baileys');
+        }
+      }
+
+      // Prioridad: media_id (WhatsApp Cloud API)
+      if (!publishMediaUrl && mediaId) {
         try {
           const meta = await getMediaMeta(mediaId); // { url, mime_type, ... }
           if (meta?.url) {
             const bin = await downloadMediaBuffer(meta.url);
             uploaded = await uploadBuffer({ buffer: bin, resourceType: mediaType });
             publishMediaUrl = uploaded.secureUrl;
+            logger.info({ publishMediaUrl, publicId: uploaded?.publicId }, 'Media subido desde media_id a Cloudinary');
           }
         } catch (e) {
           logger.error({ err: e }, 'Error obteniendo/subiendo media de WhatsApp');
@@ -79,11 +78,33 @@ export async function handleIncomingWhatsAppMessage({ message, from, waNumberId 
         try {
           uploaded = await uploadFromUrl({ url: mediaUrl, resourceType: mediaType });
           publishMediaUrl = uploaded.secureUrl;
+          logger.info({ publishMediaUrl, publicId: uploaded?.publicId }, 'Media subido desde URL pública a Cloudinary');
         } catch (e) {
           logger.error({ err: e }, 'Error subiendo media por URL pública a Cloudinary');
         }
       }
+
+      if (!publishMediaUrl) {
+        logger.warn('No se logró obtener/subir media. Verifique configuración de Cloudinary y/o token de WhatsApp Cloud si usa media_id.');
+      }
     }
+
+    // Extraer plataformas explícitas del texto
+    const explicitPlatforms = [];
+    const textLower = (userText || '').toLowerCase();
+    if (textLower.includes('facebook')) explicitPlatforms.push('facebook');
+    if (textLower.includes('instagram')) explicitPlatforms.push('instagram');
+    if (textLower.includes('twitter') || textLower.includes('x')) explicitPlatforms.push('x');
+
+    // Plan con OpenAI
+    const aiPlan = await planPost({ userPrompt: userText, mediaType });
+    let platforms = explicitPlatforms.length ? explicitPlatforms : aiPlan.platforms;
+    platforms = Array.from(new Set((platforms || []).map(p => String(p).toLowerCase()))).filter(p => ['facebook','instagram','x'].includes(p));
+    logger.info({ platforms, mediaType, hasPublishMediaUrl: !!publishMediaUrl }, 'Plataformas seleccionadas');
+
+    const captionBase = aiPlan.caption || userText || '';
+    const hashtags = (aiPlan.hashtags || []).join(' ');
+    const finalCaption = [captionBase, hashtags].filter(Boolean).join('\n\n');
 
     const results = [];
 
@@ -113,23 +134,33 @@ export async function handleIncomingWhatsAppMessage({ message, from, waNumberId 
       }
     }
 
+    logger.info({ results }, 'Resultados de publicación');
+
     // Limpieza: borrar el media temporal si hubo al menos una publicación exitosa
     const anySuccess = results.some(r => !r.error);
     if (anySuccess && uploaded?.publicId) {
-      await deleteMedia(uploaded.publicId, mediaType === 'video' ? 'video' : 'image');
+      if (config.cloudinary.keepUploads) {
+        logger.info({ publicId: uploaded.publicId, url: uploaded.secureUrl }, 'Conservando media en Cloudinary (keepUploads=true)');
+      } else {
+        await deleteMedia(uploaded.publicId, mediaType === 'video' ? 'video' : 'image');
+        logger.info({ publicId: uploaded.publicId }, 'Media eliminado de Cloudinary tras publicar');
+      }
     }
 
     // Respuesta por WhatsApp
     if (results.length === 0) {
       await sendWhatsAppMessage({ waNumberId, to: fromNumber, text: 'No se detectaron plataformas válidas para publicar.' });
+      logger.info('handleIncomingWhatsAppMessage: fin (sin plataformas)');
       return;
     }
 
     const lines = results.map(r =>
       r.error ? `❌ ${r.platform}: ${r.error}` : `✅ ${r.platform}: ${r.url || r.id}`
     );
-    const response = `Resumen de publicaciones:\n${lines.join('\n')}`;
+    const mediaInfo = uploaded?.publicId ? `\nCloudinary: publicId=${uploaded.publicId}\nURL=${uploaded.secureUrl}` : '';
+    const response = `Resumen de publicaciones:\n${lines.join('\n')}${mediaInfo}`;
     await sendWhatsAppMessage({ waNumberId, to: fromNumber, text: response });
+    logger.info('handleIncomingWhatsAppMessage: fin (respuesta enviada)');
   } catch (err) {
     logger.error({ err }, 'Error en handleIncomingWhatsAppMessage');
     try {
@@ -137,6 +168,8 @@ export async function handleIncomingWhatsAppMessage({ message, from, waNumberId 
       if (to && waNumberId) {
         await sendWhatsAppMessage({ waNumberId, to, text: 'Ocurrió un error procesando tu solicitud. Inténtalo más tarde.' });
       }
-    } catch {}
+    } catch (e2) {
+      logger.error({ err: e2 }, 'Error enviando mensaje de error por WhatsApp');
+    }
   }
 }

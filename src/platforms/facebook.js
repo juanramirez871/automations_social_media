@@ -1,9 +1,9 @@
 import config from '../config.js';
-import { Facebook } from 'fb';
+import FB from 'fb';
 import { logger } from '../logger.js';
 
 function getFbClient() {
-  const fb = new Facebook({ version: 'v19.0' });
+  const fb = new FB.Facebook({ version: 'v19.0' });
   if (config.facebook.accessToken) {
     fb.setAccessToken(config.facebook.accessToken);
   }
