@@ -96,7 +96,7 @@ export async function handleIncomingWhatsAppMessage({ message, from, waNumberId 
         try {
           await sendBaileysMessage({
             to: fromNumber,
-            text: 'Para publicar, primero envía una imagen o un video. Luego te pediré el prompt (plataformas y breve descripción).',
+            text: '¡Hola! 👋 Soy tu asistente para automatizar publicaciones en redes sociales ✨\n\nPuedo publicar en Instagram, Facebook y X a partir de lo que envíes por WhatsApp 📲\n\nPara empezar:\n1) Envía una foto 📸 o un video 🎬\n2) Luego te pediré tu prompt: plataformas (instagram, facebook, x) y una breve descripción del post 📝',
           });
         } catch (e) { logger.error({ err: e }, 'Error enviando instrucción inicial'); }
         logger.info('handleIncomingWhatsAppMessage: fin (sin sesión de media)');
