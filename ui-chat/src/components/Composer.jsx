@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 
-export default function Composer() {
+export default function Composer({ onSend }) {
+  const [message, setMessage] = useState("");
   const [previews, setPreviews] = useState([]); // [{id, url, kind, name, file}]
   const [errors, setErrors] = useState([]);
   const [dragActive, setDragActive] = useState(false);
@@ -71,11 +72,7 @@ export default function Composer() {
     });
   };
 
-  useEffect(() => {
-    return () => {
-      previews.forEach((p) => URL.revokeObjectURL(p.url));
-    };
-  }, [previews]);
+  // Nota: no revocamos automáticamente los Object URLs al limpiar todo para evitar cortar los previews en el chat cuando se envían.
 
   // Global drag & drop: habilita soltar archivos en cualquier zona de la app
   useEffect(() => {
@@ -117,6 +114,16 @@ export default function Composer() {
     };
   }, []);
 
+  const handleSend = () => {
+    const text = message.trim();
+    if (!text && previews.length === 0) return;
+    const files = previews.map((p) => p.file);
+    onSend?.({ text, files });
+    setMessage("");
+    setPreviews([]);
+    setErrors([]);
+  };
+
   const textareaPadding = previews.length ? "pb-32 sm:pb-32" : "pb-12 sm:pb-12";
 
   return (
@@ -133,6 +140,8 @@ export default function Composer() {
           <textarea
             className={`p-3 sm:p-4 ${textareaPadding} block w-full border-gray-200 rounded-lg sm:text-sm focus:border-blue-300 focus:ring-blue-300 disabled:opacity-50 disabled:pointer-events-none`}
             placeholder="Arrastra y suelta imágenes o videos aquí, o haz clic en el clip para seleccionar..."
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
             onDrop={onDrop}
             onDragEnter={onDragOver}
             onDragOver={onDragOver}
@@ -210,7 +219,9 @@ export default function Composer() {
               <div className="flex items-center gap-x-1">
                 <button
                   type="button"
+                  onClick={handleSend}
                   className="inline-flex shrink-0 justify-center items-center size-8 rounded-lg text-white bg-gradient-to-r from-blue-400 to-pink-400 hover:from-blue-400/90 hover:to-pink-400/90 focus:z-10 focus:outline-hidden"
+                  aria-label="Enviar mensaje"
                 >
                   <svg
                     className="shrink-0 size-3.5"
