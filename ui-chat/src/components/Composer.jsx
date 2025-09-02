@@ -126,6 +126,14 @@ export default function Composer({ onSend, loading = false }) {
     setErrors([]);
   };
 
+  // Enviar con Enter; usar Shift+Enter para salto de línea
+  const handleKeyDown = (e) => {
+    if (e.key === "Enter" && !e.shiftKey && !loading) {
+      e.preventDefault();
+      handleSend();
+    }
+  };
+
   const textareaPadding = previews.length ? "pb-32 sm:pb-32" : "pb-12 sm:pb-12";
 
   return (
@@ -141,13 +149,14 @@ export default function Composer({ onSend, loading = false }) {
         >
           <textarea
             className={`p-3 sm:p-4 ${textareaPadding} block w-full border-gray-200 rounded-lg sm:text-sm focus:border-blue-300 focus:ring-blue-300 disabled:opacity-50 disabled:pointer-events-none`}
-            placeholder="Arrastra y suelta imágenes o videos aquí, o haz clic en el clip para seleccionar..."
+            placeholder="Arrastra y suelta imágenes o videos aquí, o haz clic en el clip para seleccionar... (Enter para enviar, Shift+Enter para nueva línea)"
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             onDrop={onDrop}
             onDragEnter={onDragOver}
             onDragOver={onDragOver}
             onDragLeave={onDragLeave}
+            onKeyDown={handleKeyDown}
             disabled={loading}
           ></textarea>
 

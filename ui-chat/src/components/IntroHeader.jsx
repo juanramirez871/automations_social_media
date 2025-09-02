@@ -42,13 +42,13 @@ export default function IntroHeader() {
           {/* Chips de características */}
           <div className="mt-5 flex flex-wrap gap-2">
             <span className="inline-flex items-center rounded-full bg-blue-50 text-blue-600 border border-blue-100 px-3 py-1 text-xs">
-              Facebook
+              Redes Sociales
             </span>
             <span className="inline-flex items-center rounded-full bg-fuchsia-50 text-fuchsia-600 border border-fuchsia-100 px-3 py-1 text-xs">
-              Instagram
+              IA
             </span>
             <span className="inline-flex items-center rounded-full bg-red-50 text-red-600 border border-red-100 px-3 py-1 text-xs">
-              YouTube
+              Calendario
             </span>
           </div>
         </div>
