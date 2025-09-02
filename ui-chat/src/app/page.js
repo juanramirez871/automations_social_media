@@ -11,6 +11,7 @@ export default function Home() {
   // Mensajes UI propios (para soportar adjuntos locales y formato existente)
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [historyLoading, setHistoryLoading] = useState(false);
   // Estado de autenticación (demo) y control de una sola aparición
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const authGateShownRef = useRef(false);
@@ -18,15 +19,22 @@ export default function Home() {
   const [lightbox, setLightbox] = useState(null); // { kind, url, name }
 
   // Helper: guardar mensaje en DB (ignora si no hay supabase)
-  const saveMessageToDB = async ({ userId, role, content, attachments }) => {
+  const saveMessageToDB = async ({ userId, role, content, attachments, type = null, meta = null }) => {
     if (!supabase || !userId) return;
     try {
+      // Intento con columnas extendidas (type/meta)
       await supabase
         .from("messages")
-        .insert([{ user_id: userId, role, content, attachments: attachments || null }]);
-    } catch (e) {
-      // Evitar romper la UI si falla
-      console.warn("No se pudo guardar el mensaje:", e?.message || e);
+        .insert([{ user_id: userId, role, content, attachments: attachments || null, type, meta }]);
+    } catch (e1) {
+      // Fallback si aún no existen las columnas type/meta en la tabla
+      try {
+        await supabase
+          .from("messages")
+          .insert([{ user_id: userId, role, content, attachments: attachments || null }]);
+      } catch (e2) {
+        console.warn("No se pudo guardar el mensaje:", e2?.message || e2);
+      }
     }
   };
 
@@ -34,30 +42,52 @@ export default function Home() {
   const loadHistoryForCurrentUser = async () => {
     if (!supabase) return;
     try {
+      setHistoryLoading(true);
       const { data: sessionData } = await supabase.auth.getSession();
       const userId = sessionData?.session?.user?.id;
       if (!userId) return;
 
       const { data: rows, error } = await supabase
         .from("messages")
-        .select("id, role, content, attachments, created_at")
+        .select("id, role, content, attachments, type, meta, created_at")
         .eq("user_id", userId)
         .order("created_at", { ascending: true });
       if (error) throw error;
 
       const normalized = (rows || []).map((r) => {
+        const rType = r.type || (r.role === "user" ? (Array.isArray(r.attachments) && r.attachments.length ? "text+media" : "text") : "text");
+
+        // Render según type almacenado
         if (r.role === "assistant") {
+          if (rType === "widget-platforms") {
+            return { id: r.id, role: "assistant", type: "widget-platforms" };
+          }
+          if (rType === "widget-auth-gate") {
+            // Por defecto no re-renderizamos el gate tras login.
+          }
+          if (rType === "widget-auth-form") {
+            const mode = r?.meta?.mode || "login";
+            return { id: r.id, role: "assistant", type: "widget-auth-form", mode };
+          }
+          // Fallback: texto normal
           return { id: r.id, role: "assistant", type: "text", content: r.content };
         }
-        const hasAtt = Array.isArray(r.attachments) && r.attachments.length > 0;
-        const attNote = hasAtt ? `\n[Adjuntos: ${r.attachments.map((a) => a.name).join(", ")}]` : "";
-        return { id: r.id, role: "user", type: "text", text: `${r.content}${attNote}`.trim(), attachments: [] };
-      });
+
+        // Usuario
+        if (rType === "text+media") {
+          const hasAtt = Array.isArray(r.attachments) && r.attachments.length > 0;
+          const attNote = hasAtt ? `\n[Adjuntos: ${r.attachments.map((a) => a.name).join(", ")}]` : "";
+          return { id: r.id, role: "user", type: "text", text: `${r.content}${attNote}`.trim(), attachments: [] };
+        }
+        return { id: r.id, role: "user", type: "text", text: (r.content || ""), attachments: [] };
+      }).filter(Boolean);
 
       setMessages(normalized);
       setIsLoggedIn(true);
     } catch (e) {
       console.warn("No se pudo cargar el historial:", e?.message || e);
+    } finally {
+      setHistoryLoading(false);
     }
   };
   const handleSend = async ({ text, files }) => {
@@ -108,7 +138,7 @@ export default function Home() {
 
     // Guardar en DB (omitir URLs blob locales de adjuntos)
     const attachmentsForDB = attachments.map(({ kind, name }) => ({ kind, name }));
-    await saveMessageToDB({ userId, role: "user", content: trimmed, attachments: attachmentsForDB });
+    await saveMessageToDB({ userId, role: "user", content: trimmed, attachments: attachmentsForDB, type: attachments.length ? "text+media" : "text" });
 
     // 2) Enviar sólo el texto a la API y agregar la respuesta del asistente
     if (trimmed) {
@@ -133,7 +163,10 @@ export default function Home() {
 
         // Guardar respuesta del asistente en DB
         if (assistantText) {
-          await saveMessageToDB({ userId, role: "assistant", content: assistantText, attachments: null });
+          await saveMessageToDB({ userId, role: "assistant", content: assistantText, attachments: null, type: "text" });
+        }
+        if (data?.widget === "platforms") {
+          await saveMessageToDB({ userId, role: "assistant", content: "", attachments: null, type: "widget-platforms" });
         }
       } catch (e) {
         setMessages((prev) => [
@@ -401,6 +434,16 @@ export default function Home() {
         <IntroHeader />
 
         <ul className="mt-16 space-y-5">
+          {historyLoading && (
+            <li className="flex justify-center" aria-live="polite">
+              <div className="inline-flex items-center gap-3 rounded-full px-4 py-2 bg-white/80 backdrop-blur border border-blue-100 shadow-sm">
+                <span className="relative inline-flex">
+                  <span className="size-5 rounded-full border-2 border-blue-300 border-t-transparent animate-spin"></span>
+                </span>
+                <span className="text-sm font-medium bg-gradient-to-r from-blue-600 to-sky-500 bg-clip-text text-transparent">Cargando tus mensajes…</span>
+              </div>
+            </li>
+          )}
           {messages.map((m) => {
             if (m.role === "assistant") {
               if (m.type === "widget-platforms") {
@@ -462,7 +505,7 @@ export default function Home() {
         </ul>
 
         {/* El input (Composer) permanece debajo como antes */}
-        <Composer onSend={handleSend} loading={loading} />
+        <Composer onSend={handleSend} loading={loading || historyLoading} />
       </div>
 
       {/* Lightbox modal */}
