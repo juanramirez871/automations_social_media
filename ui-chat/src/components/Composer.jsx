@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 
-export default function Composer({ onSend }) {
+export default function Composer({ onSend, loading = false }) {
   const [message, setMessage] = useState("");
   const [previews, setPreviews] = useState([]); // [{id, url, kind, name, file}]
   const [errors, setErrors] = useState([]);
@@ -12,6 +12,8 @@ export default function Composer({ onSend }) {
   const accept = "image/*,video/*";
 
   const handleFiles = (fileList) => {
+    // Evitar agregar archivos mientras estamos enviando
+    if (loading) return;
     const files = Array.from(fileList || []);
     const newErrors = [];
     const newItems = [];
@@ -127,7 +129,7 @@ export default function Composer({ onSend }) {
   const textareaPadding = previews.length ? "pb-32 sm:pb-32" : "pb-12 sm:pb-12";
 
   return (
-    <div className="max-w-4xl mx-auto sticky bottom-0 z-10 pt-5 pb-4 sm:pt-4 sm:pb-6 px-4 sm:px-6 lg:px-0">
+    <div className="max-w-4xl mx-auto sticky bottom-0 z-10 pt-5 pb-4 sm:pt-4 sm:pb-6 px-4 sm:px-6 lg:px-0" aria-busy={loading}>
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-0">
         <div
           className={`relative ${dragActive ? "ring-2 ring-blue-300 rounded-lg" : ""}`}
@@ -146,6 +148,7 @@ export default function Composer({ onSend }) {
             onDragEnter={onDragOver}
             onDragOver={onDragOver}
             onDragLeave={onDragLeave}
+            disabled={loading}
           ></textarea>
 
           <div className="absolute bottom-px inset-x-px p-2 rounded-b-lg bg-white/80 backdrop-blur supports-[backdrop-filter]:bg-white/70">
@@ -163,8 +166,9 @@ export default function Composer({ onSend }) {
                       <button
                         type="button"
                         onClick={() => removePreview(p.id)}
-                        className="absolute top-1 right-1 z-10 bg-pink-500 text-white rounded-full size-5 flex items-center justify-center text-xs shadow ring-2 ring-white"
+                        className="absolute top-1 right-1 z-10 bg-pink-500 text-white rounded-full size-5 flex items-center justify-center text-xs shadow ring-2 ring-white disabled:opacity-50 disabled:pointer-events-none"
                         aria-label={`Eliminar ${p.name}`}
+                        disabled={loading}
                       >
                         ×
                       </button>
@@ -192,12 +196,14 @@ export default function Composer({ onSend }) {
                   multiple
                   className="hidden"
                   onChange={(e) => handleFiles(e.target.files)}
+                  disabled={loading}
                 />
                 <button
                   type="button"
                   onClick={() => inputRef.current?.click()}
-                  className="inline-flex shrink-0 justify-center items-center size-8 rounded-lg text-blue-500 hover:bg-blue-50 focus:z-10 focus:outline-hidden focus:bg-blue-50"
+                  className="inline-flex shrink-0 justify-center items-center size-8 rounded-lg text-blue-500 hover:bg-blue-50 focus:z-10 focus:outline-hidden focus:bg-blue-50 disabled:opacity-50 disabled:pointer-events-none"
                   aria-label="Adjuntar archivos"
+                  disabled={loading}
                 >
                   <svg
                     className="shrink-0 size-4"
@@ -216,12 +222,13 @@ export default function Composer({ onSend }) {
                 </button>
               </div>
 
-              <div className="flex items-center gap-x-1">
+              <div className="flex items-center gap-x-2">
                 <button
                   type="button"
                   onClick={handleSend}
-                  className="inline-flex shrink-0 justify-center items-center size-8 rounded-lg text-white bg-gradient-to-r from-blue-400 to-pink-400 hover:from-blue-400/90 hover:to-pink-400/90 focus:z-10 focus:outline-hidden"
+                  className="inline-flex shrink-0 justify-center items-center size-8 rounded-lg text-white bg-gradient-to-r from-blue-400 to-pink-400 hover:from-blue-400/90 hover:to-pink-400/90 focus:z-10 focus:outline-hidden disabled:opacity-50 disabled:pointer-events-none"
                   aria-label="Enviar mensaje"
+                  disabled={loading}
                 >
                   <svg
                     className="shrink-0 size-3.5"

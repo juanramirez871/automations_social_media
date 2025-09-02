@@ -9,6 +9,7 @@ import Composer from "@/components/Composer";
 export default function Home() {
   // Mensajes UI propios (para soportar adjuntos locales y formato existente)
   const [messages, setMessages] = useState([]);
+  const [loading, setLoading] = useState(false);
 
   const bottomRef = useRef(null);
   const [lightbox, setLightbox] = useState(null); // { kind, url, name }
@@ -32,12 +33,14 @@ export default function Home() {
     setMessages((prev) => [...prev, userMessage]);
 
     // 2) Enviar sólo el texto a la API y agregar la respuesta del asistente
-    if (text && text.trim()) {
+    const trimmed = (text || "").trim();
+    if (trimmed) {
+      setLoading(true);
       try {
         const res = await fetch("/api/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ messages: [{ role: "user", content: text.trim() }] }),
+          body: JSON.stringify({ messages: [{ role: "user", content: trimmed }] }),
         });
         const data = await res.json();
         const assistantText = data?.text || "";
@@ -50,14 +53,16 @@ export default function Home() {
           ...prev,
           { id: `a-${Date.now()}`, role: "assistant", type: "text", content: "Hubo un error obteniendo la respuesta." },
         ]);
+      } finally {
+        setLoading(false);
       }
     }
   };
 
-  // Desplazamiento suave hacia el final cuando cambian los mensajes UI
+  // Desplazamiento suave hacia el final cuando cambian los mensajes UI o el estado de carga
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  }, [messages, loading]);
 
   const onAttachmentClick = (a) => setLightbox(a);
   const closeLightbox = () => setLightbox(null);
@@ -83,12 +88,32 @@ export default function Home() {
             );
           })}
 
+          {/* Indicador de escritura del asistente */}
+          {loading && (
+            <AssistantMessage borderClass="border-gray-200">
+              <div className="flex items-center gap-2">
+                <span className="sr-only">El asistente está escribiendo…</span>
+                <div className="flex items-end gap-1" aria-hidden="true">
+                  <span className="block h-2.5 w-2.5 rounded-full bg-gray-300 dot"></span>
+                  <span className="block h-2.5 w-2.5 rounded-full bg-gray-300 dot"></span>
+                  <span className="block h-2.5 w-2.5 rounded-full bg-gray-300 dot"></span>
+                </div>
+              </div>
+              <style jsx>{`
+                @keyframes typingBounce { 0%, 80%, 100% { transform: translateY(0); opacity: .6 } 40% { transform: translateY(-3px); opacity: 1 } }
+                .dot { animation: typingBounce 1s infinite ease-in-out; }
+                .dot:nth-child(2) { animation-delay: .15s; }
+                .dot:nth-child(3) { animation-delay: .30s; }
+              `}</style>
+            </AssistantMessage>
+          )}
+
           {/* Ancla inferior para scroll suave */}
           <li ref={bottomRef} aria-hidden="true" />
         </ul>
 
         {/* El input (Composer) permanece debajo como antes */}
-        <Composer onSend={handleSend} />
+        <Composer onSend={handleSend} loading={loading} />
       </div>
 
       {/* Lightbox modal */}
