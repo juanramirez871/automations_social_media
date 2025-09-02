@@ -1,6 +1,6 @@
 "use client";
 
-export default function UserMessage({ children, avatar = "AZ", bubbleClass = "bg-pink-500", attachments = [] }) {
+export default function UserMessage({ children, avatar = "AZ", bubbleClass = "bg-pink-500", attachments = [], onAttachmentClick }) {
   const hasText = typeof children === "string" ? children.trim().length > 0 : Boolean(children);
 
   return (
@@ -19,13 +19,19 @@ export default function UserMessage({ children, avatar = "AZ", bubbleClass = "bg
             <div className={`mt-2 ${hasText ? "pt-1" : ""}`}>
               <div className="flex flex-wrap gap-2 justify-end">
                 {attachments.map((a, idx) => (
-                  <div key={`${a.url}-${idx}`} className="rounded-lg overflow-hidden border border-white/20 bg-white/10">
+                  <button
+                    key={`${a.url}-${idx}`}
+                    type="button"
+                    onClick={() => onAttachmentClick?.(a)}
+                    className="rounded-lg overflow-hidden border border-white/20 bg-white/10 focus:outline-hidden focus:ring-2 focus:ring-white/50 cursor-zoom-in"
+                    aria-label={`Ver ${a.kind === 'video' ? 'video' : 'imagen'} en grande`}
+                  >
                     {a.kind === "video" ? (
-                      <video src={a.url} className="h-24 w-24 object-cover" controls muted />
+                      <video src={a.url} className="h-24 w-24 object-cover pointer-events-none" muted />
                     ) : (
-                      <img src={a.url} alt={a.name || "imagen"} className="h-24 w-24 object-cover" />
+                      <img src={a.url} alt={a.name || "imagen"} className="h-24 w-24 object-cover pointer-events-none" />
                     )}
-                  </div>
+                  </button>
                 ))}
               </div>
             </div>
