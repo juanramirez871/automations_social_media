@@ -1,5 +1,5 @@
 import { google } from '@ai-sdk/google';
-import { streamText, convertToModelMessages } from 'ai';
+import { generateText, convertToModelMessages } from 'ai';
 
 export async function POST(req) {
   try {
@@ -50,14 +50,13 @@ Reglas estrictas:
     // Componer mensajes: siempre incluir la instrucción de sistema de Roro
     const composedUIMessages = [
       { role: 'system', parts: [{ type: 'text', text: roroSystemText }] },
-      // Si detectamos fuera de tema y no hay indicios de on-topic, reforzamos la instrucción
       ...(!hasOnTopic && hasOffTopic
         ? [{ role: 'system', parts: [{ type: 'text', text: 'El mensaje del usuario parece fuera del ámbito de redes sociales. Responde exactamente: "No puedo ayudarte con eso" y no agregues nada más.' }] }]
         : []),
       ...messages,
     ];
 
-    // Normalizar a formato con parts para evitar errores en convertToModelMessages
+    // Normalizar a formato con parts para evitar errores
     const normalizeToParts = (m) => {
       if (Array.isArray(m?.parts)) return m;
       const text = typeof m?.content === 'string' && m.content
@@ -67,14 +66,14 @@ Reglas estrictas:
     };
     const normalized = composedUIMessages.map(normalizeToParts);
 
-    const result = await streamText({
-      model: google('gemini-1.5-flash'),
+    const { text } = await generateText({
+      model: google('gemini-2.5-pro'),
       messages: convertToModelMessages(normalized),
       maxTokens: 1000,
       temperature: 0.7,
     });
 
-    return result.toUIMessageStreamResponse();
+    return Response.json({ text });
   } catch (error) {
     console.error('Error en API chat:', error);
     return new Response(
