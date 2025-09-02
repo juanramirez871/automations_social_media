@@ -5,19 +5,45 @@ import IntroHeader from "@/components/IntroHeader";
 import AssistantMessage from "@/components/AssistantMessage";
 import UserMessage from "@/components/UserMessage";
 import Composer from "@/components/Composer";
+import { supabase } from "@/lib/supabaseClient";
 
 export default function Home() {
   // Mensajes UI propios (para soportar adjuntos locales y formato existente)
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(false);
   // Estado de autenticación (demo) y control de una sola aparición
-  const [isLoggedIn] = useState(false);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
   const authGateShownRef = useRef(false);
   
   const bottomRef = useRef(null);
   const [lightbox, setLightbox] = useState(null); // { kind, url, name }
 
   const handleSend = async ({ text, files }) => {
+    // Guard: requiere sesión válida
+    if (!supabase) {
+      // Sin configuración de Supabase: seguir mostrando gate UI-only
+      if (!isLoggedIn && !authGateShownRef.current) {
+        setMessages((prev) => [
+          ...prev,
+          { id: `a-${Date.now()}-auth-gate`, role: "assistant", type: "widget-auth-gate" },
+        ]);
+        authGateShownRef.current = true;
+      }
+      return;
+    }
+
+    const { data } = await supabase.auth.getSession();
+    const hasSession = Boolean(data?.session);
+    if (!hasSession) {
+      if (!authGateShownRef.current) {
+        setMessages((prev) => [
+          ...prev,
+          { id: `a-${Date.now()}-auth-gate`, role: "assistant", type: "widget-auth-gate" },
+        ]);
+        authGateShownRef.current = true;
+      }
+      return;
+    }
     const attachments = (files || []).map((f) => {
       const isVideo = f.type?.startsWith("video/") || /(\.(mp4|mov|webm|ogg|mkv|m4v))$/i.test(f.name || "");
       const kind = isVideo ? "video" : "image";
@@ -74,14 +100,31 @@ export default function Home() {
 
   // Mostrar el widget de autenticación automáticamente cuando no hay login (solo una vez)
   useEffect(() => {
-    if (!isLoggedIn && !authGateShownRef.current) {
-      setMessages((prev) => [
-        ...prev,
-        { id: `a-${Date.now()}-auth-gate`, role: "assistant", type: "widget-auth-gate" },
-      ]);
-      authGateShownRef.current = true;
-    }
-  }, [isLoggedIn]);
+    const checkSession = async () => {
+      if (!supabase) {
+        setIsLoggedIn(false);
+        if (!authGateShownRef.current) {
+          setMessages((prev) => [
+            ...prev,
+            { id: `a-${Date.now()}-auth-gate`, role: "assistant", type: "widget-auth-gate" },
+          ]);
+          authGateShownRef.current = true;
+        }
+        return;
+      }
+      const { data } = await supabase.auth.getSession();
+      const hasSession = Boolean(data?.session);
+      setIsLoggedIn(hasSession);
+      if (!hasSession && !authGateShownRef.current) {
+        setMessages((prev) => [
+          ...prev,
+          { id: `a-${Date.now()}-auth-gate`, role: "assistant", type: "widget-auth-gate" },
+        ]);
+        authGateShownRef.current = true;
+      }
+    };
+    checkSession();
+  }, []);
 
   const onAttachmentClick = (a) => setLightbox(a);
   const closeLightbox = () => setLightbox(null);
@@ -130,15 +173,42 @@ export default function Home() {
     const [pass, setPass] = useState("");
     const [confirm, setConfirm] = useState("");
 
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
       e.preventDefault();
+
+      if (supabase) {
+        try {
+          if (mode === "signup") {
+            const { error } = await supabase.auth.signUp({ email, password: pass, options: { data: { name } } });
+            if (error) throw error;
+            setIsLoggedIn(true);
+          } else {
+            const { error } = await supabase.auth.signInWithPassword({ email, password: pass });
+            if (error) throw error;
+            setIsLoggedIn(true);
+          }
+          setMessages((prev) => [
+            ...prev,
+            { id: `a-${Date.now()}-auth-ok`, role: "assistant", type: "text", content: "Ingreso exitoso 🥳." },  
+          ]);
+          return;
+        } catch (err) {
+          setMessages((prev) => [
+            ...prev,
+            { id: `a-${Date.now()}-auth-error`, role: "assistant", type: "text", content: `Error de autenticación: ${err.message}` },
+          ]);
+          return;
+        }
+      }
+
+      // Fallback si no hay supabase configurado
       setMessages((prev) => [
         ...prev,
         {
           id: `a-${Date.now()}-auth-submitted`,
           role: "assistant",
           type: "text",
-          content: `Formulario de ${mode === "login" ? "inicio de sesión" : "creación de cuenta"} recibido (demo, sin lógica).`,
+          content: `Formulario de ${mode === "login" ? "inicio de sesión" : "creación de cuenta"} recibido (demo).`,
         },
       ]);
     };
