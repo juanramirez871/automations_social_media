@@ -149,7 +149,7 @@ export default function Composer({ onSend, loading = false }) {
         >
           <textarea
             className={`p-3 sm:p-4 ${textareaPadding} block w-full border-gray-200 rounded-lg sm:text-sm focus:border-blue-300 focus:ring-blue-300 disabled:opacity-50 disabled:pointer-events-none`}
-            placeholder="Arrastra y suelta imágenes o videos aquí, o haz clic en el clip para seleccionar... (Enter para enviar, Shift+Enter para nueva línea)"
+            placeholder="Escribe tu mensaje..."
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             onDrop={onDrop}
