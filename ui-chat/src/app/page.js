@@ -1,18 +1,25 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useChat } from '@ai-sdk/react';
 
 export default function Home() {
-  const [messages, setMessages] = useState(() => [
-    {
-      id: crypto.randomUUID(),
-      role: "assistant",
-      text: "¡Hola! Soy tu asistente. ¿En qué te ayudo hoy?",
-      attachments: [],
-    },
-  ]);
-  const [input, setInput] = useState("");
-  const [isSending, setIsSending] = useState(false);
+  const {
+    messages,
+    status,
+    sendMessage
+  } = useChat({
+    api: '/api/chat',
+    initialMessages: [
+      {
+        id: crypto.randomUUID(),
+        role: "assistant",
+        parts: [{ type: 'text', text: "¡Hola! Soy tu asistente con IA. ¿En qué te ayudo hoy?" }],
+      },
+    ],
+  });
+
+  const [input, setInput] = useState('');
   const [pendingMedia, setPendingMedia] = useState([]); // {id, url, type, name, size}
   const listRef = useRef(null);
   const [dragActive, setDragActive] = useState(false);
@@ -28,9 +35,11 @@ export default function Home() {
     el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
   }, [messages.length]);
 
+  const isBusy = status === 'submitted' || status === 'streaming';
+
   const canSend = useMemo(
-    () => (input.trim().length > 0 || pendingMedia.length > 0) && !isSending,
-    [input, pendingMedia.length, isSending]
+    () => (input.trim().length > 0 || pendingMedia.length > 0) && !isBusy,
+    [input, pendingMedia.length, isBusy]
   );
 
   const onPickFiles = (files) => {
@@ -96,61 +105,56 @@ export default function Home() {
     if (files && files.length) onPickFiles(files);
   };
 
-  const sendMessage = async () => {
+  const handleSendMessage = async (e) => {
+    if (e) e.preventDefault();
     if (!canSend) return;
-    const userMsg = {
-      id: crypto.randomUUID(),
-      role: "user",
-      text: input.trim(),
-      attachments: pendingMedia.map((m) => ({
-        type: m.type,
-        url: m.url,
-        name: m.name,
-        size: m.size,
-      })),
-    };
-    setInput("");
+    
+    let messageContent = input.trim();
+    
+    // Si hay archivos adjuntos, agregar información sobre ellos
+    if (pendingMedia.length > 0) {
+      const mediaInfo = pendingMedia.map(m => `[${m.type}: ${m.name}]`).join(', ');
+      messageContent = messageContent ? `${messageContent}\n\nArchivos adjuntos: ${mediaInfo}` : `Archivos adjuntos: ${mediaInfo}`;
+    }
+    
+    // Limpiar archivos pendientes e input
+    pendingMedia.forEach(m => URL.revokeObjectURL(m.url));
     setPendingMedia([]);
-    setMessages((m) => [...m, userMsg]);
-    setIsSending(true);
-
-    // Simula una respuesta del asistente
-    setTimeout(() => {
-      const reply = {
-        id: crypto.randomUUID(),
-        role: "assistant",
-        text:
-          userMsg.text || userMsg.attachments?.length
-            ? `Recibí ${userMsg.text ? `“${userMsg.text}”` : "tu contenido"}. ¿Quieres que haga algo más?`
-            : "¿Quieres que haga algo más?",
-        attachments: [],
-      };
-      setMessages((m) => [...m, reply]);
-      setIsSending(false);
-    }, 500);
+    setInput('');
+    
+    // Enviar mensaje usando useChat v5
+    sendMessage({ text: messageContent });
   };
 
   const onKeyDown = (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      sendMessage();
+      handleSendMessage(e);
     }
   };
 
   return (
-    <div className="min-h-dvh bg-gradient-to-b from-sky-50 to-white text-gray-900">
+    <div className={`min-h-dvh transition-all duration-300 ${
+      dragActive 
+        ? 'bg-gradient-to-b from-sky-50/80 to-white/80 backdrop-blur-md' 
+        : 'bg-gradient-to-b from-sky-50 to-white'
+    } text-gray-900`}>
       <main className="mx-auto max-w-3xl p-4 sm:p-6">
         <div className="flex items-center justify-between mb-4 sm:mb-6">
           <h1 className="text-xl sm:text-2xl font-semibold tracking-tight text-sky-900">
-            Chat
+            Chat IA
           </h1>
           <span className="text-xs sm:text-sm text-sky-700/80 bg-sky-100 px-2 py-1 rounded-full">
-            En línea
+            {isBusy ? 'Pensando...' : 'En línea'}
           </span>
         </div>
 
         <section
-          className="bg-white/90 backdrop-blur supports-[backdrop-filter]:bg-white/70 border border-sky-100 shadow-sm rounded-2xl overflow-hidden relative"
+          className={`transition-all duration-300 ${
+            dragActive 
+              ? 'bg-white/60 backdrop-blur-xl supports-[backdrop-filter]:bg-white/40 border-2 border-sky-300 shadow-2xl' 
+              : 'bg-white/90 backdrop-blur supports-[backdrop-filter]:bg-white/70 border border-sky-100 shadow-sm'
+          } rounded-2xl overflow-hidden relative`}
           onDragEnter={handleDragEnter}
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
@@ -158,8 +162,8 @@ export default function Home() {
         >
           {dragActive && (
             <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
-              <div className="mx-4 w-full max-w-sm rounded-2xl border-2 border-dashed border-sky-300 bg-white/80 backdrop-blur p-6 text-center text-sky-900 shadow">
-                <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-sky-100 text-sky-700">
+              <div className="mx-4 w-full max-w-sm rounded-2xl border-2 border-dashed border-sky-300 bg-white/60 backdrop-blur-xl p-6 text-center text-sky-900 shadow-2xl">
+                <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-sky-100/80 backdrop-blur text-sky-700">
                   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-6 w-6">
                     <path d="M12 2a.75.75 0 0 1 .75.75V14a.75.75 0 0 1-1.5 0V2.75A.75.75 0 0 1 12 2Zm-5.47 6.53a.75.75 0 0 1 1.06 0L12 12.94l4.41-4.41a.75.75 0 0 1 1.06 1.06l-4.94 4.95a1.5 1.5 0 0 1-2.12 0L6.53 9.59a.75.75 0 0 1 0-1.06ZM4 17.25A2.75 2.75 0 0 1 6.75 14.5h10.5A2.75 2.75 0 0 1 20 17.25v.5A2.25 2.25 0 0 1 17.75 20H6.25A2.25 2.25 0 0 1 4 17.75v-.5Z" />
                   </svg>
@@ -169,29 +173,43 @@ export default function Home() {
               </div>
             </div>
           )}
+          
           {/* Cabecera */}
-          <div className="px-4 sm:px-5 py-3 border-b border-sky-100 bg-gradient-to-r from-white to-sky-50 flex items-center gap-3">
+          <div className={`px-4 sm:px-5 py-3 border-b border-sky-100 transition-all duration-300 ${
+            dragActive 
+              ? 'bg-gradient-to-r from-white/60 to-sky-50/60 backdrop-blur-xl' 
+              : 'bg-gradient-to-r from-white to-sky-50'
+          } flex items-center gap-3`}>
             <div className="size-8 rounded-full bg-sky-200 text-sky-900 flex items-center justify-center font-semibold select-none">
-              A
+              🤖
             </div>
             <div className="leading-tight">
-              <p className="text-sm font-medium text-sky-900">Asistente</p>
-              <p className="text-xs text-sky-700/80">Respuestas rápidas y claras</p>
+              <p className="text-sm font-medium text-sky-900">Asistente IA</p>
+              <p className="text-xs text-sky-700/80">Powered by Google Gemini</p>
             </div>
           </div>
 
           {/* Lista de mensajes */}
-          <div ref={listRef} className="h-[60vh] sm:h-[65vh] overflow-y-auto px-3 sm:px-4 py-4 space-y-4 bg-white">
-            {messages.map((m) => (
-              <MessageBubble key={m.id} role={m.role} text={m.text} attachments={m.attachments} />
-            ))}
-            {isSending && (
-              <MessageBubble role="assistant" text="Escribiendo…" typing />
+          <div ref={listRef} className={`h-[60vh] sm:h-[65vh] overflow-y-auto px-3 sm:px-4 py-4 space-y-4 transition-all duration-300 ${
+            dragActive ? 'bg-white/40 backdrop-blur-xl' : 'bg-white'
+          }`}>
+            {messages.map((m) => {
+              const text = Array.isArray(m.parts)
+                ? m.parts.map(p => p.type === 'text' ? p.text : '').join('')
+                : (m.content ?? '');
+              return (
+                <MessageBubble key={m.id} role={m.role} text={text} attachments={[]} dragActive={dragActive} />
+              );
+            })}
+            {(status === 'submitted' || status === 'streaming') && (
+              <MessageBubble role="assistant" text="Escribiendo…" typing dragActive={dragActive} />
             )}
           </div>
 
           {/* Entrada de texto */}
-          <div className="border-t border-sky-100 bg-white p-3 sm:p-4">
+          <div className={`border-t border-sky-100 transition-all duration-300 ${
+            dragActive ? 'bg-white/40 backdrop-blur-xl' : 'bg-white'
+          } p-3 sm:p-4`}>
             {/* Previsualizaciones */}
             {pendingMedia.length > 0 && (
               <div className="mb-3 grid grid-cols-3 sm:grid-cols-4 gap-2">
@@ -218,7 +236,7 @@ export default function Home() {
               </div>
             )}
 
-            <div className="flex items-end gap-2">
+            <form onSubmit={handleSendMessage} className="flex items-end gap-2">
               <label className="inline-flex items-center justify-center rounded-xl border border-sky-200 bg-sky-50 text-sky-900 shadow-inner shadow-sky-100/50 px-3 py-2 sm:px-3.5 sm:py-2 hover:bg-sky-100 cursor-pointer" title="Adjuntar imagen o video">
                 <input
                   type="file"
@@ -240,7 +258,7 @@ export default function Home() {
                 className="flex-1 resize-none rounded-xl border border-sky-200 focus:border-sky-300 focus:outline-none bg-sky-50/50 placeholder:text-sky-600/60 text-sky-900 px-3 py-2 sm:px-4 sm:py-2.5 shadow-inner shadow-sky-100/50"
               />
               <button
-                onClick={sendMessage}
+                type="submit"
                 disabled={!canSend}
                 className="inline-flex items-center gap-2 rounded-xl bg-sky-600 text-white px-3 py-2 sm:px-4 sm:py-2.5 text-sm font-medium shadow-sm enabled:hover:bg-sky-700 enabled:active:bg-sky-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 aria-label="Enviar"
@@ -256,7 +274,7 @@ export default function Home() {
                 </svg>
                 Enviar
               </button>
-            </div>
+            </form>
           </div>
         </section>
       </main>
@@ -264,20 +282,25 @@ export default function Home() {
   );
 }
 
-function MessageBubble({ role, text, attachments = [], typing = false }) {
+function MessageBubble({ role, text, attachments = [], typing = false, dragActive = false }) {
   const isUser = role === "user";
   return (
     <div className={`flex items-end gap-2 ${isUser ? "justify-end" : "justify-start"}`}>
       {!isUser && (
         <div className="size-7 shrink-0 rounded-full bg-sky-200 text-sky-900 flex items-center justify-center text-xs font-semibold select-none">
-          A
+          🤖
         </div>
       )}
       <div
-        className={`max-w-[80%] sm:max-w-[70%] rounded-2xl px-3 py-2 sm:px-4 sm:py-2.5 text-sm shadow ${isUser
-          ? "bg-sky-100 text-sky-900 rounded-br-sm shadow-sky-100"
-          : "bg-gray-100 text-gray-900 rounded-bl-sm shadow-gray-100"
-          }`}
+        className={`max-w-[80%] sm:max-w-[70%] rounded-2xl px-3 py-2 sm:px-4 sm:py-2.5 text-sm shadow transition-all duration-300 ${
+          isUser
+            ? dragActive 
+              ? "bg-sky-100/80 backdrop-blur text-sky-900 rounded-br-sm shadow-sky-100/50" 
+              : "bg-sky-100 text-sky-900 rounded-br-sm shadow-sky-100"
+            : dragActive 
+              ? "bg-gray-100/80 backdrop-blur text-gray-900 rounded-bl-sm shadow-gray-100/50" 
+              : "bg-gray-100 text-gray-900 rounded-bl-sm shadow-gray-100"
+        }`}
       >
         {typing ? (
           <TypingDots />
