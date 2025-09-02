@@ -14,10 +14,52 @@ export default function Home() {
   // Estado de autenticación (demo) y control de una sola aparición
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const authGateShownRef = useRef(false);
-  
   const bottomRef = useRef(null);
   const [lightbox, setLightbox] = useState(null); // { kind, url, name }
 
+  // Helper: guardar mensaje en DB (ignora si no hay supabase)
+  const saveMessageToDB = async ({ userId, role, content, attachments }) => {
+    if (!supabase || !userId) return;
+    try {
+      await supabase
+        .from("messages")
+        .insert([{ user_id: userId, role, content, attachments: attachments || null }]);
+    } catch (e) {
+      // Evitar romper la UI si falla
+      console.warn("No se pudo guardar el mensaje:", e?.message || e);
+    }
+  };
+
+  // Helper: cargar historial para el usuario autenticado desde DB y mapear al formato UI
+  const loadHistoryForCurrentUser = async () => {
+    if (!supabase) return;
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const userId = sessionData?.session?.user?.id;
+      if (!userId) return;
+
+      const { data: rows, error } = await supabase
+        .from("messages")
+        .select("id, role, content, attachments, created_at")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: true });
+      if (error) throw error;
+
+      const normalized = (rows || []).map((r) => {
+        if (r.role === "assistant") {
+          return { id: r.id, role: "assistant", type: "text", content: r.content };
+        }
+        const hasAtt = Array.isArray(r.attachments) && r.attachments.length > 0;
+        const attNote = hasAtt ? `\n[Adjuntos: ${r.attachments.map((a) => a.name).join(", ")}]` : "";
+        return { id: r.id, role: "user", type: "text", text: `${r.content}${attNote}`.trim(), attachments: [] };
+      });
+
+      setMessages(normalized);
+      setIsLoggedIn(true);
+    } catch (e) {
+      console.warn("No se pudo cargar el historial:", e?.message || e);
+    }
+  };
   const handleSend = async ({ text, files }) => {
     // Guard: requiere sesión válida
     if (!supabase) {
@@ -32,8 +74,8 @@ export default function Home() {
       return;
     }
 
-    const { data } = await supabase.auth.getSession();
-    const hasSession = Boolean(data?.session);
+    const { data: sessionData } = await supabase.auth.getSession();
+    const hasSession = Boolean(sessionData?.session);
     if (!hasSession) {
       if (!authGateShownRef.current) {
         setMessages((prev) => [
@@ -44,6 +86,8 @@ export default function Home() {
       }
       return;
     }
+    const userId = sessionData?.session?.user?.id;
+
     const attachments = (files || []).map((f) => {
       const isVideo = f.type?.startsWith("video/") || /(\.(mp4|mov|webm|ogg|mkv|m4v))$/i.test(f.name || "");
       const kind = isVideo ? "video" : "image";
@@ -51,7 +95,8 @@ export default function Home() {
       return { kind, url, name: f.name };
     });
 
-    // 1) Agregar el mensaje del usuario a la UI
+    // 1) Agregar el mensaje del usuario a la UI y guardar en DB
+    const trimmed = (text || "").trim();
     const userMessage = {
       id: `u-${Date.now()}`,
       role: "user",
@@ -61,8 +106,11 @@ export default function Home() {
     };
     setMessages((prev) => [...prev, userMessage]);
 
+    // Guardar en DB (omitir URLs blob locales de adjuntos)
+    const attachmentsForDB = attachments.map(({ kind, name }) => ({ kind, name }));
+    await saveMessageToDB({ userId, role: "user", content: trimmed, attachments: attachmentsForDB });
+
     // 2) Enviar sólo el texto a la API y agregar la respuesta del asistente
-    const trimmed = (text || "").trim();
     if (trimmed) {
       setLoading(true);
       try {
@@ -82,6 +130,11 @@ export default function Home() {
           additions.push({ id: `a-${Date.now()}-w`, role: "assistant", type: "widget-platforms" });
         }
         setMessages((prev) => [...prev, ...additions]);
+
+        // Guardar respuesta del asistente en DB
+        if (assistantText) {
+          await saveMessageToDB({ userId, role: "assistant", content: assistantText, attachments: null });
+        }
       } catch (e) {
         setMessages((prev) => [
           ...prev,
@@ -114,13 +167,17 @@ export default function Home() {
       }
       const { data } = await supabase.auth.getSession();
       const hasSession = Boolean(data?.session);
-      setIsLoggedIn(hasSession);
-      if (!hasSession && !authGateShownRef.current) {
-        setMessages((prev) => [
-          ...prev,
-          { id: `a-${Date.now()}-auth-gate`, role: "assistant", type: "widget-auth-gate" },
-        ]);
-        authGateShownRef.current = true;
+      if (hasSession) {
+        await loadHistoryForCurrentUser();
+      } else {
+        setIsLoggedIn(false);
+        if (!authGateShownRef.current) {
+          setMessages((prev) => [
+            ...prev,
+            { id: `a-${Date.now()}-auth-gate`, role: "assistant", type: "widget-auth-gate" },
+          ]);
+          authGateShownRef.current = true;
+        }
       }
     };
     checkSession();
@@ -181,12 +238,11 @@ export default function Home() {
           if (mode === "signup") {
             const { error } = await supabase.auth.signUp({ email, password: pass, options: { data: { name } } });
             if (error) throw error;
-            setIsLoggedIn(true);
           } else {
             const { error } = await supabase.auth.signInWithPassword({ email, password: pass });
             if (error) throw error;
-            setIsLoggedIn(true);
           }
+          await loadHistoryForCurrentUser();
           setMessages((prev) => [
             ...prev,
             { id: `a-${Date.now()}-auth-ok`, role: "assistant", type: "text", content: "Ingreso exitoso 🥳." },  
