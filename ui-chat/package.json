@@ -12,6 +12,8 @@
     "@ai-sdk/react": "^2.0.29",
     "@google/generative-ai": "^0.24.1",
     "ai": "^5.0.29",
+    "flowbite": "^3.1.2",
+    "flowbite-react": "^0.12.8",
     "next": "15.5.2",
     "react": "19.1.0",
     "react-dom": "19.1.0"

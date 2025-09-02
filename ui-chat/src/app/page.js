@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useChat } from '@ai-sdk/react';
+import 'flowbite';
 
 export default function Home() {
   const {
@@ -28,6 +29,13 @@ export default function Home() {
   const MAX_FILES = 6;
   const MAX_FILE_MB = 25;
 
+  // Prompts rápidos inspirados en el snippet del usuario
+  const quickPrompts = [
+    'Ayúdame con una receta fácil de cheesecake con ingredientes sencillos',
+    'Redacta un copy breve y divertido para un post de Instagram sobre cafés de especialidad',
+    'Dame 3 ideas de Reels para promocionar un lanzamiento esta semana'
+  ];
+
   useEffect(() => {
     const el = listRef.current;
     if (!el) return;
@@ -41,6 +49,9 @@ export default function Home() {
     [input, pendingMedia.length, isBusy]
   );
 
+  // Mostrar saludo dentro del chat hasta que exista un mensaje del usuario
+  const hasUserMessage = useMemo(() => messages.some(m => m.role === 'user'), [messages]);
+  const showWelcomeInside = !hasUserMessage;
   const onPickFiles = (files) => {
     const items = Array.from(files || []);
     if (!items.length) return;
@@ -91,44 +102,57 @@ export default function Home() {
 
   const onKeyDown = (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSendMessage(e); } };
 
+  const sendQuick = (text) => {
+    // Dispara el flujo directamente para experiencia tipo sugerencia
+    setInput('');
+    sendMessage({ text });
+  };
+
+  const showHero = messages.length <= 1; // solo mensaje de bienvenida
+
   return (
-    <div className={`min-h-dvh transition-all duration-300 ${dragActive ? 'bg-gradient-to-b from-sky-50/80 to-white/80 backdrop-blur-md' : 'bg-gradient-to-b from-sky-50 to-white'} text-gray-900`}>
-      <main className="mx-auto max-w-3xl p-4 sm:p-6">
-        <div className="flex items-center justify-between mb-4 sm:mb-6">
-          <h1 className="text-xl sm:text-2xl font-semibold tracking-tight text-sky-900">Roro · Asistente de Redes Sociales</h1>
-          <span className="text-xs sm:text-sm text-sky-700/80 bg-sky-100 px-2 py-1 rounded-full">{isBusy ? 'Pensando...' : 'En línea'}</span>
-        </div>
+    <div className={`min-h-dvh transition-all duration-300 ${dragActive ? 'bg-gradient-to-tr from-sky-50/80 to-white/80 backdrop-blur-md' : 'bg-gradient-to-tr from-sky-50 to-white'} text-gray-900`}>
+      <main className="mx-auto max-w-4xl p-4 sm:p-6">
+        {/* Hero superior eliminado: el saludo vive dentro del chat */}
 
         <section
-          className={`transition-all duration-300 ${dragActive ? 'bg-white/60 backdrop-blur-xl supports-[backdrop-filter]:bg-white/40 border-2 border-sky-300 shadow-2xl' : 'bg-white/90 backdrop-blur supports-[backdrop-filter]:bg-white/70 border border-sky-100 shadow-sm'} rounded-2xl overflow-hidden relative`}
+          className={`${dragActive ? 'container-card-strong' : 'container-card'} overflow-hidden relative`}
           onDragEnter={handleDragEnter}
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
         >
-          {dragActive && (
-            <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
-              <div className="mx-4 w-full max-w-sm rounded-2xl border-2 border-dashed border-sky-300 bg-white/60 backdrop-blur-xl p-6 text-center text-sky-900 shadow-2xl">
-                <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-sky-100/80 backdrop-blur text-sky-700">
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-6 w-6"><path d="M12 2a.75.75 0 0 1 .75.75V14a.75.75 0 0 1-1.5 0V2.75A.75.75 0 0 1 12 2Zm-5.47 6.53a.75.75 0 0 1 1.06 0L12 12.94l4.41-4.41a.75.75 0 0 1 1.06 1.06l-4.94 4.95a1.5 1.5 0 0 1-2.12 0L6.53 9.59a.75.75 0 0 1 0-1.06ZM4 17.25A2.75 2.75 0 0 1 6.75 14.5h10.5A.75.75 0 0 1 18 17.25v.5A2.25 2.25 0 0 1 17.75 20H6.25A2.25 2.25 0 0 1 4 17.75v-.5Z"/></svg>
-                </div>
-                <p className="text-sm font-medium">Suelta imágenes o videos para adjuntar</p>
-                <p className="mt-1 text-xs text-sky-700/80">Hasta {MAX_FILES} archivos, máx {MAX_FILE_MB} MB c/u</p>
-              </div>
-            </div>
-          )}
-
           <div className={`px-4 sm:px-5 py-3 border-b border-sky-100 transition-all duration-300 ${dragActive ? 'bg-gradient-to-r from-white/60 to-sky-50/60 backdrop-blur-xl' : 'bg-gradient-to-r from-white to-sky-50'} flex items-center gap-3`}>
-            <div className="size-8 rounded-full bg-sky-200 text-sky-900 flex items-center justify-center font-semibold select-none">🤖</div>
+            <div className="size-9 sm:size-10 rounded-full bg-sky-200 text-sky-900 flex items-center justify-center font-semibold select-none shadow-inner">🤖</div>
             <div className="leading-tight">
               <p className="text-sm font-medium text-sky-900">Roro</p>
-              <p className="text-xs text-sky-700/80">Especialista en IG/FB · Gemini</p>
+              <p className="text-xs small-muted">Especialista en IG/FB · Gemini</p>
             </div>
+            <div className="ml-auto"><span className={`text-[11px] sm:text-xs ${isBusy ? 'text-sky-800 bg-sky-200' : 'text-sky-700/80 bg-sky-100'} px-2 py-1 rounded-full`}>{isBusy ? 'Pensando…' : 'En línea'}</span></div>
           </div>
 
-          <div ref={listRef} className={`h-[60vh] sm:h-[65vh] overflow-y-auto px-3 sm:px-4 py-4 space-y-4 transition-all duration-300 ${dragActive ? 'bg-white/40 backdrop-blur-xl' : 'bg-white'}`}>
+          {/* Lista de mensajes */}
+          <div ref={listRef} className={`h-[62vh] sm:h-[68vh] overflow-y-auto px-3 sm:px-6 py-5 space-y-5 transition-all duration-300 ${dragActive ? 'bg-white/40 backdrop-blur-xl' : 'bg-white'}`}>
+            {showWelcomeInside && (
+              <div className="w-full mx-auto mb-2">
+                <div className="mx-auto max-w-2xl text-center">
+                  <h1 className="bg-gradient-to-r from-black via-pink-500 to-violet-800 inline-block text-transparent bg-clip-text font-semibold text-3xl sm:text-4xl leading-tight">Hola,</h1><br/>
+                  <h2 className="bg-gradient-to-r from-black via-pink-500 to-violet-800 inline-block text-transparent bg-clip-text font-semibold text-3xl sm:text-4xl -mt-2 mb-2 leading-tight">¿en qué te ayudo hoy?</h2>
+                  <p className="text-neutral-600 leading-tight tracking-tight mb-4 text-sm sm:text-base">Usa uno de los prompts comunes abajo o escribe el tuyo para empezar.</p>
+                </div>
+                <div className="flex w-full mb-2 gap-3 text-sm text-neutral-800 flex-col sm:flex-row">
+                  {quickPrompts.map((q, idx) => (
+                    <button key={idx} type="button" onClick={() => sendQuick(q)} className="group relative grow border border-neutral-200 shadow-sm hover:shadow-md hover:-translate-y-[1px] hover:bg-neutral-100/30 rounded-xl p-4 text-left transition-all duration-300">
+                      {q}
+                      <svg className="absolute right-2 bottom-2 h-4 text-neutral-500 opacity-0 -translate-x-4 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-300" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><g fill="none"><path d="M2 8a.75.75 0 0 1 .75-.75h8.787L8.25 4.309a.75.75 0 0 1 1-1.118L14 7.441a.75.75 0 0 1 0 1.118l-4.75 4.25a.75.75 0 1 1-1-1.118l3.287-2.941H2.75A.75.75 0 0 1 2 8z" fill="currentColor"></path></g></svg>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {messages.map((m) => {
-              const text = Array.isArray(m.parts) ? m.parts.map(p => p.type === 'text' ? p.text : '').join('') : (m.content ?? '');
+              const text = Array.isArray(m.parts) ? m.parts.map((p) => (p.type === 'text' ? p.text : '')).join('') : m.content ?? '';
               return <MessageBubble key={m.id} role={m.role} text={text} attachments={[]} dragActive={dragActive} />;
             })}
             {(status === 'submitted' || status === 'streaming') && (
@@ -136,12 +160,14 @@ export default function Home() {
             )}
           </div>
 
-          <div className={`border-t border-sky-100 transition-all duration-300 ${dragActive ? 'bg-white/40 backdrop-blur-xl' : 'bg-white'} p-3 sm:p-4`}>
+          {/* Dock de entrada */}
+          <div className={`border-t border-sky-100 transition-all duration-300 ${dragActive ? 'bg-white/40 backdrop-blur-xl' : 'bg-white'} p-3 sm:p-4`}
+            style={{ boxShadow: '0 -10px 25px -20px rgba(2,132,199,0.25)' }}>
             {pendingMedia.length > 0 && (
               <div className="mb-3 grid grid-cols-3 sm:grid-cols-4 gap-2">
                 {pendingMedia.map((m) => (
                   <div key={m.id} className="relative group rounded-lg overflow-hidden border border-sky-100 bg-sky-50">
-                    {m.type === "image" ? (
+                    {m.type === 'image' ? (
                       <img src={m.url} alt={m.name} className="h-24 w-full object-cover" />
                     ) : (
                       <video src={m.url} className="h-24 w-full object-cover" muted playsInline />
@@ -162,14 +188,14 @@ export default function Home() {
 
               <div className="flex-1">
                 <div className={`rounded-xl border ${dragActive ? 'border-sky-300 bg-white/70 backdrop-blur' : 'border-sky-200 bg-white'} shadow-inner px-3 py-2`}>
-                  <textarea className="w-full resize-none bg-transparent outline-none text-sm leading-6 placeholder-sky-800/50" rows={2} placeholder="Escribe tu idea de publicación o pide ayuda para programarla…" value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={onKeyDown} />
+                  <textarea className="w-full resize-none bg-transparent outline-none text-[15px] leading-6 placeholder-sky-800/50" rows={3} placeholder="Escribe tu idea de publicación o pide ayuda para programarla…" value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={onKeyDown} />
                 </div>
                 <div className="mt-1 flex items-center justify-between">
-                  <p className="text-[11px] text-sky-700/70">Enter para enviar, Shift+Enter para nueva línea</p>
+                  <p className="text-[11px] small-muted">Enter para enviar, Shift+Enter para nueva línea</p>
                 </div>
               </div>
 
-              <button type="submit" disabled={!canSend} className={`inline-flex items-center gap-2 rounded-xl px-3.5 py-2 text-sm font-medium shadow transition ${canSend ? 'bg-sky-600 text-white hover:bg-sky-700 active:bg-sky-800' : 'bg-sky-200 text-sky-600/70 cursor-not-allowed'}`} aria-label="Enviar">
+              <button type="submit" disabled={!canSend} className={`inline-flex items-center gap-2 rounded-xl px-3.5 py-2.5 text-sm font-medium shadow-md transition ${canSend ? 'bg-sky-600 text-white hover:bg-sky-700 active:bg-sky-800' : 'bg-sky-200 text-sky-600/70 cursor-not-allowed'}`} aria-label="Enviar">
                 <span>Enviar</span>
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="size-4"><path d="M2.293 2.293a1 1 0 0 1 1.055-.242l18 6a1 1 0 0 1 0 1.898l-6.92 2.769a2 2 0 0 0-1.113 1.113l-2.769 6.92a1 1 0 0 1-1.898 0l-6-18a1 1 0 0 1 .645-1.458ZM6.56 7.44l7.517 3.132a.25.25 0 0 1 0 .463L10.94 12.56a2 2 0 0 0-1.152 1.152L9.035 15a.25.25 0 0 1-.463 0L5.44 7.56a.25.25 0 0 1 .463-.463l.657.343Z"/></svg>
               </button>
@@ -184,9 +210,12 @@ export default function Home() {
 function MessageBubble({ role, text, attachments = [], typing = false, dragActive }) {
   const isAssistant = role === 'assistant';
   return (
-    <div className={`flex ${isAssistant ? 'justify-start' : 'justify-end'}`}>
-      <div className={`max-w-[85%] sm:max-w-[75%] rounded-2xl px-4 py-2 text-sm leading-6 shadow ${isAssistant ? `${dragActive ? 'bg-sky-50/70 border border-sky-200/70 backdrop-blur' : 'bg-sky-50 border border-sky-100'} text-sky-900` : 'bg-sky-600 text-white border border-sky-700/60'}`}>
-        <div className="whitespace-pre-wrap">
+    <div className={`flex items-end gap-3 ${isAssistant ? 'flex-row' : 'flex-row-reverse'}`}>
+      {/* Avatar */}
+      <div className={`size-8 shrink-0 rounded-full ${isAssistant ? 'bg-sky-200 text-sky-900' : 'bg-sky-600 text-white'} flex items-center justify-center font-semibold select-none shadow-inner`}>{isAssistant ? '🤖' : '👤'}</div>
+      {/* Burbuja estilo Flowbite (inspirado) */}
+      <div className={`max-w-[88%] sm:max-w-[78%] px-4 py-3 text-[15px] leading-7 shadow border ${isAssistant ? `${dragActive ? 'bg-sky-50/70 border-sky-200/70 backdrop-blur' : 'bg-white border-sky-100'} text-slate-900 rounded-2xl rounded-tl-none` : 'bg-sky-600 border-sky-700/60 text-white rounded-2xl rounded-tr-none'}`}>
+        <div className="whitespace-pre-wrap prose-chat">
           {typing ? (
             <TypingDots />
           ) : (
