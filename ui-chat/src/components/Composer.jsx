@@ -1,21 +1,194 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
+
 export default function Composer() {
+  const [previews, setPreviews] = useState([]); // [{id, url, kind, name, file}]
+  const [errors, setErrors] = useState([]);
+  const [dragActive, setDragActive] = useState(false);
+  const inputRef = useRef(null);
+
+  const accept = "image/*,video/*";
+
+  const handleFiles = (fileList) => {
+    const files = Array.from(fileList || []);
+    const newErrors = [];
+    const newItems = [];
+
+    files.forEach((f) => {
+      const isImage = f.type?.startsWith("image/") || /\.(png|jpe?g|gif|webp|svg)$/i.test(f.name);
+      const isVideo = f.type?.startsWith("video/") || /\.(mp4|mov|webm|ogg|mkv|m4v)$/i.test(f.name);
+      if (!isImage && !isVideo) {
+        newErrors.push(`${f.name}: formato no permitido`);
+        return;
+      }
+      const kind = isVideo ? "video" : "image";
+      const url = URL.createObjectURL(f);
+      newItems.push({ id: `${Date.now()}-${f.name}-${Math.random().toString(36).slice(2, 8)}`, file: f, url, kind, name: f.name });
+    });
+
+    if (newItems.length) setPreviews((prev) => [...prev, ...newItems]);
+    if (newErrors.length) setErrors((prev) => [...prev, ...newErrors]);
+  };
+
+  const onDrop = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+    const dt = e.dataTransfer;
+    if (dt?.files?.length) {
+      handleFiles(dt.files);
+      return;
+    }
+    if (dt?.items?.length) {
+      const asFiles = [];
+      for (const item of dt.items) {
+        if (item.kind === "file") {
+          const f = item.getAsFile();
+          if (f) asFiles.push(f);
+        }
+      }
+      if (asFiles.length) handleFiles(asFiles);
+    }
+  };
+
+  const onDragOver = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(true);
+  };
+  const onDragLeave = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+  };
+
+  const removePreview = (id) => {
+    setPreviews((prev) => {
+      const removed = prev.find((p) => p.id === id);
+      if (removed) URL.revokeObjectURL(removed.url);
+      return prev.filter((p) => p.id !== id);
+    });
+  };
+
+  useEffect(() => {
+    return () => {
+      previews.forEach((p) => URL.revokeObjectURL(p.url));
+    };
+  }, [previews]);
+
+  // Global drag & drop: habilita soltar archivos en cualquier zona de la app
+  useEffect(() => {
+    const handleWindowDragOver = (e) => {
+      e.preventDefault();
+      setDragActive(true);
+    };
+    const handleWindowDrop = (e) => {
+      e.preventDefault();
+      setDragActive(false);
+      const dt = e.dataTransfer;
+      if (dt?.files?.length) {
+        handleFiles(dt.files);
+        return;
+      }
+      if (dt?.items?.length) {
+        const asFiles = [];
+        for (const item of dt.items) {
+          if (item.kind === "file") {
+            const f = item.getAsFile();
+            if (f) asFiles.push(f);
+          }
+        }
+        if (asFiles.length) handleFiles(asFiles);
+      }
+    };
+    const handleWindowDragLeave = (e) => {
+      e.preventDefault();
+      setDragActive(false);
+    };
+
+    window.addEventListener("dragover", handleWindowDragOver);
+    window.addEventListener("drop", handleWindowDrop);
+    window.addEventListener("dragleave", handleWindowDragLeave);
+    return () => {
+      window.removeEventListener("dragover", handleWindowDragOver);
+      window.removeEventListener("drop", handleWindowDrop);
+      window.removeEventListener("dragleave", handleWindowDragLeave);
+    };
+  }, []);
+
+  const textareaPadding = previews.length ? "pb-32 sm:pb-32" : "pb-12 sm:pb-12";
+
   return (
     <div className="max-w-4xl mx-auto sticky bottom-0 z-10 pt-5 pb-4 sm:pt-4 sm:pb-6 px-4 sm:px-6 lg:px-0">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-0">
-        <div className="relative">
+        <div
+          className={`relative ${dragActive ? "ring-2 ring-blue-300 rounded-lg" : ""}`}
+          onDragEnter={onDragOver}
+          onDragOver={onDragOver}
+          onDragLeave={onDragLeave}
+          onDrop={onDrop}
+          aria-dropeffect="copy"
+        >
           <textarea
-            className="p-3 sm:p-4 pb-12 sm:pb-12 block w-full border-gray-200 rounded-lg sm:text-sm focus:border-blue-300 focus:ring-blue-300 disabled:opacity-50 disabled:pointer-events-none"
-            placeholder="Preguntame..."
+            className={`p-3 sm:p-4 ${textareaPadding} block w-full border-gray-200 rounded-lg sm:text-sm focus:border-blue-300 focus:ring-blue-300 disabled:opacity-50 disabled:pointer-events-none`}
+            placeholder="Arrastra y suelta imágenes o videos aquí, o haz clic en el clip para seleccionar..."
+            onDrop={onDrop}
+            onDragEnter={onDragOver}
+            onDragOver={onDragOver}
+            onDragLeave={onDragLeave}
           ></textarea>
 
           <div className="absolute bottom-px inset-x-px p-2 rounded-b-lg bg-white/80 backdrop-blur supports-[backdrop-filter]:bg-white/70">
+            {/* Previews */}
+            {previews.length > 0 && (
+              <div className="mb-2 overflow-x-auto">
+                <div className="flex gap-2">
+                  {previews.map((p) => (
+                    <div key={p.id} className="relative border border-gray-200 rounded-lg p-1 bg-white overflow-visible">
+                      {p.kind === "image" ? (
+                        <img src={p.url} alt={p.name} className="h-16 w-16 rounded object-cover" />
+                      ) : (
+                        <video src={p.url} className="h-16 w-16 rounded object-cover" muted />
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => removePreview(p.id)}
+                        className="absolute top-1 right-1 z-10 bg-pink-500 text-white rounded-full size-5 flex items-center justify-center text-xs shadow ring-2 ring-white"
+                        aria-label={`Eliminar ${p.name}`}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Errors */}
+            {errors.length > 0 && (
+              <div className="mb-2 text-xs text-pink-500">
+                {errors.map((e, i) => (
+                  <div key={i}>{e}</div>
+                ))}
+              </div>
+            )}
+
             <div className="flex flex-wrap justify-between items-center gap-2">
               <div className="flex items-center">
+                <input
+                  ref={inputRef}
+                  type="file"
+                  accept={accept}
+                  multiple
+                  className="hidden"
+                  onChange={(e) => handleFiles(e.target.files)}
+                />
                 <button
                   type="button"
+                  onClick={() => inputRef.current?.click()}
                   className="inline-flex shrink-0 justify-center items-center size-8 rounded-lg text-blue-500 hover:bg-blue-50 focus:z-10 focus:outline-hidden focus:bg-blue-50"
+                  aria-label="Adjuntar archivos"
                 >
                   <svg
                     className="shrink-0 size-4"
