@@ -11,9 +11,9 @@ import { InstagramCredentialsWidget as InstagramCredentialsWidgetExt, InstagramC
 import { FacebookAuthWidget as FacebookAuthWidgetExt, FacebookConnectedWidget as FacebookConnectedWidgetExt } from "@/components/widgets/FacebookWidgets";
 import { YouTubeAuthWidget as YouTubeAuthWidgetExt, YouTubeConnectedWidget as YouTubeConnectedWidgetExt } from "@/components/widgets/YouTubeWidgets";
 import { LogoutWidget as LogoutWidgetExt, ClearChatWidget as ClearChatWidgetExt, PlatformsWidget as PlatformsWidgetExt } from "@/components/widgets/ControlWidgets";
-import { getInstagramCreds, upsertInstagramCreds, getFacebookToken, upsertFacebookToken, getYouTubeToken, upsertYouTubeToken } from "@/lib/apiHelpers";
+import { upsertInstagramCreds, upsertFacebookToken, upsertYouTubeToken } from "@/lib/apiHelpers";
 import { saveMessageToDB, loadHistoryForCurrentUser } from "@/lib/databaseUtils";
-import { detectInstagramIntent, detectUpdateCredentialsIntent, detectFacebookIntent, detectYouTubeIntent, showPlatformsWidgetHeuristic, showPlatformsWidgetByTool } from "@/lib/intentDetection";
+// import { detectInstagramIntent, detectUpdateCredentialsIntent, detectFacebookIntent, detectYouTubeIntent, showPlatformsWidgetHeuristic, showPlatformsWidgetByTool } from "@/lib/intentDetection";
 
 export default function Home() {
   const [messages, setMessages] = useState([]);
@@ -200,111 +200,8 @@ export default function Home() {
     const attachmentsForDB = uploadedAttachments.map(({ kind, url, publicId, name }) => ({ kind, url, publicId, name }));
     await saveMessageToDB({ userId, role: "user", content: trimmed, attachments: attachmentsForDB, type: uploadedAttachments.length ? "text+media" : "text" });
 
-    if (detectUpdateCredentialsIntent(trimmed) && detectInstagramIntent(trimmed)) {
-      const widgetId = `a-${Date.now()}-ig-upd`;
-      setMessages((prev) => [
-        ...prev,
-        { id: widgetId, role: "assistant", type: "widget-instagram-credentials" },
-      ]);
-      await saveMessageToDB({ userId, role: "assistant", content: "", attachments: null, type: "widget-instagram-credentials" });
-      return;
-    }
-    
-    // Mostrar widget de plataformas si se detecta la intención
-    if (showPlatformsWidgetByTool(trimmed) || showPlatformsWidgetHeuristic(trimmed)) {
-      const widgetId = `a-${Date.now()}-platforms`;
-      setMessages((prev) => [
-        ...prev,
-        { id: widgetId, role: "assistant", type: "widget-platforms" },
-      ]);
-      await saveMessageToDB({ userId, role: "assistant", content: "", attachments: null, type: "widget-platforms" });
-      return;
-    }
-    if (detectUpdateCredentialsIntent(trimmed) && detectFacebookIntent(trimmed)) {
-      const widgetId = `a-${Date.now()}-fb-upd`;
-      setMessages((prev) => [
-        ...prev,
-        { id: widgetId, role: "assistant", type: "widget-facebook-auth" },
-      ]);
-      await saveMessageToDB({ userId, role: "assistant", content: "", attachments: null, type: "widget-facebook-auth" });
-      return;
-    }
-    if (detectUpdateCredentialsIntent(trimmed) && detectYouTubeIntent(trimmed)) {
-      const widgetId = `a-${Date.now()}-yt-upd`;
-      setMessages((prev) => [
-        ...prev,
-        { id: widgetId, role: "assistant", type: "widget-youtube-auth" },
-      ]);
-      await saveMessageToDB({ userId, role: "assistant", content: "", attachments: null, type: "widget-youtube-auth" });
-      return;
-    }
-
-    const wantsLogout = (() => {
-      const s = trimmed.toLowerCase();
-      return /(cerrar sesión|cerrar sesion|logout|salir|sign out|cerrar la sesión|cerrar la sesion)/i.test(s);
-    })();
-    const wantsClear = (() => {
-      const s = trimmed.toLowerCase();
-      return /(borrar chat|limpiar chat|vaciar conversación|vaciar conversacion|vaciar chat|eliminar conversación|eliminar conversacion|clear chat|delete chat|reset chat)/i.test(s);
-    })();
-
-    if (wantsLogout) {
-      const textId = `a-${Date.now()}-logout-text`;
-      const widgetId = `a-${Date.now()}-logout`;
-      setMessages((prev) => [
-        ...prev,
-        { id: textId, role: "assistant", type: "text", content: "Aquí tienes el control para cerrar sesión." },
-        { id: widgetId, role: "assistant", type: "widget-logout" },
-      ]);
-      await saveMessageToDB({ userId, role: "assistant", content: "Aquí tienes el control para cerrar sesión.", attachments: null, type: "text" });
-      await saveMessageToDB({ userId, role: "assistant", content: "", attachments: null, type: "widget-logout" });
-      return;
-    }
-    if (wantsClear) {
-      const textId = `a-${Date.now()}-clear-text`;
-      const widgetId = `a-${Date.now()}-clear`;
-      setMessages((prev) => [
-        ...prev,
-        { id: textId, role: "assistant", type: "text", content: "Aquí puedes borrar el chat de esta conversación." },
-        { id: widgetId, role: "assistant", type: "widget-clear-chat" },
-      ]);
-      await saveMessageToDB({ userId, role: "assistant", content: "Aquí puedes borrar el chat de esta conversación.", attachments: null, type: "text" });
-      await saveMessageToDB({ userId, role: "assistant", content: "", attachments: null, type: "widget-clear-chat" });
-      return;
-    }
-
-    // Dentro de handleSend, después del bloque de Facebook
-    if (detectYouTubeIntent(trimmed)) {
-      let yt = null;
-      if (userId) {
-        yt = await getYouTubeToken(userId);
-      }
-      const hasToken = !!yt?.token;
-      const widgetId = `a-${Date.now()}-yt`;
-      if (!hasToken) {
-        setMessages((prev) => [
-          ...prev,
-          { id: widgetId, role: "assistant", type: "widget-youtube-auth" },
-        ]);
-        await saveMessageToDB({ userId, role: "assistant", content: "", attachments: null, type: "widget-youtube-auth" });
-      } else {
-        const connected = {
-          id: widgetId,
-          role: "assistant",
-          type: "widget-youtube-connected",
-          meta: {
-            channelId: yt.channelId,
-            channelTitle: yt.channelTitle,
-            grantedScopes: yt.grantedScopes,
-            expiresAt: yt.expiresAt,
-          },
-        };
-        setMessages((prev) => [...prev, connected]);
-        await saveMessageToDB({ userId, role: "assistant", content: "", attachments: null, type: "widget-youtube-connected", meta: connected.meta });
-      }
-      return;
-    }
-
+    // Desde aquí en adelante, ya no se hace detección manual de intención.
+    // En su lugar, se envía el mensaje al endpoint /api/chat el cual decide qué widgets mostrar vía tools
     if (trimmed) {
       setLoading(true);
       try {
@@ -320,17 +217,38 @@ export default function Home() {
         if (assistantText) {
           additions.push({ id: `a-${Date.now()}-t`, role: "assistant", type: "text", content: assistantText });
         }
-        if (data?.widget === "platforms") {
-          additions.push({ id: `a-${Date.now()}-w`, role: "assistant", type: "widget-platforms" });
+
+        const widgets = Array.isArray(data?.widgets)
+          ? data.widgets
+          : (data?.widget ? [data.widget] : []);
+
+        const widgetTypeMap = {
+          platforms: "widget-platforms",
+          "instagram-credentials": "widget-instagram-credentials",
+          "facebook-auth": "widget-facebook-auth",
+          "youtube-auth": "widget-youtube-auth",
+          logout: "widget-logout",
+          "clear-chat": "widget-clear-chat",
+        };
+
+        for (const w of widgets) {
+          const t = widgetTypeMap[w];
+          if (t) {
+            additions.push({ id: `a-${Date.now()}-w-${w}`, role: "assistant", type: t });
+          }
         }
+
         setMessages((prev) => [...prev, ...additions]);
 
-        // Guardar respuesta del asistente en DB
+        // Guardar respuesta del asistente y widgets en DB
         if (assistantText) {
           await saveMessageToDB({ userId, role: "assistant", content: assistantText, attachments: null, type: "text" });
         }
-        if (data?.widget === "platforms") {
-          await saveMessageToDB({ userId, role: "assistant", content: "", attachments: null, type: "widget-platforms" });
+        for (const w of widgets) {
+          const t = widgetTypeMap[w];
+          if (t) {
+            await saveMessageToDB({ userId, role: "assistant", content: "", attachments: null, type: t });
+          }
         }
       } catch (e) {
         setMessages((prev) => [
