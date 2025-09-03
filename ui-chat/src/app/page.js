@@ -41,6 +41,8 @@ export default function Home() {
 
   // NUEVO: Utilidad: detectar intención de Facebook
   const isFacebookIntent = (t = "") => /\bfacebook\b|\bfb\b/i.test(String(t || ""));
+  // Nuevo: YouTube/Shorts
+  const isYouTubeIntent = (t = "") => /\byoutube\b|\byt\b|\bshorts\b/i.test(String(t || ""));
 
   // Nuevo: detectar intención de actualizar credenciales
   const isUpdateCredentialsIntent = (t = "") => {
@@ -283,23 +285,46 @@ export default function Home() {
       await saveMessageToDB({ userId, role: "assistant", content: "", attachments: null, type: "widget-facebook-auth" });
       return;
     }
+    if (isUpdateCredentialsIntent(trimmed) && isYouTubeIntent(trimmed)) {
+      const widgetId = `a-${Date.now()}-yt-upd`;
+      setMessages((prev) => [
+        ...prev,
+        { id: widgetId, role: "assistant", type: "widget-youtube-auth" },
+      ]);
+      await saveMessageToDB({ userId, role: "assistant", content: "", attachments: null, type: "widget-youtube-auth" });
+      return;
+    }
 
-    // 1.6) Facebook: siempre mostrar un widget (auth si no hay token, conectado si ya hay) y abortar envío a la IA
-    if (isFacebookIntent(trimmed)) {
-      const { token, fbUserId, grantedScopes } = await getFacebookToken(userId);
-      const widgetId = `a-${Date.now()}-fb`;
-      if (!token) {
+    // Dentro de handleSend, después del bloque de Facebook
+    if (isYouTubeIntent(trimmed)) {
+      let yt = null;
+      if (userId) {
+        yt = await getYouTubeToken(userId);
+      }
+      const hasToken = !!yt?.token;
+      const widgetId = `a-${Date.now()}-yt`;
+      if (!hasToken) {
         setMessages((prev) => [
           ...prev,
-          { id: widgetId, role: "assistant", type: "widget-facebook-auth" },
+          { id: widgetId, role: "assistant", type: "widget-youtube-auth" },
         ]);
-        await saveMessageToDB({ userId, role: "assistant", content: "", attachments: null, type: "widget-facebook-auth" });
+        await saveMessageToDB({ userId, role: "assistant", content: "", attachments: null, type: "widget-youtube-auth" });
       } else {
-        const connected = { id: widgetId, role: "assistant", type: "widget-facebook-connected", name: null, fbId: fbUserId || "", scopes: grantedScopes || null };
+        const connected = {
+          id: widgetId,
+          role: "assistant",
+          type: "widget-youtube-connected",
+          meta: {
+            channelId: yt.channelId,
+            channelTitle: yt.channelTitle,
+            grantedScopes: yt.grantedScopes,
+            expiresAt: yt.expiresAt,
+          },
+        };
         setMessages((prev) => [...prev, connected]);
-        await saveMessageToDB({ userId, role: "assistant", content: "", attachments: null, type: "widget-facebook-connected", meta: { name: connected.name, id: connected.fbId, scopes: connected.scopes } });
+        await saveMessageToDB({ userId, role: "assistant", content: "", attachments: null, type: "widget-youtube-connected", meta: connected.meta });
       }
-      return; // no llamamos a la IA en esta interacción
+      return; // no llamamos a la IA
     }
 
     // 2) Enviar sólo el texto a la API y agregar la respuesta del asistente
@@ -726,7 +751,6 @@ export default function Home() {
           )}
           {connecting ? "Conectando…" : "Login con Facebook"}
         </button>
-        <p className="text-xs text-gray-400">Por defecto sólo se obtienen datos básicos (nombre, email, foto). Para publicar en muro, páginas o grupos se requieren permisos extra como pages_manage_posts o publish_to_groups.</p>
       </div>
     );
   };
@@ -879,6 +903,27 @@ export default function Home() {
                   </AssistantMessage>
                 );
               }
+              // NUEVO: YouTube auth y conectado
+              if (m.type === "widget-youtube-auth") {
+                return (
+                  <AssistantMessage key={m.id} borderClass="border-red-200">
+                    <YouTubeAuthWidget />
+                  </AssistantMessage>
+                );
+              }
+              if (m.type === "widget-youtube-connected") {
+                const meta = m.meta || {};
+                return (
+                  <AssistantMessage key={m.id} borderClass="border-red-200">
+                    <YouTubeConnectedWidget
+                      channelId={m.channelId ?? meta.channelId}
+                      channelTitle={m.channelTitle ?? meta.channelTitle}
+                      grantedScopes={m.grantedScopes ?? meta.grantedScopes}
+                      expiresAt={m.expiresAt ?? meta.expiresAt}
+                    />
+                  </AssistantMessage>
+                );
+              }
               return (
                 <AssistantMessage key={m.id} borderClass="border-gray-200">
                   {m.content}
@@ -990,3 +1035,148 @@ const upsertFacebookToken = async ({ userId, token, expiresAt = null, fbUserId =
     return false;
   }
 };
+
+// NUEVO: Leer token de YouTube del perfil
+const getYouTubeToken = async (userId) => {
+  try {
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("youtube_access_token, youtube_refresh_token, youtube_expires_at, youtube_channel_id, youtube_channel_title, youtube_granted_scopes")
+      .eq("id", userId)
+      .maybeSingle();
+    if (error) throw error;
+    const token = data?.youtube_access_token || null;
+    const refreshToken = data?.youtube_refresh_token || null;
+    const expiresAt = data?.youtube_expires_at || null;
+    const channelId = data?.youtube_channel_id || null;
+    const channelTitle = data?.youtube_channel_title || null;
+    const grantedScopes = data?.youtube_granted_scopes || null;
+    return { token, refreshToken, expiresAt, channelId, channelTitle, grantedScopes };
+  } catch (e) {
+    console.warn("No se pudo obtener token de YouTube:", e?.message || e);
+    return { token: null, refreshToken: null, expiresAt: null, channelId: null, channelTitle: null, grantedScopes: null };
+  }
+};
+
+// NUEVO: Guardar/actualizar token de YouTube en perfil
+const upsertYouTubeToken = async ({ userId, token, refreshToken = null, expiresAt = null, channelId = null, channelTitle = null, grantedScopes = null }) => {
+  try {
+    const row = {
+      id: userId,
+      youtube_access_token: token,
+      youtube_refresh_token: refreshToken,
+      youtube_expires_at: expiresAt,
+      youtube_channel_id: channelId,
+      youtube_channel_title: channelTitle,
+      youtube_granted_scopes: grantedScopes,
+      updated_at: new Date().toISOString(),
+    };
+    const { error } = await supabase.from("profiles").upsert(row, { onConflict: "id" });
+    if (error) throw error;
+    return true;
+  } catch (e) {
+    console.warn("No se pudo guardar token de YouTube:", e?.message || e);
+    return false;
+  }
+};
+
+// YouTube widgets
+const YouTubeAuthWidget = () => {
+  const [connecting, setConnecting] = useState(false);
+  useEffect(() => {
+    const onMsg = async (ev) => {
+      try {
+        if (!ev?.data || ev.origin !== window.location.origin) return;
+        if (ev.data?.source !== 'yt-oauth') return;
+        if (!ev.data.ok) {
+          setConnecting(false);
+          return;
+        }
+        const d = ev.data.data || {};
+        const access_token = d.access_token;
+        const refresh_token = d.refresh_token || null;
+        const expires_at = d.expires_at || null;
+        const channel_id = d.channel_id || null;
+        const channel_title = d.channel_title || null;
+        const granted_scopes = d.granted_scopes || null;
+        const { data: sessionData } = await supabase.auth.getSession();
+        const userId = sessionData?.session?.user?.id;
+        if (userId && access_token) {
+          await upsertYouTubeToken({ userId, token: access_token, refreshToken: refresh_token, expiresAt: expires_at, channelId: channel_id, channelTitle: channel_title, grantedScopes: granted_scopes });
+        }
+        setConnecting(false);
+      } catch (e) {
+        setConnecting(false);
+      }
+    };
+    window.addEventListener('message', onMsg);
+    return () => window.removeEventListener('message', onMsg);
+  }, []);
+
+  const startLogin = () => {
+    setConnecting(true);
+    const w = 600, h = 700;
+    const dualScreenLeft = window.screenLeft !== undefined ? window.screenLeft : window.screenX;
+    const dualScreenTop = window.screenTop !== undefined ? window.screenTop : window.screenY;
+    const width = window.innerWidth || document.documentElement.clientWidth || screen.width;
+    const height = window.innerHeight || document.documentElement.clientHeight || screen.height;
+    const left = ((width - w) / 2) + dualScreenLeft;
+    const top = ((height - h) / 2) + dualScreenTop;
+    window.open(
+      "/api/youtube/login",
+      "yt_oauth",
+      `scrollbars=yes,width=${w},height=${h},top=${top},left=${left}`
+    );
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-3">
+        <div className="relative size-10 shrink-0 rounded-xl bg-[#FF0000] flex items-center justify-center shadow-inner">
+          <svg viewBox="0 0 24 24" className="size-5" aria-hidden="true">
+            <path fill="#fff" d="M10 15.5v-7l6 3.5-6 3.5z"/>
+            <rect x="3" y="6" width="18" height="12" rx="3" ry="3" fill="none" stroke="#fff" strokeWidth="2"/>
+          </svg>
+        </div>
+        <div>
+          <p className="text-sm font-medium text-gray-800">YouTube</p>
+          <p className="text-xs text-gray-500">Conectar con OAuth</p>
+        </div>
+      </div>
+      <button
+        type="button"
+        onClick={startLogin}
+        disabled={connecting}
+        className="inline-flex items-center gap-2 rounded-lg bg-[#FF0000] px-4 py-2 text-white text-sm disabled:opacity-50"
+      >
+        {connecting ? (
+          <span className="size-4 rounded-full border-2 border-white/60 border-t-transparent animate-spin" aria-hidden="true"></span>
+        ) : (
+          <svg viewBox="0 0 24 24" className="size-4" aria-hidden="true"><path fill="currentColor" d="M5 12l5 5L20 7"/></svg>
+        )}
+        {connecting ? "Conectando…" : "Login con YouTube"}
+      </button>
+    </div>
+  );
+};
+
+const YouTubeConnectedWidget = ({ channelId, channelTitle, grantedScopes, expiresAt }) => (
+  <div className="flex items-center gap-3">
+    <div className="relative size-10 shrink-0 rounded-xl bg-[#FF0000] flex items-center justify-center shadow-inner">
+      <svg viewBox="0 0 24 24" className="size-5" aria-hidden="true">
+        <path fill="#fff" d="M10 15.5v-7l6 3.5-6 3.5z"/>
+        <rect x="3" y="6" width="18" height="12" rx="3" ry="3" fill="none" stroke="#fff" strokeWidth="2"/>
+      </svg>
+    </div>
+    <div>
+      <p className="text-sm font-medium text-gray-800">YouTube conectado</p>
+      {channelTitle && <p className="text-xs text-gray-500">{channelTitle} ({channelId})</p>}
+      {Array.isArray(grantedScopes) && grantedScopes.length > 0 && (
+        <p className="text-xs text-gray-400 mt-1">Permisos: {grantedScopes.join(", ")}</p>
+      )}
+      {expiresAt && (
+        <p className="text-[11px] text-gray-400 mt-1">Token expira: {new Date(expiresAt).toLocaleString()}</p>
+      )}
+    </div>
+  </div>
+);
