@@ -11,6 +11,9 @@ import { InstagramCredentialsWidget as InstagramCredentialsWidgetExt, InstagramC
 import { FacebookAuthWidget as FacebookAuthWidgetExt, FacebookConnectedWidget as FacebookConnectedWidgetExt } from "@/components/widgets/FacebookWidgets";
 import { YouTubeAuthWidget as YouTubeAuthWidgetExt, YouTubeConnectedWidget as YouTubeConnectedWidgetExt } from "@/components/widgets/YouTubeWidgets";
 import { LogoutWidget as LogoutWidgetExt, ClearChatWidget as ClearChatWidgetExt, PlatformsWidget as PlatformsWidgetExt } from "@/components/widgets/ControlWidgets";
+import { getInstagramCreds, upsertInstagramCreds, getFacebookToken, upsertFacebookToken, getYouTubeToken, upsertYouTubeToken } from "@/lib/apiHelpers";
+import { saveMessageToDB, loadHistoryForCurrentUser } from "@/lib/databaseUtils";
+import { detectInstagramIntent, detectUpdateCredentialsIntent, detectFacebookIntent, detectYouTubeIntent, showPlatformsWidgetHeuristic, showPlatformsWidgetByTool } from "@/lib/intentDetection";
 
 export default function Home() {
   const [messages, setMessages] = useState([]);
@@ -21,69 +24,7 @@ export default function Home() {
   const bottomRef = useRef(null);
   const [lightbox, setLightbox] = useState(null);
 
-  const saveMessageToDB = async ({ userId, role, content, attachments, type = null, meta = null }) => {
-    if (!supabase || !userId) return;
-    try {
-      await supabase
-        .from("messages")
-        .insert([{ user_id: userId, role, content, attachments: attachments || null, type, meta }]);
-    } catch (e1) {
-      try {
-        await supabase
-          .from("messages")
-          .insert([{ user_id: userId, role, content, attachments: attachments || null }]);
-      } catch (e2) {
-        console.warn("No se pudo guardar el mensaje:", e2?.message || e2);
-      }
-    }
-  };
-
-  const isInstagramIntent = (t = "") => /\binstagram\b|\big\b|\binsta\b/i.test(String(t || ""));
-  const isFacebookIntent = (t = "") => /\bfacebook\b|\bfb\b/i.test(String(t || ""));
-  const isYouTubeIntent = (t = "") => /\byoutube\b|\byt\b|\bshorts\b/i.test(String(t || ""));
-  const isUpdateCredentialsIntent = (t = "") => {
-    const s = String(t || "").toLowerCase();
-    const patterns = [
-      "actualiza", "actualizar", "actualización",
-      "cambia", "cambiar",
-      "modifica", "modificar",
-      "reconfigura", "reconfigurar",
-      "reconecta", "reconectar",
-      "reautentica", "reautenticar",
-      "relogin", "volver a iniciar sesión",
-      "renueva", "renovar",
-      "refresh", "refresca", "refrescar",
-      "update", "renew",
-      "credencial", "credenciales", "token"
-    ];
-    return patterns.some(p => s.includes(p));
-  };
-
-  const upsertInstagramCreds = async ({ userId, username, password }) => {
-    const row = {
-      id: userId,
-      instagram_username: username,
-      instagram_password: password,
-      updated_at: new Date().toISOString(),
-    };
-    try {
-      const { error } = await supabase.from("profiles").upsert(row, { onConflict: "id" });
-      if (error) throw error;
-      return true;
-    } catch (e1) {
-
-      try {
-        const { error } = await supabase
-          .from("profiles")
-          .upsert({ id: userId, userinstagram: username, passwordinstagram: password, updated_at: new Date().toISOString() }, { onConflict: "id" });
-        if (error) throw error;
-        return true;
-      } catch (e2) {
-        console.warn("No se pudieron guardar credenciales IG:", e2?.message || e2);
-        return false;
-      }
-    }
-  };
+  // Subir archivo a Cloudinary vía API interna
 
   // Subir archivo a Cloudinary vía API interna
   const uploadToCloudinary = async (file, { folder = 'ui-chat-uploads' } = {}) => {
@@ -103,20 +44,14 @@ export default function Home() {
   };
 
   // Helper: cargar historial para el usuario autenticado desde DB y mapear al formato UI
-  const loadHistoryForCurrentUser = async () => {
-    if (!supabase) return;
+  const loadHistoryAndNormalize = async () => {
     try {
       setHistoryLoading(true);
       const { data: sessionData } = await supabase.auth.getSession();
       const userId = sessionData?.session?.user?.id;
       if (!userId) return;
 
-      const { data: rows, error } = await supabase
-        .from("messages")
-        .select("id, role, content, attachments, type, meta, created_at")
-        .eq("user_id", userId)
-        .order("created_at", { ascending: true });
-      if (error) throw error;
+      const rows = await loadHistoryForCurrentUser();
 
       const normalized = (rows || []).map((r) => {
         const rType = r.type || (r.role === "user" ? (Array.isArray(r.attachments) && r.attachments.length ? "text+media" : "text") : "text");
@@ -265,7 +200,7 @@ export default function Home() {
     const attachmentsForDB = uploadedAttachments.map(({ kind, url, publicId, name }) => ({ kind, url, publicId, name }));
     await saveMessageToDB({ userId, role: "user", content: trimmed, attachments: attachmentsForDB, type: uploadedAttachments.length ? "text+media" : "text" });
 
-    if (isUpdateCredentialsIntent(trimmed) && isInstagramIntent(trimmed)) {
+    if (detectUpdateCredentialsIntent(trimmed) && detectInstagramIntent(trimmed)) {
       const widgetId = `a-${Date.now()}-ig-upd`;
       setMessages((prev) => [
         ...prev,
@@ -274,7 +209,18 @@ export default function Home() {
       await saveMessageToDB({ userId, role: "assistant", content: "", attachments: null, type: "widget-instagram-credentials" });
       return;
     }
-    if (isUpdateCredentialsIntent(trimmed) && isFacebookIntent(trimmed)) {
+    
+    // Mostrar widget de plataformas si se detecta la intención
+    if (showPlatformsWidgetByTool(trimmed) || showPlatformsWidgetHeuristic(trimmed)) {
+      const widgetId = `a-${Date.now()}-platforms`;
+      setMessages((prev) => [
+        ...prev,
+        { id: widgetId, role: "assistant", type: "widget-platforms" },
+      ]);
+      await saveMessageToDB({ userId, role: "assistant", content: "", attachments: null, type: "widget-platforms" });
+      return;
+    }
+    if (detectUpdateCredentialsIntent(trimmed) && detectFacebookIntent(trimmed)) {
       const widgetId = `a-${Date.now()}-fb-upd`;
       setMessages((prev) => [
         ...prev,
@@ -283,7 +229,7 @@ export default function Home() {
       await saveMessageToDB({ userId, role: "assistant", content: "", attachments: null, type: "widget-facebook-auth" });
       return;
     }
-    if (isUpdateCredentialsIntent(trimmed) && isYouTubeIntent(trimmed)) {
+    if (detectUpdateCredentialsIntent(trimmed) && detectYouTubeIntent(trimmed)) {
       const widgetId = `a-${Date.now()}-yt-upd`;
       setMessages((prev) => [
         ...prev,
@@ -328,7 +274,7 @@ export default function Home() {
     }
 
     // Dentro de handleSend, después del bloque de Facebook
-    if (isYouTubeIntent(trimmed)) {
+    if (detectYouTubeIntent(trimmed)) {
       let yt = null;
       if (userId) {
         yt = await getYouTubeToken(userId);
@@ -417,7 +363,7 @@ export default function Home() {
       const { data } = await supabase.auth.getSession();
       const hasSession = Boolean(data?.session);
       if (hasSession) {
-        await loadHistoryForCurrentUser();
+        await loadHistoryAndNormalize();
       } else {
         setIsLoggedIn(false);
         if (!authGateShownRef.current) {
@@ -487,7 +433,7 @@ export default function Home() {
                               const { error } = await supabase.auth.signInWithPassword({ email, password: pass });
                               if (error) throw error;
                             }
-                            await loadHistoryForCurrentUser();
+                            await loadHistoryAndNormalize();
                             setMessages((prev) => [
                               ...prev,
                               { id: `a-${Date.now()}-auth-ok`, role: "assistant", type: "text", content: "Ingreso exitoso 🥳." },
@@ -790,64 +736,3 @@ export default function Home() {
     </div>
   );
 }
-
-const upsertFacebookToken = async ({ userId, token, expiresAt = null, fbUserId = null, grantedScopes = null, fbName = null }) => {
-  try {
-    const row = {
-      id: userId,
-      facebook_access_token: token,
-      facebook_expires_at: expiresAt,
-      facebook_user_id: fbUserId,
-      facebook_granted_scopes: grantedScopes,
-      updated_at: new Date().toISOString(),
-    };
-    const { error } = await supabase.from("profiles").upsert(row, { onConflict: "id" });
-    if (error) throw error;
-    return true;
-  } catch (e) {
-    console.warn("No se pudo guardar token de Facebook:", e?.message || e);
-    return false;
-  }
-};
-
-const getYouTubeToken = async (userId) => {
-  try {
-    const { data, error } = await supabase
-      .from("profiles")
-      .select("youtube_access_token, youtube_refresh_token, youtube_expires_at, youtube_channel_id, youtube_channel_title, youtube_granted_scopes")
-      .eq("id", userId)
-      .maybeSingle();
-    if (error) throw error;
-    const token = data?.youtube_access_token || null;
-    const refreshToken = data?.youtube_refresh_token || null;
-    const expiresAt = data?.youtube_expires_at || null;
-    const channelId = data?.youtube_channel_id || null;
-    const channelTitle = data?.youtube_channel_title || null;
-    const grantedScopes = data?.youtube_granted_scopes || null;
-    return { token, refreshToken, expiresAt, channelId, channelTitle, grantedScopes };
-  } catch (e) {
-    console.warn("No se pudo obtener token de YouTube:", e?.message || e);
-    return { token: null, refreshToken: null, expiresAt: null, channelId: null, channelTitle: null, grantedScopes: null };
-  }
-};
-
-const upsertYouTubeToken = async ({ userId, token, refreshToken = null, expiresAt = null, channelId = null, channelTitle = null, grantedScopes = null }) => {
-  try {
-    const row = {
-      id: userId,
-      youtube_access_token: token,
-      youtube_refresh_token: refreshToken,
-      youtube_expires_at: expiresAt,
-      youtube_channel_id: channelId,
-      youtube_channel_title: channelTitle,
-      youtube_granted_scopes: grantedScopes,
-      updated_at: new Date().toISOString(),
-    };
-    const { error } = await supabase.from("profiles").upsert(row, { onConflict: "id" });
-    if (error) throw error;
-    return true;
-  } catch (e) {
-    console.warn("No se pudo guardar token de YouTube:", e?.message || e);
-    return false;
-  }
-};
