@@ -91,7 +91,7 @@ Reglas estrictas:
     });
 
     const { text } = await generateText({
-      model: google('gemini-2.5-pro'),
+      model: google('gemini-2.5-flash'),
       messages: convertToModelMessages(normalized),
       tools: { showSupportedNetworks },
       maxTokens: 1000,

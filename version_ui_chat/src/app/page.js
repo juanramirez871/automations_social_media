@@ -6,6 +6,11 @@ import AssistantMessage from "@/components/AssistantMessage";
 import UserMessage from "@/components/UserMessage";
 import Composer from "@/components/Composer";
 import { supabase } from "@/lib/supabaseClient";
+import { AuthGateWidget as AuthGateWidgetExt, AuthFormWidget as AuthFormWidgetExt } from "@/components/widgets/AuthWidgets";
+import { InstagramCredentialsWidget as InstagramCredentialsWidgetExt, InstagramConfiguredWidget as InstagramConfiguredWidgetExt } from "@/components/widgets/InstagramWidgets";
+import { FacebookAuthWidget as FacebookAuthWidgetExt, FacebookConnectedWidget as FacebookConnectedWidgetExt } from "@/components/widgets/FacebookWidgets";
+import { YouTubeAuthWidget as YouTubeAuthWidgetExt, YouTubeConnectedWidget as YouTubeConnectedWidgetExt } from "@/components/widgets/YouTubeWidgets";
+import { LogoutWidget as LogoutWidgetExt, ClearChatWidget as ClearChatWidgetExt, PlatformsWidget as PlatformsWidgetExt } from "@/components/widgets/ControlWidgets";
 
 export default function Home() {
   // Mensajes UI propios (para soportar adjuntos locales y formato existente)
@@ -1025,35 +1030,107 @@ export default function Home() {
               if (m.type === "widget-platforms") {
                 return (
                   <AssistantMessage key={m.id} borderClass="border-blue-200">
-                    <PlatformsWidget />
+                    <PlatformsWidgetExt />
                   </AssistantMessage>
                 );
               }
               if (m.type === "widget-auth-gate") {
                 return (
                   <AssistantMessage key={m.id} borderClass="border-blue-200">
-                    <AuthGateWidget />
+                    <AuthGateWidgetExt onOpen={(mode) => {
+                      setMessages((prev) => [
+                        ...prev,
+                        { id: `a-${Date.now()}-auth-${mode}`, role: "assistant", type: "widget-auth-form", mode },
+                      ]);
+                    }} />
                   </AssistantMessage>
                 );
               }
               if (m.type === "widget-auth-form") {
                 return (
                   <AssistantMessage key={m.id} borderClass="border-blue-200">
-                    <AuthFormWidget mode={m.mode} />
+                    <AuthFormWidgetExt
+                      mode={m.mode}
+                      onLogin={async ({ mode, name, email, pass }) => {
+                        if (supabase) {
+                          try {
+                            if (mode === "signup") {
+                              const { error } = await supabase.auth.signUp({ email, password: pass, options: { data: { name } } });
+                              if (error) throw error;
+                            } else {
+                              const { error } = await supabase.auth.signInWithPassword({ email, password: pass });
+                              if (error) throw error;
+                            }
+                            await loadHistoryForCurrentUser();
+                            setMessages((prev) => [
+                              ...prev,
+                              { id: `a-${Date.now()}-auth-ok`, role: "assistant", type: "text", content: "Ingreso exitoso 🥳." },
+                            ]);
+                            return;
+                          } catch (err) {
+                            throw err;
+                          }
+                        }
+                        setMessages((prev) => [
+                          ...prev,
+                          {
+                            id: `a-${Date.now()}-auth-submitted`,
+                            role: "assistant",
+                            type: "text",
+                            content: `Formulario de ${mode === "login" ? "inicio de sesión" : "creación de cuenta"} recibido (demo).`,
+                          },
+                        ]);
+                      }}
+                      onError={(err) => {
+                        setMessages((prev) => [
+                          ...prev,
+                          { id: `a-${Date.now()}-auth-error`, role: "assistant", type: "text", content: `Error de autenticación: ${err?.message || err}` },
+                        ]);
+                      }}
+                    />
                   </AssistantMessage>
                 );
               }
               if (m.type === "widget-instagram-credentials") {
                 return (
                   <AssistantMessage key={m.id} borderClass="border-fuchsia-200">
-                    <InstagramCredentialsWidget widgetId={m.id} />
+                    <InstagramCredentialsWidgetExt
+                      widgetId={m.id}
+                      onSubmit={async ({ username, password }) => {
+                        const { data: sessionData } = await supabase.auth.getSession();
+                        const userId = sessionData?.session?.user?.id;
+                        if (!userId) {
+                          setMessages((prev) => [
+                            ...prev,
+                            { id: `a-${Date.now()}-ig-error`, role: "assistant", type: "text", content: `Error guardando credenciales de Instagram: Sesión inválida` },
+                          ]);
+                          return;
+                        }
+                        try {
+                          const ok = await upsertInstagramCreds({ userId, username, password });
+                          if (!ok) throw new Error("No fue posible guardar credenciales");
+                          const configured = { id: `a-${Date.now()}-ig-ok`, role: "assistant", type: "widget-instagram-configured", username };
+                          setMessages((prev) => [...prev, configured]);
+                          const { data: sessionData2 } = await supabase.auth.getSession();
+                          const userId2 = sessionData2?.session?.user?.id;
+                          if (userId2) {
+                            await saveMessageToDB({ userId: userId2, role: "assistant", content: "", attachments: null, type: "widget-instagram-configured", meta: { username } });
+                          }
+                        } catch (err) {
+                          setMessages((prev) => [
+                            ...prev,
+                            { id: `a-${Date.now()}-ig-error`, role: "assistant", type: "text", content: `Error guardando credenciales de Instagram: ${err?.message || err}` },
+                          ]);
+                        }
+                      }}
+                    />
                   </AssistantMessage>
                 );
               }
               if (m.type === "widget-instagram-configured") {
                 return (
                   <AssistantMessage key={m.id} borderClass="border-fuchsia-200">
-                    <InstagramConfiguredWidget username={m.username} />
+                    <InstagramConfiguredWidgetExt username={m.username} />
                   </AssistantMessage>
                 );
               }
@@ -1061,28 +1138,95 @@ export default function Home() {
               if (m.type === "widget-facebook-auth") {
                 return (
                   <AssistantMessage key={m.id} borderClass="border-blue-200">
-                    <FacebookAuthWidget widgetId={m.id} />
+                    <FacebookAuthWidgetExt
+                      widgetId={m.id}
+                      onConnected={async (payload) => {
+                        try {
+                          const access_token = payload?.access_token;
+                          const expires_in = payload?.expires_in;
+                          const profile = payload?.fb_user || {};
+                          const permissions = payload?.granted_scopes || [];
+                          const expiresAt = expires_in ? new Date(Date.now() + (Number(expires_in) * 1000)).toISOString() : null;
+                          const { data: sessionData } = await supabase.auth.getSession();
+                          const userId = sessionData?.session?.user?.id;
+                          if (!userId) throw new Error("Sesión inválida");
+                          const ok = await upsertFacebookToken({
+                            userId,
+                            token: access_token,
+                            expiresAt,
+                            fbUserId: profile?.id || null,
+                            grantedScopes: permissions,
+                            fbName: profile?.name || null,
+                          });
+                          if (!ok) throw new Error("No fue posible guardar el token en el perfil");
+                          const connected = {
+                            id: `a-${Date.now()}-fb-ok`,
+                            role: "assistant",
+                            type: "widget-facebook-connected",
+                            name: profile?.name || null,
+                            fbId: profile?.id || null,
+                            scopes: permissions,
+                          };
+                          setMessages((prev) => [...prev, connected]);
+                          if (userId) {
+                            await saveMessageToDB({ userId, role: "assistant", content: "", attachments: null, type: "widget-facebook-connected", meta: { name: connected.name, fbId: connected.fbId, scopes: connected.scopes } });
+                          }
+                        } catch (err) {
+                          setMessages((prev) => [
+                            ...prev,
+                            { id: `a-${Date.now()}-fb-error`, role: "assistant", type: "text", content: `Facebook OAuth error: ${err?.message || err}` },
+                          ]);
+                        }
+                      }}
+                      onError={(reason) => {
+                        setMessages((prev) => [
+                          ...prev,
+                          { id: `a-${Date.now()}-fb-error`, role: "assistant", type: "text", content: `Facebook OAuth error: ${reason}` },
+                        ]);
+                      }}
+                    />
                   </AssistantMessage>
                 );
               }
               if (m.type === "widget-facebook-connected") {
                 return (
                   <AssistantMessage key={m.id} borderClass="border-blue-200">
-                    <FacebookConnectedWidget name={m.name} fbId={m.fbId} scopes={m.scopes} />
+                    <FacebookConnectedWidgetExt name={m.name} fbId={m.fbId} scopes={m.scopes} />
                   </AssistantMessage>
                 );
               }
               if (m.type === "widget-logout") {
                 return (
                   <AssistantMessage key={m.id} borderClass="border-gray-200">
-                    <LogoutWidget />
+                    <LogoutWidgetExt
+                      onLogout={async () => {
+                        try {
+                          await supabase.auth.signOut();
+                          setMessages((prev) => [
+                            ...prev,
+                            { id: `a-${Date.now()}-logout`, role: "assistant", type: "text", content: "Has cerrado sesión correctamente." },
+                          ]);
+                        } catch (err) {
+                          setMessages((prev) => [
+                            ...prev,
+                            { id: `a-${Date.now()}-logout-error`, role: "assistant", type: "text", content: `Error al cerrar sesión: ${err?.message || err}` },
+                          ]);
+                        }
+                      }}
+                    />
                   </AssistantMessage>
                 );
               }
               if (m.type === "widget-clear-chat") {
                 return (
                   <AssistantMessage key={m.id} borderClass="border-red-200">
-                    <ClearChatWidget />
+                    <ClearChatWidgetExt
+                      onClear={() => {
+                        setMessages([
+                          { id: '1', role: 'assistant', type: 'text', content: 'Hola! Soy tu asistente de redes sociales. ¿En qué plataforma quieres trabajar hoy? Escribe "plataformas" para ver opciones.' },
+                        ]);
+                      }}
+                    />
                   </AssistantMessage>
                 );
               }
@@ -1090,27 +1234,40 @@ export default function Home() {
               if (m.type === "widget-youtube-auth") {
                 return (
                   <AssistantMessage key={m.id} borderClass="border-red-200">
-                    <YouTubeAuthWidget
+                    <YouTubeAuthWidgetExt
                       widgetId={m.id}
-                      onConnected={async (meta) => {
-                        // Insertar widget conectado asegurando que no haya duplicados previos (auth/connected)
-                        const connected = {
-                          id: `a-${Date.now()}-yt-ok`,
-                          role: "assistant",
-                          type: "widget-youtube-connected",
-                          meta: {
-                            channelId: meta?.channelId || null,
-                            channelTitle: meta?.channelTitle || null,
-                            grantedScopes: meta?.grantedScopes || null,
-                            expiresAt: meta?.expiresAt || null,
-                          },
-                        };
-                        setMessages((prev) => [...prev, connected]);
-                        // Persistir en DB
-                        const { data: sessionData } = await supabase.auth.getSession();
-                        const userId = sessionData?.session?.user?.id;
-                        if (userId) {
-                          await saveMessageToDB({ userId, role: "assistant", content: "", attachments: null, type: "widget-youtube-connected", meta: connected.meta });
+                      onConnected={async (payload) => {
+                        try {
+                          const { access_token, expires_in, channel, granted_scopes } = payload || {};
+                          const expiresAt = expires_in ? new Date(Date.now() + Number(expires_in) * 1000).toISOString() : null;
+                          const { data: sessionData } = await supabase.auth.getSession();
+                          const userId = sessionData?.session?.user?.id;
+                          if (!userId) throw new Error("Sesión inválida");
+                          const ok = await upsertYouTubeToken({
+                            userId,
+                            token: access_token,
+                            expiresAt,
+                            channelId: channel?.id || null,
+                            channelTitle: channel?.title || null,
+                            grantedScopes: granted_scopes || [],
+                          });
+                          if (!ok) throw new Error("No fue posible guardar el token de YouTube");
+                          const connected = {
+                            id: `a-${Date.now()}-yt-ok`,
+                            role: "assistant",
+                            type: "widget-youtube-connected",
+                            channelId: channel?.id || null,
+                            channelTitle: channel?.title || null,
+                            grantedScopes: granted_scopes || [],
+                            expiresAt,
+                          };
+                          setMessages((prev) => [...prev, connected]);
+                          await saveMessageToDB({ userId, role: "assistant", content: "", attachments: null, type: "widget-youtube-connected", meta: { channelId: connected.channelId, channelTitle: connected.channelTitle, grantedScopes: connected.grantedScopes, expiresAt } });
+                        } catch (err) {
+                          setMessages((prev) => [
+                            ...prev,
+                            { id: `a-${Date.now()}-yt-error`, role: "assistant", type: "text", content: `YouTube OAuth error: ${err?.message || err}` },
+                          ]);
                         }
                       }}
                       onError={(reason) => {
@@ -1127,7 +1284,7 @@ export default function Home() {
                 const meta = m.meta || {};
                 return (
                   <AssistantMessage key={m.id} borderClass="border-red-200">
-                    <YouTubeConnectedWidget
+                    <YouTubeConnectedWidgetExt
                       channelId={m.channelId ?? meta.channelId}
                       channelTitle={m.channelTitle ?? meta.channelTitle}
                       grantedScopes={m.grantedScopes ?? meta.grantedScopes}
