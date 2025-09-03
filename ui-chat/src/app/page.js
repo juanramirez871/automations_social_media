@@ -84,6 +84,23 @@ export default function Home() {
     }
   };
 
+  // Subir archivo a Cloudinary vía API interna
+  const uploadToCloudinary = async (file, { folder = 'ui-chat-uploads' } = {}) => {
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('folder', folder);
+      fd.append('resourceType', 'auto');
+      const res = await fetch('/api/upload', { method: 'POST', body: fd });
+      if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
+      const data = await res.json();
+      return { secureUrl: data.secureUrl, publicId: data.publicId, resourceType: data.resourceType };
+    } catch (e) {
+      console.warn('Cloudinary upload error:', e?.message || e);
+      return null;
+    }
+  };
+
   // Helper: cargar historial para el usuario autenticado desde DB y mapear al formato UI
   const loadHistoryForCurrentUser = async () => {
     if (!supabase) return;
@@ -125,9 +142,16 @@ export default function Home() {
 
         // Usuario
         if (rType === "text+media") {
-          const hasAtt = Array.isArray(r.attachments) && r.attachments.length > 0;
-          const attNote = hasAtt ? `\n[Adjuntos: ${r.attachments.map((a) => a.name).join(", ")}]` : "";
-          return { id: r.id, role: "user", type: "text", text: `${r.content}${attNote}`.trim(), attachments: [] };
+          const att = Array.isArray(r.attachments) ? r.attachments : [];
+          const mapped = att
+            .map((a) => {
+              const isVideo = a.kind === 'video';
+              const url = a.url || a.secureUrl || null;
+              if (!url) return null;
+              return { kind: isVideo ? 'video' : 'image', url, name: a.name || undefined };
+            })
+            .filter(Boolean);
+          return { id: r.id, role: "user", type: "text", text: (r.content || ""), attachments: mapped };
         }
         return { id: r.id, role: "user", type: "text", text: (r.content || ""), attachments: [] };
       }).filter(Boolean);
@@ -168,27 +192,45 @@ export default function Home() {
     }
     const userId = sessionData?.session?.user?.id;
 
-    const attachments = (files || []).map((f) => {
-      const isVideo = f.type?.startsWith("video/") || /(\.(mp4|mov|webm|ogg|mkv|m4v))$/i.test(f.name || "");
-      const kind = isVideo ? "video" : "image";
-      const url = URL.createObjectURL(f);
-      return { kind, url, name: f.name };
-    });
+    // Subir adjuntos a Cloudinary antes de construir el mensaje
+    let uploadedAttachments = [];
+    if (Array.isArray(files) && files.length > 0) {
+      setLoading(true);
+      const uploads = [];
+      for (const f of files) {
+        uploads.push(
+          (async () => {
+            const isVideo = f.type?.startsWith('video/') || /(\.(mp4|mov|webm|ogg|mkv|m4v))$/i.test(f.name || "");
+            const kind = isVideo ? 'video' : 'image';
+            const res = await uploadToCloudinary(f);
+            if (res?.secureUrl) {
+              return { kind, url: res.secureUrl, publicId: res.publicId, name: f.name };
+            } else {
+              // Fallback: no URL si falló
+              return null;
+            }
+          })()
+        );
+      }
+      const results = await Promise.all(uploads);
+      uploadedAttachments = results.filter(Boolean);
+      setLoading(false);
+    }
 
     // 1) Agregar el mensaje del usuario a la UI y guardar en DB
     const trimmed = (text || "").trim();
     const userMessage = {
       id: `u-${Date.now()}`,
       role: "user",
-      type: attachments.length ? "text+media" : "text",
+      type: uploadedAttachments.length ? "text+media" : "text",
       text: text || "",
-      attachments,
+      attachments: uploadedAttachments,
     };
     setMessages((prev) => [...prev, userMessage]);
 
-    // Guardar en DB (omitir URLs blob locales de adjuntos)
-    const attachmentsForDB = attachments.map(({ kind, name }) => ({ kind, name }));
-    await saveMessageToDB({ userId, role: "user", content: trimmed, attachments: attachmentsForDB, type: attachments.length ? "text+media" : "text" });
+    // Guardar en DB (guardar URLs de Cloudinary cuando existan)
+    const attachmentsForDB = uploadedAttachments.map(({ kind, url, publicId, name }) => ({ kind, url, publicId, name }));
+    await saveMessageToDB({ userId, role: "user", content: trimmed, attachments: attachmentsForDB, type: uploadedAttachments.length ? "text+media" : "text" });
 
     // 1.5) Si la intención es Instagram y no hay credenciales en perfil, mostrar widget para ingresarlas y abortar envío a la IA
     if (isInstagramIntent(trimmed)) {
