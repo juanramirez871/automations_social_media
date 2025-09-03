@@ -13,18 +13,14 @@ import { YouTubeAuthWidget as YouTubeAuthWidgetExt, YouTubeConnectedWidget as Yo
 import { LogoutWidget as LogoutWidgetExt, ClearChatWidget as ClearChatWidgetExt, PlatformsWidget as PlatformsWidgetExt } from "@/components/widgets/ControlWidgets";
 
 export default function Home() {
-  // Mensajes UI propios (para soportar adjuntos locales y formato existente)
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
-  // Estado de autenticación (demo) y control de una sola aparición
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const authGateShownRef = useRef(false);
   const bottomRef = useRef(null);
-  const [lightbox, setLightbox] = useState(null); // { kind, url, name }
-  const controlsShownRef = useRef(false);
+  const [lightbox, setLightbox] = useState(null);
 
-  // Helper: guardar mensaje en DB (ignora si no hay supabase)
   const saveMessageToDB = async ({ userId, role, content, attachments, type = null, meta = null }) => {
     if (!supabase || !userId) return;
     try {
@@ -42,15 +38,9 @@ export default function Home() {
     }
   };
 
-  // Utilidad: detectar intención de Instagram
   const isInstagramIntent = (t = "") => /\binstagram\b|\big\b|\binsta\b/i.test(String(t || ""));
-
-  // NUEVO: Utilidad: detectar intención de Facebook
   const isFacebookIntent = (t = "") => /\bfacebook\b|\bfb\b/i.test(String(t || ""));
-  // Nuevo: YouTube/Shorts
   const isYouTubeIntent = (t = "") => /\byoutube\b|\byt\b|\bshorts\b/i.test(String(t || ""));
-
-  // Nuevo: detectar intención de actualizar credenciales
   const isUpdateCredentialsIntent = (t = "") => {
     const s = String(t || "").toLowerCase();
     const patterns = [
@@ -69,25 +59,6 @@ export default function Home() {
     return patterns.some(p => s.includes(p));
   };
 
-  // Leer credenciales IG del perfil
-  const getInstagramCreds = async (userId) => {
-    try {
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("instagram_username, instagram_password, userinstagram, passwordinstagram")
-        .eq("id", userId)
-        .maybeSingle();
-      if (error) throw error;
-      const username = data?.instagram_username || data?.userinstagram || null;
-      const password = data?.instagram_password || data?.passwordinstagram || null;
-      return { username, password };
-    } catch (e) {
-      console.warn("No se pudieron obtener credenciales IG:", e?.message || e);
-      return { username: null, password: null };
-    }
-  };
-
-  // Guardar/actualizar credenciales IG en perfil (upsert por id)
   const upsertInstagramCreds = async ({ userId, username, password }) => {
     const row = {
       id: userId,
@@ -100,7 +71,7 @@ export default function Home() {
       if (error) throw error;
       return true;
     } catch (e1) {
-      // Fallback: columnas alternativas
+
       try {
         const { error } = await supabase
           .from("profiles")
@@ -169,7 +140,7 @@ export default function Home() {
             const username = r?.meta?.username || "";
             return { id: r.id, role: "assistant", type: "widget-instagram-configured", username };
           }
-          // NUEVO: Facebook widgets
+
           if (rType === "widget-facebook-auth") {
             return { id: r.id, role: "assistant", type: "widget-facebook-auth" };
           }
@@ -179,7 +150,7 @@ export default function Home() {
             const scopes = r?.meta?.scopes || null;
             return { id: r.id, role: "assistant", type: "widget-facebook-connected", name: fbName, fbId, scopes };
           }
-          // NUEVO: YouTube widgets
+
           if (rType === "widget-youtube-auth") {
             return { id: r.id, role: "assistant", type: "widget-youtube-auth" };
           }
@@ -196,7 +167,7 @@ export default function Home() {
           if (rType === "widget-clear-chat") {
             return { id: r.id, role: "assistant", type: "widget-clear-chat" };
           }
-          // Fallback: texto normal
+
           return { id: r.id, role: "assistant", type: "text", content: r.content };
         }
 
@@ -216,7 +187,6 @@ export default function Home() {
         return { id: r.id, role: "user", type: "text", text: (r.content || ""), attachments: [] };
       }).filter(Boolean);
 
-      // Merge: evitar ocultar widgets recién insertados (p.ej., Facebook/YouTube) mientras se carga el historial
       setMessages((prev) => {
         const histIds = new Set((normalized || []).map((m) => m.id));
         const keep = (prev || []).filter((m) => !histIds.has(m?.id));
@@ -230,9 +200,8 @@ export default function Home() {
     }
   };
   const handleSend = async ({ text, files }) => {
-    // Guard: requiere sesión válida
+
     if (!supabase) {
-      // Sin configuración de Supabase: seguir mostrando gate UI-only
       if (!isLoggedIn && !authGateShownRef.current) {
         setMessages((prev) => [
           ...prev,
@@ -293,11 +262,9 @@ export default function Home() {
     };
     setMessages((prev) => [...prev, userMessage]);
 
-    // Guardar en DB (guardar URLs de Cloudinary cuando existan)
     const attachmentsForDB = uploadedAttachments.map(({ kind, url, publicId, name }) => ({ kind, url, publicId, name }));
     await saveMessageToDB({ userId, role: "user", content: trimmed, attachments: attachmentsForDB, type: uploadedAttachments.length ? "text+media" : "text" });
 
-    // 1.4) Si el usuario pide actualizar credenciales, mostrar widget de login correspondiente y abortar
     if (isUpdateCredentialsIntent(trimmed) && isInstagramIntent(trimmed)) {
       const widgetId = `a-${Date.now()}-ig-upd`;
       setMessages((prev) => [
@@ -326,7 +293,6 @@ export default function Home() {
       return;
     }
 
-    // Detectar solicitud explícita de controles (logout / clear chat)
     const wantsLogout = (() => {
       const s = trimmed.toLowerCase();
       return /(cerrar sesión|cerrar sesion|logout|salir|sign out|cerrar la sesión|cerrar la sesion)/i.test(s);
@@ -390,10 +356,9 @@ export default function Home() {
         setMessages((prev) => [...prev, connected]);
         await saveMessageToDB({ userId, role: "assistant", content: "", attachments: null, type: "widget-youtube-connected", meta: connected.meta });
       }
-      return; // no llamamos a la IA
+      return;
     }
 
-    // 2) Enviar sólo el texto a la API y agregar la respuesta del asistente
     if (trimmed) {
       setLoading(true);
       try {
@@ -432,14 +397,10 @@ export default function Home() {
     }
   };
 
-  // Desplazamiento suave hacia el final cuando cambian los mensajes UI o el estado de carga
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, loading]);
 
-  // Widgets de control: se mostrarán solo cuando el usuario los solicite (sin auto-insertar)
-
-  // Mostrar el widget de autenticación automáticamente cuando no hay login (solo una vez)
   useEffect(() => {
     const checkSession = async () => {
       if (!supabase) {
@@ -473,541 +434,6 @@ export default function Home() {
 
   const onAttachmentClick = (a) => setLightbox(a);
   const closeLightbox = () => setLightbox(null);
-
-  // Widget de autenticación (gate con opciones)
-  const AuthGateWidget = () => {
-    const openForm = (mode) => {
-      setMessages((prev) => [
-        ...prev,
-        { id: `a-${Date.now()}-auth-${mode}`, role: "assistant", type: "widget-auth-form", mode },
-      ]);
-    };
-
-    return (
-      <div className="space-y-4">
-        <div className="flex items-center gap-2">
-          <div className="h-1 w-8 rounded-full bg-gradient-to-r from-blue-400 to-sky-400" />
-          <p className="text-sm font-semibold text-gray-700">Autenticación requerida</p>
-        </div>
-        <p className="text-sm text-gray-600">Para continuar, elige una opción:</p>
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={() => openForm("login")}
-            className="px-3 py-1.5 rounded-full border border-blue-200 text-blue-700 bg-blue-50/60 hover:bg-blue-100 transition"
-          >
-            Iniciar sesión
-          </button>
-          <button
-            type="button"
-            onClick={() => openForm("signup")}
-            className="px-3 py-1.5 rounded-full border border-pink-200 text-pink-700 bg-pink-50/60 hover:bg-pink-100 transition"
-          >
-            Crear cuenta
-          </button>
-        </div>
-        <p className="text-xs text-gray-400">Demo: sin lógica de backend ni validaciones.</p>
-      </div>
-    );
-  };
-
-  // Formulario inline (login o signup) dentro del chat
-  const AuthFormWidget = ({ mode }) => {
-    const [name, setName] = useState("");
-    const [email, setEmail] = useState("");
-    const [pass, setPass] = useState("");
-    const [confirm, setConfirm] = useState("");
-
-    const handleSubmit = async (e) => {
-      e.preventDefault();
-
-      if (supabase) {
-        try {
-          if (mode === "signup") {
-            const { error } = await supabase.auth.signUp({ email, password: pass, options: { data: { name } } });
-            if (error) throw error;
-          } else {
-            const { error } = await supabase.auth.signInWithPassword({ email, password: pass });
-            if (error) throw error;
-          }
-          await loadHistoryForCurrentUser();
-          setMessages((prev) => [
-            ...prev,
-            { id: `a-${Date.now()}-auth-ok`, role: "assistant", type: "text", content: "Ingreso exitoso 🥳." },  
-          ]);
-          return;
-        } catch (err) {
-          setMessages((prev) => [
-            ...prev,
-            { id: `a-${Date.now()}-auth-error`, role: "assistant", type: "text", content: `Error de autenticación: ${err.message}` },
-          ]);
-          return;
-        }
-      }
-
-      // Fallback si no hay supabase configurado
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: `a-${Date.now()}-auth-submitted`,
-          role: "assistant",
-          type: "text",
-          content: `Formulario de ${mode === "login" ? "inicio de sesión" : "creación de cuenta"} recibido (demo).`,
-        },
-      ]);
-    };
-
-    const submitBtnGradient = "bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-500/90 hover:to-blue-600/90";
-
-    return (
-      <div className="space-y-4 w-full sm:w-[34rem] md:w-[40rem]">
-        <div className="flex items-center gap-2">
-          <div className="h-1 w-8 rounded-full bg-gradient-to-r from-blue-400 to-sky-400" />
-          <p className="text-sm font-semibold text-gray-700">{mode === "login" ? "Iniciar sesión" : "Crear cuenta"}</p>
-        </div>
-        <form onSubmit={handleSubmit} className="space-y-3">
-          {mode === "signup" && (
-            <div>
-              <label className="block text-xs text-gray-600 mb-1">Nombre</label>
-              <input
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:ring-blue-300 focus:border-blue-300"
-                placeholder="Tu nombre"
-              />
-            </div>
-          )}
-          <div>
-            <label className="block text-xs text-gray-600 mb-1">Email</label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:ring-blue-300 focus:border-blue-300"
-              placeholder="tu@email.com"
-            />
-          </div>
-          <div>
-            <label className="block text-xs text-gray-600 mb-1">Contraseña</label>
-            <input
-              type="password"
-              value={pass}
-              onChange={(e) => setPass(e.target.value)}
-              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:ring-blue-300 focus:border-blue-300"
-              placeholder="••••••••"
-            />
-          </div>
-          {mode === "signup" && (
-            <div>
-              <label className="block text-xs text-gray-600 mb-1">Confirmar contraseña</label>
-              <input
-                type="password"
-                value={confirm}
-                onChange={(e) => setConfirm(e.target.value)}
-                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:ring-blue-300 focus:border-blue-300"
-                placeholder="••••••••"
-              />
-            </div>
-          )}
-          <button
-            type="submit"
-            className={`w-full inline-flex justify-center items-center rounded-lg text-white ${submitBtnGradient} px-4 py-2 text-sm`}
-          >
-            {mode === "login" ? "Entrar" : "Crear cuenta"}
-          </button>
-        </form>
-      </div>
-    );
-  };
-
-  // Widget: pedir credenciales de Instagram
-  const InstagramCredentialsWidget = ({ widgetId }) => {
-    const [u, setU] = useState("");
-    const [p, setP] = useState("");
-    const [saving, setSaving] = useState(false);
-
-    const submit = async (e) => {
-      e.preventDefault();
-      if (!u || !p) return;
-      setSaving(true);
-      try {
-        const { data: sessionData } = await supabase.auth.getSession();
-        const userId = sessionData?.session?.user?.id;
-        if (!userId) throw new Error("Sesión inválida");
-        const ok = await upsertInstagramCreds({ userId, username: u, password: p });
-        if (!ok) throw new Error("No fue posible guardar credenciales");
-
-        // Mantener el widget visible (no eliminarlo)
-        // setMessages((prev) => prev.filter((m) => m.id !== widgetId));
-
-        // Insertar widget configurado y persistirlo en DB
-        const configured = { id: `a-${Date.now()}-ig-ok`, role: "assistant", type: "widget-instagram-configured", username: u };
-        setMessages((prev) => [...prev, configured]);
-
-        const { data: sessionData2 } = await supabase.auth.getSession();
-        const userId2 = sessionData2?.session?.user?.id;
-        if (userId2) {
-          await saveMessageToDB({ userId: userId2, role: "assistant", content: "", attachments: null, type: "widget-instagram-configured", meta: { username: u } });
-        }
-      } catch (err) {
-        setMessages((prev) => [
-          ...prev,
-          { id: `a-${Date.now()}-ig-error`, role: "assistant", type: "text", content: `Error guardando credenciales de Instagram: ${err?.message || err}` },
-        ]);
-      } finally {
-        setSaving(false);
-      }
-    };
-
-    return (
-      <div className="space-y-3">
-        <div className="flex items-center gap-2">
-          <div className="h-1 w-8 rounded-full bg-gradient-to-r from-fuchsia-400 to-pink-400" />
-          <p className="text-sm font-semibold text-gray-700">Conectar Instagram</p>
-        </div>
-        <div className="flex items-center gap-3">
-          <div className="relative size-10 shrink-0 rounded-full bg-gradient-to-br from-pink-400 to-fuchsia-500 flex items-center justify-center shadow-inner">
-            <svg viewBox="0 0 24 24" className="size-5" aria-hidden="true">
-              <path fill="#fff" d="M7 2h10a5 5 0 015 5v10a5 5 0 01-5 5H7a5 5 0 01-5-5V7a5 5 0 015-5zm0 2a3 3 0 00-3 3v10a3 3 0 003 3h10a3 3 0 003-3V7a3 3 0 00-3-3H7zm5 3.5a5 5 0 110 10 5 5 0 010-10zm0 2a3 3 0 100 6 3 3 0 000-6zm6.5-.75a1.25 1.25 0 11-2.5 0 1.25 1.25 0 012.5 0z" />
-            </svg>
-          </div>
-          <div>
-            <p className="text-sm font-medium text-gray-800">Instagram</p>
-            <p className="text-xs text-gray-500">Ingresa tus credenciales</p>
-          </div>
-        </div>
-        <form onSubmit={submit} className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <input type="text" value={u} onChange={(e) => setU(e.target.value)} placeholder="Usuario de Instagram" className="w-full rounded-lg border border-fuchsia-200 px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-fuchsia-300" />
-          <input type="password" value={p} onChange={(e) => setP(e.target.value)} placeholder="Contraseña de Instagram" className="w-full rounded-lg border border-fuchsia-200 px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-fuchsia-300" />
-          <div className="sm:col-span-2">
-            <button type="submit" disabled={saving || !u || !p} className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-fuchsia-500 to-pink-500 px-4 py-2 text-white text-sm disabled:opacity-50">
-              {saving ? (
-                <span className="size-4 rounded-full border-2 border-white/60 border-t-transparent animate-spin" aria-hidden="true"></span>
-              ) : (
-                <svg viewBox="0 0 24 24" className="size-4" aria-hidden="true"><path fill="currentColor" d="M5 12l5 5L20 7"/></svg>
-              )}
-              Guardar y continuar
-            </button>
-          </div>
-        </form>
-        <p className="text-xs text-gray-400">Aviso: las credenciales se guardan en tu perfil.</p>
-      </div>
-    );
-  };
-
-  // Widget: Instagram configurado
-  const InstagramConfiguredWidget = ({ username }) => (
-    <div className="flex items-center gap-3">
-      <div className="relative size-10 shrink-0 rounded-full bg-gradient-to-br from-pink-400 to-fuchsia-500 flex items-center justify-center shadow-inner">
-        <svg viewBox="0 0 24 24" className="size-5" aria-hidden="true">
-          <path fill="#fff" d="M7 2h10a5 5 0 015 5v10a5 5 0 01-5 5H7a5 5 0 01-5-5V7a5 5 0 015-5zm0 2a3 3 0 00-3 3v10a3 3 0 003 3h10a3 3 0 003-3V7a3 3 0 00-3-3H7zm5 3.5a5 5 0 110 10 5 5 0 010-10zm0 2a3 3 0 100 6 3 3 0 000-6zm6.5-.75a1.25 1.25 0 11-2.5 0 1.25 1.25 0 012.5 0z" />
-        </svg>
-      </div>
-      <div>
-        <p className="text-sm font-medium text-gray-800">Instagram conectado</p>
-        <p className="text-xs text-gray-500">@{username} listo para publicar</p>
-      </div>
-    </div>
-  );
-  
-  // NUEVO: Facebook - Widget de autenticación
-  const FacebookAuthWidget = ({ widgetId }) => {
-    const [connecting, setConnecting] = useState(false);
-  
-    useEffect(() => {
-      const onMsg = async (ev) => {
-        try {
-          if (!ev?.data || ev.data?.source !== 'fb-oauth') return;
-          if (ev.origin !== window.location.origin) return;
- 
-          // Evitar manejar múltiples veces el mismo evento
-          if (typeof window !== 'undefined' && window.__fb_oauth_handled) return;
-          if (typeof window !== 'undefined') window.__fb_oauth_handled = true;
-           
-           if (!ev.data.ok) {
-            setMessages((prev) => [
-              ...prev,
-              { id: `a-${Date.now()}-fb-error`, role: "assistant", type: "text", content: `Facebook OAuth error: ${ev.data.error}` },
-            ]);
-            setConnecting(false);
-            return;
-          }
- 
-          const d = ev.data.data || {};
-          const access_token = d.access_token;
-          const expires_in = d.expires_in;
-          const profile = d.fb_user || {};
-          const permissions = d.granted_scopes || [];
-          const expiresAt = expires_in ? new Date(Date.now() + (Number(expires_in) * 1000)).toISOString() : null;
- 
-          const { data: sessionData } = await supabase.auth.getSession();
-          const userId = sessionData?.session?.user?.id;
-          if (!userId) throw new Error("Sesión inválida");
- 
-          const ok = await upsertFacebookToken({
-            userId,
-            token: access_token,
-            expiresAt,
-            fbUserId: profile?.id || null,
-            grantedScopes: permissions,
-            fbName: profile?.name || null,
-          });
-          if (!ok) throw new Error("No fue posible guardar el token en el perfil");
- 
-         // Insertar widget conectado asegurando que no haya duplicados previos (auth/connected)
-         const connected = {
-           id: `a-${Date.now()}-fb-ok`,
-           role: "assistant",
-           type: "widget-facebook-connected",
-           name: profile?.name || "Facebook user",
-           fbId: profile?.id || "",
-           scopes: permissions || null,
-         };
-         setMessages((prev) => [...prev, connected]);
-
-          await saveMessageToDB({ userId, role: "assistant", content: "", attachments: null, type: "widget-facebook-connected", meta: { name: connected.name, id: connected.fbId, scopes: connected.scopes } });
-        } catch (err) {
-          setMessages((prev) => [
-            ...prev,
-            { id: `a-${Date.now()}-fb-error2`, role: "assistant", type: "text", content: `No se pudo completar Facebook OAuth: ${err?.message || err}` },
-          ]);
-        } finally {
-          setConnecting(false);
-        }
-      };
-      window.addEventListener('message', onMsg);
-      return () => window.removeEventListener('message', onMsg);
-    }, [widgetId]);
-  
-    const startLogin = () => {
-      setConnecting(true);
-      if (typeof window !== 'undefined') window.__fb_oauth_handled = false;
-      const w = 600, h = 700;
-      const dualScreenLeft = window.screenLeft !== undefined ? window.screenLeft : window.screenX;
-      const dualScreenTop = window.screenTop !== undefined ? window.screenTop : window.screenY;
-      const width = window.innerWidth || document.documentElement.clientWidth || screen.width;
-      const height = window.innerHeight || document.documentElement.clientHeight || screen.height;
-      const left = ((width - w) / 2) + dualScreenLeft;
-      const top = ((height - h) / 2) + dualScreenTop;
-      window.open(
-        "/api/facebook/login",
-        "fb_oauth",
-        `scrollbars=yes,width=${w},height=${h},top=${top},left=${left}`
-      );
-    };  
-    return (
-      <div className="space-y-3">
-        <div className="flex items-center gap-3">
-          <div className="relative size-10 shrink-0 rounded-full bg-[#1877F2] flex items-center justify-center shadow-inner">
-            <svg viewBox="0 0 24 24" className="size-5" aria-hidden="true">
-              <path fill="#fff" d="M13.4 21v-7h2.3l.4-2.7h-2.7v-1.7c0-.8.3-1.3 1.3-1.3h1.5V5c-.3 0-1.1-.1-2.1-.1-2 0-3.4 1.2-3.4 3.5v2H8.4V14h2.3v7h2.7z"/>
-            </svg>
-          </div>
-          <div>
-            <p className="text-sm font-medium text-gray-800">Facebook</p>
-            <p className="text-xs text-gray-500">Conectar con OAuth</p>
-          </div>
-        </div>
-        <button
-          type="button"
-          onClick={startLogin}
-          disabled={connecting}
-          className="inline-flex items-center gap-2 rounded-lg bg-[#1877F2] px-4 py-2 text-white text-sm disabled:opacity-50"
-        >
-          {connecting ? (
-            <span className="size-4 rounded-full border-2 border-white/60 border-t-transparent animate-spin" aria-hidden="true"></span>
-          ) : (
-            <svg viewBox="0 0 24 24" className="size-4" aria-hidden="true"><path fill="currentColor" d="M5 12l5 5L20 7"/></svg>
-          )}
-          {connecting ? "Conectando…" : "Login con Facebook"}
-        </button>
-      </div>
-    );
-  };
-  
-  // NUEVO: Facebook - Widget conectado
-  const FacebookConnectedWidget = ({ name, fbId, scopes }) => (
-    <div className="flex items-center gap-3">
-      <div className="relative size-10 shrink-0 rounded-full bg-[#1877F2] flex items-center justify-center shadow-inner">
-        <svg viewBox="0 0 24 24" className="size-5" aria-hidden="true">
-          <path fill="#fff" d="M13.4 21v-7h2.3l.4-2.7h-2.7v-1.7c0-.8.3-1.3 1.3-1.3h1.5V5c-.3 0-1.1-.1-2.1-.1-2 0-3.4 1.2-3.4 3.5v2H8.4V14h2.3v7h2.7z"/>
-        </svg>
-      </div>
-      <div>
-        <p className="text-sm font-medium text-gray-800">Facebook conectado</p>
-        <p className="text-xs text-gray-500">{name ? `${name} (${fbId})` : `ID ${fbId}`}</p>
-        {Array.isArray(scopes) && scopes.length > 0 && (
-          <p className="text-xs text-gray-400 mt-1">Permisos: {scopes.join(", ")}</p>
-        )}
-      </div>
-    </div>
-  );
-  
-  // NUEVO: Widget de cerrar sesión
-  const LogoutWidget = () => {
-    const [working, setWorking] = useState(false);
-    const handleLogout = async () => {
-      try {
-        setWorking(true);
-        if (supabase?.auth?.signOut) {
-          await supabase.auth.signOut();
-        }
-        setIsLoggedIn(false);
-        // Limpiar todos los mensajes previos y mostrar solo el AuthGate
-        setMessages([]);
-        setMessages((prev) => [
-          ...prev,
-          { id: `a-${Date.now()}-auth-gate`, role: "assistant", type: "widget-auth-gate" },
-        ]);
-        authGateShownRef.current = true;
-      } catch (e) {
-        setMessages((prev) => [
-          ...prev,
-          { id: `a-${Date.now()}-signout-error`, role: "assistant", type: "text", content: `No se pudo cerrar sesión: ${e?.message || e}` },
-        ]);
-      } finally {
-        setWorking(false);
-      }
-    };
-    return (
-      <div className="flex flex-col gap-2 items-center justify-between rounded-xl border border-gray-200 bg-white p-3">
-        <div className="flex items-center gap-2">
-          <div className="h-1 w-6 rounded-full bg-gradient-to-r from-gray-400 to-gray-300" />
-          <p className="text-sm font-medium text-gray-700">Sesión</p>
-        </div>
-        <button
-          type="button"
-          onClick={handleLogout}
-          disabled={working}
-          className="inline-flex items-center gap-2 rounded-lg bg-gray-700 px-3 py-1.5 text-white text-xs disabled:opacity-50"
-        >
-          {working ? (
-            <span className="size-3.5 rounded-full border-2 border-white/60 border-t-transparent animate-spin" aria-hidden="true"></span>
-          ) : (
-            <svg viewBox="0 0 24 24" className="size-4" aria-hidden="true"><path fill="currentColor" d="M16 13v-2H7V8l-5 4 5 4v-3h9zM20 3h-8a2 2 0 00-2 2v4h2V5h8v14h-8v-4h-2v4a2 2 0 002 2h8a2 2 0 002-2V5a2 2 0 00-2-2z"/></svg>
-          )}
-          Cerrar sesión
-        </button>
-      </div>
-    );
-  };
-
-  // NUEVO: Widget de borrar chat
-  const ClearChatWidget = () => {
-    const [deleting, setDeleting] = useState(false);
-    const handleClear = async () => {
-      if (deleting) return;
-      if (typeof window !== 'undefined') {
-        const ok = window.confirm('¿Seguro que deseas borrar todos los mensajes del chat? Esta acción no se puede deshacer.');
-        if (!ok) return;
-      }
-      try {
-        setDeleting(true);
-        const { data: sessionData } = await supabase.auth.getSession();
-        const userId = sessionData?.session?.user?.id;
-        if (!userId) throw new Error('Sesión inválida');
-        await supabase.from('messages').delete().eq('user_id', userId);
-        // Reiniciar UI
-        setMessages([]);
-        // Ya no reinyectamos controles automáticamente; el usuario puede solicitarlos con un mensaje.
-        // Guardar un mensaje de confirmación opcional
-        setMessages((prev) => [
-          ...prev,
-          { id: `a-${Date.now()}-cleared`, role: 'assistant', type: 'text', content: 'Tu chat ha sido borrado.' },
-        ]);
-      } catch (e) {
-        setMessages((prev) => [
-          ...prev,
-          { id: `a-${Date.now()}-clear-error`, role: 'assistant', type: 'text', content: `No se pudo borrar el chat: ${e?.message || e}` },
-        ]);
-      } finally {
-        setDeleting(false);
-      }
-    };
-    return (
-      <div className="flex flex-col gap-2 items-center justify-between rounded-xl border border-red-200 bg-red-50 p-3">
-        <div className="flex items-center gap-2">
-          <div className="h-1 w-6 rounded-full bg-gradient-to-r from-red-400 to-rose-300" />
-          <p className="text-sm font-medium text-red-700">Borrar chat</p>
-        </div>
-        <button
-          type="button"
-          onClick={handleClear}
-          disabled={deleting}
-          className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-3 py-1.5 text-white text-xs disabled:opacity-50"
-        >
-          {deleting ? (
-            <span className="size-3.5 rounded-full border-2 border-white/60 border-t-transparent animate-spin" aria-hidden="true"></span>
-          ) : (
-            <svg viewBox="0 0 24 24" className="size-4" aria-hidden="true"><path fill="currentColor" d="M6 7h12l-1 13H7L6 7zm3-3h6l1 2H8l1-2z"/></svg>
-          )}
-          Vaciar conversación
-        </button>
-      </div>
-    );
-  };
-
-  const PlatformsWidget = () => (
-    <div className="space-y-4">
-      <div className="flex items-center gap-2">
-        <div className="h-1 w-8 rounded-full bg-gradient-to-r from-blue-400 to-sky-400" />
-        <p className="text-sm font-semibold text-gray-700">Plataformas que manejo</p>
-      </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        {/* Facebook */}
-        <div className="group flex items-center gap-3 rounded-xl border border-blue-100 bg-gradient-to-br from-white to-blue-50/30 p-3 hover:shadow-md transition-all">
-          <div className="relative size-10 shrink-0 rounded-full bg-[#1877F2] flex items-center justify-center shadow-inner">
-            <svg viewBox="0 0 24 24" className="size-5" aria-hidden="true">
-              <path fill="#fff" d="M13.4 21v-7h2.3l.4-2.7h-2.7v-1.7c0-.8.3-1.3 1.3-1.3h1.5V5c-.3 0-1.1-.1-2.1-.1-2 0-3.4 1.2-3.4 3.5v2h-2.3V14h2.3v7h2.7z"/>
-            </svg>
-          </div>
-          <div>
-            <p className="text-sm font-medium text-gray-800">Facebook</p>
-            <p className="text-xs text-gray-500">Páginas y publicaciones</p>
-          </div>
-        </div>
-        {/* Instagram */}
-        <div className="group flex items-center gap-3 rounded-xl border border-fuchsia-100 bg-gradient-to-br from-white to-fuchsia-50/30 p-3 hover:shadow-md transition-all">
-          <div className="relative size-10 shrink-0 rounded-xl bg-gradient-to-br from-pink-500 via-fuchsia-500 to-purple-500 flex items-center justify-center shadow-inner">
-            <svg viewBox="0 0 24 24" className="size-5" aria-hidden="true">
-              <rect x="3" y="3" width="18" height="18" rx="5" ry="5" fill="none" stroke="#fff" strokeWidth="2"/>
-              <circle cx="12" cy="12" r="3.5" fill="none" stroke="#fff" strokeWidth="2"/>
-              <circle cx="17.5" cy="6.5" r="1.2" fill="#fff"/>
-            </svg>
-          </div>
-          <div>
-            <p className="text-sm font-medium text-gray-800">Instagram</p>
-            <p className="text-xs text-gray-500">Feed, Reels y Stories</p>
-          </div>
-        </div>
-        {/* YouTube */}
-        <div className="group flex items-center gap-3 rounded-xl border border-red-100 bg-gradient-to-br from-white to-red-50/30 p-3 hover:shadow-md transition-all">
-          <div className="relative size-10 shrink-0 rounded-xl bg-[#FF0000] flex items-center justify-center shadow-inner">
-            <svg viewBox="0 0 24 24" className="size-5" aria-hidden="true">
-              <path fill="#fff" d="M10 15.5v-7l6 3.5-6 3.5z"/>
-              <rect x="3" y="6" width="18" height="12" rx="3" ry="3" fill="none" stroke="#fff" strokeWidth="2"/>
-            </svg>
-          </div>
-          <div>
-            <p className="text-sm font-medium text-gray-800">YouTube</p>
-            <p className="text-xs text-gray-500">Videos y Shorts</p>
-          </div>
-        </div>
-        {/* TikTok */}
-        <div className="group flex items-center gap-3 rounded-xl border border-gray-200 bg-gradient-to-br from-white to-gray-50 p-3 hover:shadow-md transition-all">
-          <div className="relative size-10 shrink-0 rounded-full bg-black flex items-center justify-center shadow-inner">
-            <svg viewBox="0 0 24 24" className="size-5" aria-hidden="true">
-              <path fill="#fff" d="M16.5 7.5c1.1.9 2.4 1.4 3.8 1.5v2.3c-1.6-.1-3.1-.7-4.4-1.7v4.9c0 2.8-2.2 5-5 5s-5-2.2-5-5 2.2-5 5-5c.4 0 .7 0 1 .1v2.4c-.3-.1-.6-.1-1-.1-1.5 0-2.7 1.2-2.7 2.7S9.4 20 11 20s2.7-1.2 2.7-2.7V4h2.8v3.5z"/>
-            </svg>
-          </div>
-          <div>
-            <p className="text-sm font-medium text-gray-800">TikTok</p>
-            <p className="text-xs text-gray-500">Clips y tendencias</p>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-blue-50 via-white to-pink-50 px-4 sm:px-6 lg:px-8 text-gray-600">
@@ -1134,7 +560,7 @@ export default function Home() {
                   </AssistantMessage>
                 );
               }
-              // NUEVO: Facebook auth y conectado
+ 
               if (m.type === "widget-facebook-auth") {
                 return (
                   <AssistantMessage key={m.id} borderClass="border-blue-200">
@@ -1230,7 +656,7 @@ export default function Home() {
                   </AssistantMessage>
                 );
               }
-              // NUEVO: YouTube auth y conectado
+
               if (m.type === "widget-youtube-auth") {
                 return (
                   <AssistantMessage key={m.id} borderClass="border-red-200">
@@ -1365,27 +791,6 @@ export default function Home() {
   );
 }
 
-// NUEVO: Leer token de Facebook del perfil
-const getFacebookToken = async (userId) => {
-  try {
-    const { data, error } = await supabase
-      .from("profiles")
-      .select("facebook_access_token, facebook_expires_at, facebook_user_id, facebook_granted_scopes")
-      .eq("id", userId)
-      .maybeSingle();
-    if (error) throw error;
-    const token = data?.facebook_access_token || null;
-    const expiresAt = data?.facebook_expires_at || null;
-    const fbUserId = data?.facebook_user_id || null;
-    const grantedScopes = data?.facebook_granted_scopes || null;
-    return { token, expiresAt, fbUserId, grantedScopes };
-  } catch (e) {
-    console.warn("No se pudo obtener token de Facebook:", e?.message || e);
-    return { token: null, expiresAt: null, fbUserId: null, grantedScopes: null };
-  }
-};
-
-// NUEVO: Guardar/actualizar token de Facebook en perfil
 const upsertFacebookToken = async ({ userId, token, expiresAt = null, fbUserId = null, grantedScopes = null, fbName = null }) => {
   try {
     const row = {
@@ -1405,7 +810,6 @@ const upsertFacebookToken = async ({ userId, token, expiresAt = null, fbUserId =
   }
 };
 
-// NUEVO: Leer token de YouTube del perfil
 const getYouTubeToken = async (userId) => {
   try {
     const { data, error } = await supabase
@@ -1427,7 +831,6 @@ const getYouTubeToken = async (userId) => {
   }
 };
 
-// NUEVO: Guardar/actualizar token de YouTube en perfil
 const upsertYouTubeToken = async ({ userId, token, refreshToken = null, expiresAt = null, channelId = null, channelTitle = null, grantedScopes = null }) => {
   try {
     const row = {
@@ -1448,115 +851,3 @@ const upsertYouTubeToken = async ({ userId, token, refreshToken = null, expiresA
     return false;
   }
 };
-
-// YouTube widgets
-const YouTubeAuthWidget = ({ widgetId, onConnected, onError }) => {
-  const [connecting, setConnecting] = useState(false);
-  const handledRef = useRef(false);
-  useEffect(() => {
-    const onMsg = async (ev) => {
-      try {
-        if (!ev?.data || ev.origin !== window.location.origin) return;
-        if (ev.data?.source !== 'yt-oauth') return;
-        // Evitar manejar el evento múltiples veces (varios widgets montados o StrictMode)
-        if (handledRef.current || (typeof window !== 'undefined' && window.__yt_oauth_handled)) return;
-        handledRef.current = true;
-        if (typeof window !== 'undefined') window.__yt_oauth_handled = true;
-
-        if (!ev.data.ok) {
-          setConnecting(false);
-          onError && onError(ev.data?.reason || 'oauth_error');
-          return;
-        }
-        const d = ev.data.data || {};
-        const access_token = d.access_token;
-        const refresh_token = d.refresh_token || null;
-        const expires_at = d.expires_at || null;
-        const channel_id = d.channel_id || null;
-        const channel_title = d.channel_title || null;
-        const granted_scopes = d.granted_scopes || null;
-        const { data: sessionData } = await supabase.auth.getSession();
-        const userId = sessionData?.session?.user?.id;
-        if (userId && access_token) {
-          await upsertYouTubeToken({ userId, token: access_token, refreshToken: refresh_token, expiresAt: expires_at, channelId: channel_id, channelTitle: channel_title, grantedScopes: granted_scopes });
-        }
-        setConnecting(false);
-        onConnected && onConnected({ channelId: channel_id, channelTitle: channel_title, grantedScopes: granted_scopes, expiresAt: expires_at });
-      } catch (e) {
-        setConnecting(false);
-        onError && onError(e?.message || 'exception');
-      }
-    };
-    window.addEventListener('message', onMsg);
-    return () => window.removeEventListener('message', onMsg);
-  }, [onConnected, onError]);
- 
-  const startLogin = () => {
-    setConnecting(true);
-    // Resetear flag global en un nuevo intento
-    if (typeof window !== 'undefined') window.__yt_oauth_handled = false;
-    const w = 600, h = 700;
-    const dualScreenLeft = window.screenLeft !== undefined ? window.screenLeft : window.screenX;
-    const dualScreenTop = window.screenTop !== undefined ? window.screenTop : window.screenY;
-    const width = window.innerWidth || document.documentElement.clientWidth || screen.width;
-    const height = window.innerHeight || document.documentElement.clientHeight || screen.height;
-    const left = ((width - w) / 2) + dualScreenLeft;
-    const top = ((height - h) / 2) + dualScreenTop;
-    window.open(
-      "/api/youtube/login",
-      "yt_oauth",
-      `scrollbars=yes,width=${w},height=${h},top=${top},left=${left}`
-    );
-  };
-
-  return (
-    <div className="space-y-3">
-      <div className="flex items-center gap-3">
-        <div className="relative size-10 shrink-0 rounded-xl bg-[#FF0000] flex items-center justify-center shadow-inner">
-          <svg viewBox="0 0 24 24" className="size-5" aria-hidden="true">
-            <path fill="#fff" d="M10 15.5v-7l6 3.5-6 3.5z"/>
-            <rect x="3" y="6" width="18" height="12" rx="3" ry="3" fill="none" stroke="#fff" strokeWidth="2"/>
-          </svg>
-        </div>
-        <div>
-          <p className="text-sm font-medium text-gray-800">YouTube</p>
-          <p className="text-xs text-gray-500">Conectar con OAuth</p>
-        </div>
-      </div>
-      <button
-        type="button"
-        onClick={startLogin}
-        disabled={connecting}
-        className="inline-flex items-center gap-2 rounded-lg bg-[#FF0000] px-4 py-2 text-white text-sm disabled:opacity-50"
-      >
-        {connecting ? (
-          <span className="size-4 rounded-full border-2 border-white/60 border-t-transparent animate-spin" aria-hidden="true"></span>
-        ) : (
-          <svg viewBox="0 0 24 24" className="size-4" aria-hidden="true"><path fill="currentColor" d="M5 12l5 5L20 7"/></svg>
-        )}
-        {connecting ? "Conectando…" : "Login con YouTube"}
-      </button>
-    </div>
-  );
-};
-
-const YouTubeConnectedWidget = ({ channelId, channelTitle, grantedScopes, expiresAt }) => (
-  <div className="flex items-center gap-3">
-    <div className="relative size-10 shrink-0 rounded-xl bg-[#FF0000] flex items-center justify-center shadow-inner">
-      <svg viewBox="0 0 24 24" className="size-5" aria-hidden="true">
-        <path fill="#fff" d="M10 15.5v-7l6 3.5-6 3.5z"/>
-        <rect x="3" y="6" width="18" height="12" rx="3" ry="3" fill="none" stroke="#fff" strokeWidth="2"/>
-      </svg>
-    </div>
-    <div>
-      <p className="text-sm font-medium text-gray-800">YouTube conectado</p>
-      {channelTitle && <p className="text-xs text-gray-500">{channelTitle} ({channelId})</p>}
-      {Array.isArray(grantedScopes) && grantedScopes.length > 0 && (
-        <p className="text-xs text-gray-400 mt-1">Permisos: {grantedScopes.join(", ")}</p>
-      )}
-      {expiresAt && (
-        <p className="text-[11px] text-gray-400 mt-1">Token expira: {new Date(expiresAt).toLocaleString()}</p>
-      )}
-    </div>
-  </div>
-);
