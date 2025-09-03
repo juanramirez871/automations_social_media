@@ -44,14 +44,12 @@ export async function initBaileys() {
     }
   });
 
-  // Listener de mensajes entrantes
   sock.ev.on('messages.upsert', async ({ messages, type }) => {
     logger.info({ type, count: messages?.length || 0 }, 'Evento messages.upsert');
     if (!messages || !messages.length) {
       logger.warn('messages.upsert sin mensajes válidos');
       return;
     }
-    // Log de todos los mensajes entrantes para debug
     for (let i = 0; i < messages.length; i++) {
       const m = messages[i];
       logger.info({ 
@@ -65,7 +63,6 @@ export async function initBaileys() {
       }, 'Mensaje entrante detectado');
     }
     
-    // No filtramos por type para poder ver si llegan otros tipos
     for (const m of messages) {
       try {
         const from = m?.key?.remoteJid;

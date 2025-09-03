@@ -2,7 +2,6 @@ import axios from 'axios';
 import config from './config.js';
 import * as orchestrator from './orchestrator.js';
 
-// Verifica el webhook de WhatsApp (Meta)
 export async function verify(req, res) {
   try {
     const VERIFY_TOKEN = config.whatsapp.verifyToken;
@@ -20,7 +19,6 @@ export async function verify(req, res) {
   }
 }
 
-// Recibir mensajes entrantes
 export async function receive(req, res) {
   try {
     const body = req.body;
@@ -29,7 +27,6 @@ export async function receive(req, res) {
       return res.sendStatus(404);
     }
 
-    // Responder 200 inmediatamente para evitar reintentos
     res.sendStatus(200);
 
     const entries = body.entry || [];

@@ -7,12 +7,8 @@ import { uploadFromUrl, uploadBuffer, deleteMedia } from './media_store.js';
 import { logger } from './logger.js';
 import config from './config.js';
 
-// Sesiones en memoria por usuario (JID/numero) para flujo en 3 pasos
-// step: 'await_platforms' -> esperando que el usuario diga las redes
-// step: 'await_description' -> esperando la descripción/brief
-const pendingSessions = new Map(); // key = fromNumber, value = { mediaType, publishMediaUrl, uploaded, createdAt, step, selectedPlatforms }
+const pendingSessions = new Map();
 
-// Utilidad: parsear plataformas desde texto del usuario
 function parsePlatforms(text = '') {
   const t = String(text || '').toLowerCase();
   const out = new Set();
@@ -22,12 +18,6 @@ function parsePlatforms(text = '') {
   return Array.from(out);
 }
 
-/*
-  Nueva lógica de flujo (3 pasos):
-  1) Usuario envía imagen o video -> subimos a Cloudinary, guardamos en sesión (step=await_platforms) y pedimos plataformas.
-  2) Usuario envía texto con plataformas -> guardamos selectedPlatforms, avanzamos a step=await_description y pedimos la descripción.
-  3) Usuario envía la descripción -> generamos caption/hashtags con IA (ignorando plataformas), publicamos en selectedPlatforms y limpiamos sesión.
-*/
 export async function handleIncomingWhatsAppMessage({ message, from, waNumberId }) {
   logger.info({ from, waNumberId, type: message?.type }, 'handleIncomingWhatsAppMessage: inicio');
   try {
@@ -48,12 +38,10 @@ export async function handleIncomingWhatsAppMessage({ message, from, waNumberId 
 
     logger.debug({ from: fromNumber, mediaType }, 'Incoming WhatsApp message');
 
-    // PASO 1: Llega media (imagen/video) -> subir, guardar sesión y pedir plataformas
     if (mediaType === 'image' || mediaType === 'video') {
       let uploaded = null;
       let publishMediaUrl = null;
 
-      // Sólo disponible automáticamente con Baileys (buffer binario)
       const buffer = message._mediaBuffer;
       logger.debug({ bufLen: buffer?.length || 0 }, 'Baileys media buffer length');
       if (buffer && Buffer.isBuffer(buffer) && buffer.length) {
@@ -69,7 +57,6 @@ export async function handleIncomingWhatsAppMessage({ message, from, waNumberId 
       }
 
       if (publishMediaUrl) {
-        // Si ya había una sesión, la reemplazamos por la nueva
         const hadPrev = pendingSessions.has(fromNumber);
         pendingSessions.set(fromNumber, {
           mediaType,
@@ -100,14 +87,12 @@ export async function handleIncomingWhatsAppMessage({ message, from, waNumberId 
       }
 
       logger.info('handleIncomingWhatsAppMessage: fin (esperando plataformas)');
-      return; // No publicamos aún, esperamos plataformas
+      return;
     }
 
-    // PASO 2 y 3: Llega texto
     if (message.type === 'text') {
       const session = pendingSessions.get(fromNumber);
       if (!session) {
-        // No hay media pendiente -> pedimos que envíe primero imagen/video
         try {
           await sendBaileysMessage({
             to: fromNumber,
@@ -121,7 +106,6 @@ export async function handleIncomingWhatsAppMessage({ message, from, waNumberId 
       const { mediaType: sessMediaType, publishMediaUrl, uploaded } = session;
       const promptText = userText || '';
 
-      // Control por pasos
       if (session.step === 'await_platforms') {
         const plats = parsePlatforms(promptText).filter(p => ['facebook','instagram','x'].includes(p));
         if (!plats.length) {
@@ -134,7 +118,6 @@ export async function handleIncomingWhatsAppMessage({ message, from, waNumberId 
           logger.info('Aún esperando plataformas válidas');
           return;
         }
-        // Guardar plataformas y pedir descripción
         session.selectedPlatforms = plats;
         session.step = 'await_description';
         pendingSessions.set(fromNumber, session);
@@ -149,12 +132,9 @@ export async function handleIncomingWhatsAppMessage({ message, from, waNumberId 
       }
 
       if (session.step === 'await_description') {
-        // Generar plan con OpenAI usando SOLO la descripción y el tipo de media almacenado
         const aiPlan = await planPost({ userPrompt: promptText, mediaType: sessMediaType });
 
-        // Usar exclusivamente las plataformas elegidas por el usuario en el paso anterior
         let platforms = Array.from(new Set((session.selectedPlatforms || []).map(p => String(p).toLowerCase()))).filter(p => ['facebook','instagram','x'].includes(p));
-        // Fallback si por alguna razón no hay plataformas almacenadas
         if (!platforms.length) {
           platforms = Array.from(new Set((aiPlan.platforms || []).map(p => String(p).toLowerCase()))).filter(p => ['facebook','instagram','x'].includes(p));
         }
@@ -201,7 +181,6 @@ export async function handleIncomingWhatsAppMessage({ message, from, waNumberId 
 
         logger.info({ results }, 'Resultados de publicación');
 
-        // Limpieza: borrar el media temporal si hubo al menos una publicación exitosa
         const anySuccess = results.some(r => !r.error);
         if (anySuccess && uploaded?.publicId) {
           if (config.cloudinary.keepUploads) {
@@ -212,11 +191,10 @@ export async function handleIncomingWhatsAppMessage({ message, from, waNumberId 
           }
         }
 
-        // Respuesta por WhatsApp con resumen
         if (results.length === 0) {
           try { await sendBaileysMessage({ to: fromNumber, text: 'No se detectaron plataformas válidas para publicar.' }); } catch {}
           logger.info('handleIncomingWhatsAppMessage: fin (sin plataformas)');
-          pendingSessions.delete(fromNumber); // limpiar sesión aunque no haya plataformas
+          pendingSessions.delete(fromNumber);
           return;
         }
 
@@ -227,13 +205,11 @@ export async function handleIncomingWhatsAppMessage({ message, from, waNumberId 
         const response = `Resumen de publicaciones:\n${lines.join('\n')}${mediaInfo}`;
         try { await sendBaileysMessage({ to: fromNumber, text: response }); } catch {}
 
-        // Limpiar sesión tras publicar
         pendingSessions.delete(fromNumber);
         logger.info('handleIncomingWhatsAppMessage: fin (publicación y limpieza de sesión)');
         return;
       }
 
-      // Si por alguna razón la sesión no tiene step conocido, reiniciar al paso de plataformas
       session.step = 'await_platforms';
       pendingSessions.set(fromNumber, session);
       try {
@@ -242,7 +218,6 @@ export async function handleIncomingWhatsAppMessage({ message, from, waNumberId 
       return;
     }
 
-    // Otros tipos no soportados
     try {
       await sendBaileysMessage({ to: fromNumber, text: 'Envía una imagen o un video para comenzar.' });
     } catch {}

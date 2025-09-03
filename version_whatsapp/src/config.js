@@ -3,7 +3,6 @@ import 'dotenv/config';
 const config = {
   port: process.env.PORT || 3030,
   whatsapp: {
-    // Solo Baileys (no oficial)
   },
   ai: {
     provider: process.env.AI_PROVIDER || 'openai', // 'openai' | 'gemini'
@@ -14,17 +13,15 @@ const config = {
       apiKey: process.env.GEMINI_API_KEY,
     },
   },
-  // Deprecated: mantener por compatibilidad
   openai: {
     apiKey: process.env.OPENAI_API_KEY,
   },
   facebook: {
     pageId: process.env.FACEBOOK_PAGE_ID,
     accessToken: process.env.META_ACCESS_TOKEN,
-    // Opcional: para auto refrescar el token cuando expira
     appId: process.env.FACEBOOK_APP_ID,
     appSecret: process.env.FACEBOOK_APP_SECRET,
-    userAccessToken: process.env.FACEBOOK_USER_ACCESS_TOKEN, // idealmente long-lived
+    userAccessToken: process.env.FACEBOOK_USER_ACCESS_TOKEN,
   },
   instagram: {
     username: process.env.INSTAGRAM_USERNAME,

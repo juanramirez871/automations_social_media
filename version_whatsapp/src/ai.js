@@ -19,30 +19,22 @@ function getGeminiClient() {
   return geminiClient;
 }
 
-// Utilidades de fallback (sin IA) para generar caption y hashtags profesionales
 function stripDiacritics(str = '') {
   try { return str.normalize('NFD').replace(/[\u0300-\u036f]/g, ''); } catch { return str; }
 }
 function unique(arr) { return Array.from(new Set(arr)); }
-// Ampliamos stopwords para excluir verbos de instrucción y plataformas
 const STOPWORDS = new Set([
   'de','la','que','el','en','y','a','los','del','se','las','por','un','para','con','no','una','su','al','lo','como','más','pero','sus','le','ya','o','este','sí','porque','esta','entre','cuando','muy','sin','sobre','también','me','hasta','hay','donde','quien','desde','todo','nos','durante','todos','uno','les','ni','contra','otros','ese','eso','ante','ellos','e','esto','mí','antes','algunos','qué','unos','yo','otro','otras','otra','él','tanto','esa','estos','mucho','quienes','nada','muchos','cual','poco','ella','estar','estas','algunas','algo','nosotros','mi','mis','tú','te','ti','tu','tus','ellas','nosotras','vosotros','vosotras','os','mío','mía','míos','mías','tuyo','tuya','tuyos','tuyas','nuestro','nuestra','nuestros','nuestras','vuestro','vuestra','vuestros','vuestras','esos','esas','estoy','estás','está','estamos','estáis','están','esté','estés','estemos','estéis','estén','estaré','estarás','estará','estaremos','estaréis','estarán','estaría','estarías','estaríamos','estaríais','estarían','estaba','estabas','estábamos','estabais','estaban','estuve','estuviste','estuvo','estuvimos','estuvisteis','estuvieron','estuviera','estuvieras','estuviéramos','estuvierais','estuvieran','estuviese','estuvieses','estuviésemos','estuvieseis','estuviesen','estando','estado','estada','estados','estadas','estad','el','la','los','las','un','una','unos','unas',
   'the','and','for','with','that','this','from','your','you','our','on','of','to','in','at','by','it','is','are','as','an','or','be','we','us','a',
-  // Direcciones/acciones típicas que no deben ser hashtags ni parte del tema
   'quiero','queremos','quieres','subir','suba','subo','publicar','publica','publico','postear','postea','poste','post','elegir','elige','elije','indicar','indica','poner','plataforma','plataformas','red','redes','social','sociales','subor',
-  // Plataformas
   'facebook','instagram','twitter','x'
 ]);
 
 function sanitizeBrief(input = '') {
   let s = input || '';
-  // Eliminar líneas que empiezan con "plataforma/s: ..."
   s = s.replace(/^\s*plataformas?:.*$/gim, '');
-  // Quitar frases del tipo "quiero/queremos (subir|publicar|postear) (en|a) ..."
   s = s.replace(/\b(quiero|queremos|por\s*favor)\s+(subir|publicar|postear)\s+(en|a)?\s*[^\n\r\.;,!]+/gim, '');
-  // Quitar menciones aisladas de plataformas
   s = s.replace(/\b(instagram|facebook|twitter|\bx\b)\b/gi, '');
-  // Reducir múltiples espacios y limpiar
   s = s.replace(/\s{2,}/g, ' ').replace(/[\t\r]+/g, ' ').trim();
   return s;
 }
@@ -54,14 +46,14 @@ function toTitleCase(word = '') {
 function deriveHashtags(prompt = '', max = 12) {
   const cleaned = stripDiacritics(prompt.toLowerCase().replace(/[^a-z0-9\s]/gi, ' '));
   const words = cleaned.split(/\s+/).filter(w => w && w.length >= 3 && !STOPWORDS.has(w));
-  const uniq = unique(words).slice(0, max + 8); // margen
+  const uniq = unique(words).slice(0, max + 8);
   const tags = [];
   for (const w of uniq) {
     const tag = `#${w.replace(/\s+/g, '')}`;
     if (!tags.includes(tag)) tags.push(tag);
     if (tags.length >= max) break;
   }
-  // Agregar algunos genéricos si faltan
+
   const filler = ['#marketing','#socialmedia','#estrategia','#contenido','#tendencias','#comunidad','#brand','#creatividad','#negocios'];
   for (const f of filler) {
     if (tags.length >= max) break;
@@ -93,15 +85,6 @@ Ready for more? Join the conversation.`;
   };
 }
 
-/*
-  Dado el prompt del usuario (texto), y metadatos del medio (opcional),
-  devolver un JSON con:
-  {
-    platforms: ["facebook", "instagram", "x"],
-    caption: "...",
-    hashtags: ["#...", "#..."],
-  }
-*/
 async function planPost({ userPrompt, mediaType }) {
   const provider = config.ai.provider;
   
@@ -170,11 +153,9 @@ Tipo de media: ${mediaType || 'desconocido'}`;
     }
   } catch (error) {
     console.error(`Error with ${provider} provider:`, error.message);
-    // Fallback en caso de error
     return generateFallbackPlan({ userPrompt: cleanedPrompt, mediaType });
   }
 
-  // Parsear respuesta JSON
   try {
     const jsonStart = responseText.indexOf('{');
     const jsonEnd = responseText.lastIndexOf('}');
@@ -184,7 +165,6 @@ Tipo de media: ${mediaType || 'desconocido'}`;
     let caption = typeof data.caption === 'string' ? data.caption : '';
     let hashtags = Array.isArray(data.hashtags) ? data.hashtags : [];
 
-    // Si la IA devolvió el brief casi literal o vacío, aplicar fallback para garantizar un texto nuevo y profesional
     const briefTrim = (cleanedPrompt || '').trim();
     const capTrim = (caption || '').trim();
     const looksEcho = capTrim && briefTrim && (
@@ -197,7 +177,6 @@ Tipo de media: ${mediaType || 'desconocido'}`;
       if (!hashtags || hashtags.length < 5) hashtags = fb.hashtags;
     }
 
-    // Normalizar hashtags (minúsculas y sin acentos)
     hashtags = unique((hashtags || []).map(h => {
       const t = (h || '').toString().trim();
       if (!t) return null;

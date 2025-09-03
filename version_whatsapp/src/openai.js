@@ -9,17 +9,7 @@ function getClient() {
   return client;
 }
 
-/*
-  Dado el prompt del usuario (texto), y metadatos del medio (opcional),
-  devolver un JSON con:
-  {
-    platforms: ["facebook", "instagram", "x"],
-    caption: "...",
-    hashtags: ["#...", "#..."],
-  }
-*/
 async function planPost({ userPrompt, mediaType }) {
-  // Si no hay API key, devolvemos un plan básico por defecto
   if (!config.openai.apiKey) {
     const fallbackCaption = userPrompt || '';
     return {
