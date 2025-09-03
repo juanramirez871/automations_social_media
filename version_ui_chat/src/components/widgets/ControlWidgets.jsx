@@ -136,7 +136,7 @@ export const PlatformsWidget = () => {
     <div className="space-y-4">
       <div className="flex items-center gap-2">
         <div className="h-1 w-8 rounded-full bg-gradient-to-r from-blue-400 to-sky-400" />
-        <p className="text-sm font-semibold text-gray-700">Plataformas que manejo</p>
+        <p className="text-sm font-semibold text-gray-700">Plataformas</p>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {/* Facebook */}
