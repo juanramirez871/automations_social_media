@@ -39,6 +39,28 @@ export default function Home() {
   // Utilidad: detectar intención de Instagram
   const isInstagramIntent = (t = "") => /\binstagram\b|\big\b|\binsta\b/i.test(String(t || ""));
 
+  // NUEVO: Utilidad: detectar intención de Facebook
+  const isFacebookIntent = (t = "") => /\bfacebook\b|\bfb\b/i.test(String(t || ""));
+
+  // Nuevo: detectar intención de actualizar credenciales
+  const isUpdateCredentialsIntent = (t = "") => {
+    const s = String(t || "").toLowerCase();
+    const patterns = [
+      "actualiza", "actualizar", "actualización",
+      "cambia", "cambiar",
+      "modifica", "modificar",
+      "reconfigura", "reconfigurar",
+      "reconecta", "reconectar",
+      "reautentica", "reautenticar",
+      "relogin", "volver a iniciar sesión",
+      "renueva", "renovar",
+      "refresh", "refresca", "refrescar",
+      "update", "renew",
+      "credencial", "credenciales", "token"
+    ];
+    return patterns.some(p => s.includes(p));
+  };
+
   // Leer credenciales IG del perfil
   const getInstagramCreds = async (userId) => {
     try {
@@ -136,6 +158,16 @@ export default function Home() {
             const username = r?.meta?.username || "";
             return { id: r.id, role: "assistant", type: "widget-instagram-configured", username };
           }
+          // NUEVO: Facebook widgets
+          if (rType === "widget-facebook-auth") {
+            return { id: r.id, role: "assistant", type: "widget-facebook-auth" };
+          }
+          if (rType === "widget-facebook-connected") {
+            const fbName = r?.meta?.name || "";
+            const fbId = r?.meta?.id || "";
+            const scopes = r?.meta?.scopes || null;
+            return { id: r.id, role: "assistant", type: "widget-facebook-connected", name: fbName, fbId, scopes };
+          }
           // Fallback: texto normal
           return { id: r.id, role: "assistant", type: "text", content: r.content };
         }
@@ -232,17 +264,42 @@ export default function Home() {
     const attachmentsForDB = uploadedAttachments.map(({ kind, url, publicId, name }) => ({ kind, url, publicId, name }));
     await saveMessageToDB({ userId, role: "user", content: trimmed, attachments: attachmentsForDB, type: uploadedAttachments.length ? "text+media" : "text" });
 
-    // 1.5) Si la intención es Instagram y no hay credenciales en perfil, mostrar widget para ingresarlas y abortar envío a la IA
-    if (isInstagramIntent(trimmed)) {
-      const { username, password } = await getInstagramCreds(userId);
-      if (!username || !password) {
-        const widgetId = `a-${Date.now()}-ig-cred`;
+    // 1.4) Si el usuario pide actualizar credenciales, mostrar widget de login correspondiente y abortar
+    if (isUpdateCredentialsIntent(trimmed) && isInstagramIntent(trimmed)) {
+      const widgetId = `a-${Date.now()}-ig-upd`;
+      setMessages((prev) => [
+        ...prev,
+        { id: widgetId, role: "assistant", type: "widget-instagram-credentials" },
+      ]);
+      await saveMessageToDB({ userId, role: "assistant", content: "", attachments: null, type: "widget-instagram-credentials" });
+      return;
+    }
+    if (isUpdateCredentialsIntent(trimmed) && isFacebookIntent(trimmed)) {
+      const widgetId = `a-${Date.now()}-fb-upd`;
+      setMessages((prev) => [
+        ...prev,
+        { id: widgetId, role: "assistant", type: "widget-facebook-auth" },
+      ]);
+      await saveMessageToDB({ userId, role: "assistant", content: "", attachments: null, type: "widget-facebook-auth" });
+      return;
+    }
+
+    // 1.6) Facebook: siempre mostrar un widget (auth si no hay token, conectado si ya hay) y abortar envío a la IA
+    if (isFacebookIntent(trimmed)) {
+      const { token, fbUserId, grantedScopes } = await getFacebookToken(userId);
+      const widgetId = `a-${Date.now()}-fb`;
+      if (!token) {
         setMessages((prev) => [
           ...prev,
-          { id: widgetId, role: "assistant", type: "widget-instagram-credentials" },
+          { id: widgetId, role: "assistant", type: "widget-facebook-auth" },
         ]);
-        return; // no llamamos a la IA hasta tener credenciales
+        await saveMessageToDB({ userId, role: "assistant", content: "", attachments: null, type: "widget-facebook-auth" });
+      } else {
+        const connected = { id: widgetId, role: "assistant", type: "widget-facebook-connected", name: null, fbId: fbUserId || "", scopes: grantedScopes || null };
+        setMessages((prev) => [...prev, connected]);
+        await saveMessageToDB({ userId, role: "assistant", content: "", attachments: null, type: "widget-facebook-connected", meta: { name: connected.name, id: connected.fbId, scopes: connected.scopes } });
       }
+      return; // no llamamos a la IA en esta interacción
     }
 
     // 2) Enviar sólo el texto a la API y agregar la respuesta del asistente
@@ -559,6 +616,139 @@ export default function Home() {
       </div>
     </div>
   );
+  
+  // NUEVO: Facebook - Widget de autenticación
+  const FacebookAuthWidget = ({ widgetId }) => {
+    const [connecting, setConnecting] = useState(false);
+  
+    useEffect(() => {
+      const onMsg = async (ev) => {
+        try {
+          if (!ev?.data || ev.data?.source !== 'fb-oauth') return;
+          if (ev.origin !== window.location.origin) return;
+  
+          if (!ev.data.ok) {
+            setMessages((prev) => [
+              ...prev,
+              { id: `a-${Date.now()}-fb-error`, role: "assistant", type: "text", content: `Facebook OAuth error: ${ev.data.error}` },
+            ]);
+            setConnecting(false);
+            return;
+          }
+  
+          const d = ev.data.data || {};
+          const access_token = d.access_token;
+          const expires_in = d.expires_in;
+          const profile = d.fb_user || {};
+          const permissions = d.granted_scopes || [];
+          const expiresAt = expires_in ? new Date(Date.now() + (Number(expires_in) * 1000)).toISOString() : null;
+  
+          const { data: sessionData } = await supabase.auth.getSession();
+          const userId = sessionData?.session?.user?.id;
+          if (!userId) throw new Error("Sesión inválida");
+  
+          const ok = await upsertFacebookToken({
+            userId,
+            token: access_token,
+            expiresAt,
+            fbUserId: profile?.id || null,
+            grantedScopes: permissions,
+            fbName: profile?.name || null,
+          });
+          if (!ok) throw new Error("No fue posible guardar el token en el perfil");
+  
+          // Quitar este widget
+          setMessages((prev) => prev.filter((m) => m.id !== widgetId));
+  
+          // Insertar widget conectado y persistirlo en DB (sin token)
+          const connected = {
+            id: `a-${Date.now()}-fb-ok`,
+            role: "assistant",
+            type: "widget-facebook-connected",
+            name: profile?.name || "Facebook user",
+            fbId: profile?.id || "",
+            scopes: permissions || null,
+          };
+          setMessages((prev) => [...prev, connected]);
+          await saveMessageToDB({ userId, role: "assistant", content: "", attachments: null, type: "widget-facebook-connected", meta: { name: connected.name, id: connected.fbId, scopes: connected.scopes } });
+        } catch (err) {
+          setMessages((prev) => [
+            ...prev,
+            { id: `a-${Date.now()}-fb-error2`, role: "assistant", type: "text", content: `No se pudo completar Facebook OAuth: ${err?.message || err}` },
+          ]);
+        } finally {
+          setConnecting(false);
+        }
+      };
+      window.addEventListener('message', onMsg);
+      return () => window.removeEventListener('message', onMsg);
+    }, [widgetId]);
+  
+    const startLogin = () => {
+      setConnecting(true);
+      const w = 600, h = 700;
+      const dualScreenLeft = window.screenLeft !== undefined ? window.screenLeft : window.screenX;
+      const dualScreenTop = window.screenTop !== undefined ? window.screenTop : window.screenY;
+      const width = window.innerWidth || document.documentElement.clientWidth || screen.width;
+      const height = window.innerHeight || document.documentElement.clientHeight || screen.height;
+      const left = ((width - w) / 2) + dualScreenLeft;
+      const top = ((height - h) / 2) + dualScreenTop;
+      window.open(
+        "/api/facebook/login",
+        "fb_oauth",
+        `scrollbars=yes,width=${w},height=${h},top=${top},left=${left}`
+      );
+    };
+  
+    return (
+      <div className="space-y-3">
+        <div className="flex items-center gap-3">
+          <div className="relative size-10 shrink-0 rounded-full bg-[#1877F2] flex items-center justify-center shadow-inner">
+            <svg viewBox="0 0 24 24" className="size-5" aria-hidden="true">
+              <path fill="#fff" d="M13.4 21v-7h2.3l.4-2.7h-2.7v-1.7c0-.8.3-1.3 1.3-1.3h1.5V5c-.3 0-1.1-.1-2.1-.1-2 0-3.4 1.2-3.4 3.5v2H8.4V14h2.3v7h2.7z"/>
+            </svg>
+          </div>
+          <div>
+            <p className="text-sm font-medium text-gray-800">Facebook</p>
+            <p className="text-xs text-gray-500">Conectar con OAuth</p>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={startLogin}
+          disabled={connecting}
+          className="inline-flex items-center gap-2 rounded-lg bg-[#1877F2] px-4 py-2 text-white text-sm disabled:opacity-50"
+        >
+          {connecting ? (
+            <span className="size-4 rounded-full border-2 border-white/60 border-t-transparent animate-spin" aria-hidden="true"></span>
+          ) : (
+            <svg viewBox="0 0 24 24" className="size-4" aria-hidden="true"><path fill="currentColor" d="M5 12l5 5L20 7"/></svg>
+          )}
+          {connecting ? "Conectando…" : "Login con Facebook"}
+        </button>
+        <p className="text-xs text-gray-400">Por defecto sólo se obtienen datos básicos (nombre, email, foto). Para publicar en muro, páginas o grupos se requieren permisos extra como pages_manage_posts o publish_to_groups.</p>
+      </div>
+    );
+  };
+  
+  // NUEVO: Facebook - Widget conectado
+  const FacebookConnectedWidget = ({ name, fbId, scopes }) => (
+    <div className="flex items-center gap-3">
+      <div className="relative size-10 shrink-0 rounded-full bg-[#1877F2] flex items-center justify-center shadow-inner">
+        <svg viewBox="0 0 24 24" className="size-5" aria-hidden="true">
+          <path fill="#fff" d="M13.4 21v-7h2.3l.4-2.7h-2.7v-1.7c0-.8.3-1.3 1.3-1.3h1.5V5c-.3 0-1.1-.1-2.1-.1-2 0-3.4 1.2-3.4 3.5v2H8.4V14h2.3v7h2.7z"/>
+        </svg>
+      </div>
+      <div>
+        <p className="text-sm font-medium text-gray-800">Facebook conectado</p>
+        <p className="text-xs text-gray-500">{name ? `${name} (${fbId})` : `ID ${fbId}`}</p>
+        {Array.isArray(scopes) && scopes.length > 0 && (
+          <p className="text-xs text-gray-400 mt-1">Permisos: {scopes.join(", ")}</p>
+        )}
+      </div>
+    </div>
+  );
+  
   const PlatformsWidget = () => (
     <div className="space-y-4">
       <div className="flex items-center gap-2">
@@ -674,6 +864,21 @@ export default function Home() {
                   </AssistantMessage>
                 );
               }
+              // NUEVO: Facebook auth y conectado
+              if (m.type === "widget-facebook-auth") {
+                return (
+                  <AssistantMessage key={m.id} borderClass="border-blue-200">
+                    <FacebookAuthWidget widgetId={m.id} />
+                  </AssistantMessage>
+                );
+              }
+              if (m.type === "widget-facebook-connected") {
+                return (
+                  <AssistantMessage key={m.id} borderClass="border-blue-200">
+                    <FacebookConnectedWidget name={m.name} fbId={m.fbId} scopes={m.scopes} />
+                  </AssistantMessage>
+                );
+              }
               return (
                 <AssistantMessage key={m.id} borderClass="border-gray-200">
                   {m.content}
@@ -745,3 +950,43 @@ export default function Home() {
     </div>
   );
 }
+
+// NUEVO: Leer token de Facebook del perfil
+const getFacebookToken = async (userId) => {
+  try {
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("facebook_access_token, facebook_expires_at, facebook_user_id, facebook_granted_scopes")
+      .eq("id", userId)
+      .maybeSingle();
+    if (error) throw error;
+    const token = data?.facebook_access_token || null;
+    const expiresAt = data?.facebook_expires_at || null;
+    const fbUserId = data?.facebook_user_id || null;
+    const grantedScopes = data?.facebook_granted_scopes || null;
+    return { token, expiresAt, fbUserId, grantedScopes };
+  } catch (e) {
+    console.warn("No se pudo obtener token de Facebook:", e?.message || e);
+    return { token: null, expiresAt: null, fbUserId: null, grantedScopes: null };
+  }
+};
+
+// NUEVO: Guardar/actualizar token de Facebook en perfil
+const upsertFacebookToken = async ({ userId, token, expiresAt = null, fbUserId = null, grantedScopes = null, fbName = null }) => {
+  try {
+    const row = {
+      id: userId,
+      facebook_access_token: token,
+      facebook_expires_at: expiresAt,
+      facebook_user_id: fbUserId,
+      facebook_granted_scopes: grantedScopes,
+      updated_at: new Date().toISOString(),
+    };
+    const { error } = await supabase.from("profiles").upsert(row, { onConflict: "id" });
+    if (error) throw error;
+    return true;
+  } catch (e) {
+    console.warn("No se pudo guardar token de Facebook:", e?.message || e);
+    return false;
+  }
+};
