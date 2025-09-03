@@ -157,6 +157,9 @@ export default function Home() {
             const mode = r?.meta?.mode || "login";
             return { id: r.id, role: "assistant", type: "widget-auth-form", mode };
           }
+          if (rType === "widget-instagram-credentials") {
+            return { id: r.id, role: "assistant", type: "widget-instagram-credentials" };
+          }
           if (rType === "widget-instagram-configured") {
             const username = r?.meta?.username || "";
             return { id: r.id, role: "assistant", type: "widget-instagram-configured", username };
@@ -208,7 +211,12 @@ export default function Home() {
         return { id: r.id, role: "user", type: "text", text: (r.content || ""), attachments: [] };
       }).filter(Boolean);
 
-      setMessages(normalized);
+      // Merge: evitar ocultar widgets recién insertados (p.ej., Facebook/YouTube) mientras se carga el historial
+      setMessages((prev) => {
+        const histIds = new Set((normalized || []).map((m) => m.id));
+        const keep = (prev || []).filter((m) => !histIds.has(m?.id));
+        return [...normalized, ...keep];
+      });
       setIsLoggedIn(true);
     } catch (e) {
       console.warn("No se pudo cargar el historial:", e?.message || e);
@@ -305,10 +313,10 @@ export default function Home() {
     }
     if (isUpdateCredentialsIntent(trimmed) && isYouTubeIntent(trimmed)) {
       const widgetId = `a-${Date.now()}-yt-upd`;
-      setMessages((prev) => {
-        const cleaned = prev.filter((x) => !(x.type === "widget-youtube-auth" || x.type === "widget-youtube-connected"));
-        return [...cleaned, { id: widgetId, role: "assistant", type: "widget-youtube-auth" }];
-      });
+      setMessages((prev) => [
+        ...prev,
+        { id: widgetId, role: "assistant", type: "widget-youtube-auth" },
+      ]);
       await saveMessageToDB({ userId, role: "assistant", content: "", attachments: null, type: "widget-youtube-auth" });
       return;
     }
@@ -357,10 +365,10 @@ export default function Home() {
       const hasToken = !!yt?.token;
       const widgetId = `a-${Date.now()}-yt`;
       if (!hasToken) {
-        setMessages((prev) => {
-          const cleaned = prev.filter((x) => !(x.type === "widget-youtube-auth" || x.type === "widget-youtube-connected"));
-          return [...cleaned, { id: widgetId, role: "assistant", type: "widget-youtube-auth" }];
-        });
+        setMessages((prev) => [
+          ...prev,
+          { id: widgetId, role: "assistant", type: "widget-youtube-auth" },
+        ]);
         await saveMessageToDB({ userId, role: "assistant", content: "", attachments: null, type: "widget-youtube-auth" });
       } else {
         const connected = {
@@ -374,10 +382,7 @@ export default function Home() {
             expiresAt: yt.expiresAt,
           },
         };
-        setMessages((prev) => {
-          const cleaned = prev.filter((x) => !(x.type === "widget-youtube-auth" || x.type === "widget-youtube-connected"));
-          return [...cleaned, connected];
-        });
+        setMessages((prev) => [...prev, connected]);
         await saveMessageToDB({ userId, role: "assistant", content: "", attachments: null, type: "widget-youtube-connected", meta: connected.meta });
       }
       return; // no llamamos a la IA
@@ -753,10 +758,7 @@ export default function Home() {
            fbId: profile?.id || "",
            scopes: permissions || null,
          };
-         setMessages((prev) => {
-           const cleaned = prev.filter((x) => !(x.type === "widget-facebook-auth" || x.type === "widget-facebook-connected"));
-           return [...cleaned, connected];
-         });
+         setMessages((prev) => [...prev, connected]);
 
           await saveMessageToDB({ userId, role: "assistant", content: "", attachments: null, type: "widget-facebook-connected", meta: { name: connected.name, id: connected.fbId, scopes: connected.scopes } });
         } catch (err) {
@@ -1103,10 +1105,7 @@ export default function Home() {
                             expiresAt: meta?.expiresAt || null,
                           },
                         };
-                        setMessages((prev) => {
-                          const cleaned = prev.filter((x) => !(x.type === "widget-youtube-auth" || x.type === "widget-youtube-connected"));
-                          return [...cleaned, connected];
-                        });
+                        setMessages((prev) => [...prev, connected]);
                         // Persistir en DB
                         const { data: sessionData } = await supabase.auth.getSession();
                         const userId = sessionData?.session?.user?.id;
