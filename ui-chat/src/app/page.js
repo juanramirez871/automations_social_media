@@ -17,6 +17,7 @@ export default function Home() {
   const authGateShownRef = useRef(false);
   const bottomRef = useRef(null);
   const [lightbox, setLightbox] = useState(null); // { kind, url, name }
+  const controlsShownRef = useRef(false);
 
   // Helper: guardar mensaje en DB (ignora si no hay supabase)
   const saveMessageToDB = async ({ userId, role, content, attachments, type = null, meta = null }) => {
@@ -181,6 +182,12 @@ export default function Home() {
             const expiresAt = r?.meta?.expiresAt || null;
             return { id: r.id, role: "assistant", type: "widget-youtube-connected", meta: { channelId, channelTitle, grantedScopes, expiresAt } };
           }
+          if (rType === "widget-logout") {
+            return { id: r.id, role: "assistant", type: "widget-logout" };
+          }
+          if (rType === "widget-clear-chat") {
+            return { id: r.id, role: "assistant", type: "widget-clear-chat" };
+          }
           // Fallback: texto normal
           return { id: r.id, role: "assistant", type: "text", content: r.content };
         }
@@ -298,11 +305,46 @@ export default function Home() {
     }
     if (isUpdateCredentialsIntent(trimmed) && isYouTubeIntent(trimmed)) {
       const widgetId = `a-${Date.now()}-yt-upd`;
+      setMessages((prev) => {
+        const cleaned = prev.filter((x) => !(x.type === "widget-youtube-auth" || x.type === "widget-youtube-connected"));
+        return [...cleaned, { id: widgetId, role: "assistant", type: "widget-youtube-auth" }];
+      });
+      await saveMessageToDB({ userId, role: "assistant", content: "", attachments: null, type: "widget-youtube-auth" });
+      return;
+    }
+
+    // Detectar solicitud explícita de controles (logout / clear chat)
+    const wantsLogout = (() => {
+      const s = trimmed.toLowerCase();
+      return /(cerrar sesión|cerrar sesion|logout|salir|sign out|cerrar la sesión|cerrar la sesion)/i.test(s);
+    })();
+    const wantsClear = (() => {
+      const s = trimmed.toLowerCase();
+      return /(borrar chat|limpiar chat|vaciar conversación|vaciar conversacion|vaciar chat|eliminar conversación|eliminar conversacion|clear chat|delete chat|reset chat)/i.test(s);
+    })();
+
+    if (wantsLogout) {
+      const textId = `a-${Date.now()}-logout-text`;
+      const widgetId = `a-${Date.now()}-logout`;
       setMessages((prev) => [
         ...prev,
-        { id: widgetId, role: "assistant", type: "widget-youtube-auth" },
+        { id: textId, role: "assistant", type: "text", content: "Aquí tienes el control para cerrar sesión." },
+        { id: widgetId, role: "assistant", type: "widget-logout" },
       ]);
-      await saveMessageToDB({ userId, role: "assistant", content: "", attachments: null, type: "widget-youtube-auth" });
+      await saveMessageToDB({ userId, role: "assistant", content: "Aquí tienes el control para cerrar sesión.", attachments: null, type: "text" });
+      await saveMessageToDB({ userId, role: "assistant", content: "", attachments: null, type: "widget-logout" });
+      return;
+    }
+    if (wantsClear) {
+      const textId = `a-${Date.now()}-clear-text`;
+      const widgetId = `a-${Date.now()}-clear`;
+      setMessages((prev) => [
+        ...prev,
+        { id: textId, role: "assistant", type: "text", content: "Aquí puedes borrar el chat de esta conversación." },
+        { id: widgetId, role: "assistant", type: "widget-clear-chat" },
+      ]);
+      await saveMessageToDB({ userId, role: "assistant", content: "Aquí puedes borrar el chat de esta conversación.", attachments: null, type: "text" });
+      await saveMessageToDB({ userId, role: "assistant", content: "", attachments: null, type: "widget-clear-chat" });
       return;
     }
 
@@ -315,10 +357,10 @@ export default function Home() {
       const hasToken = !!yt?.token;
       const widgetId = `a-${Date.now()}-yt`;
       if (!hasToken) {
-        setMessages((prev) => [
-          ...prev,
-          { id: widgetId, role: "assistant", type: "widget-youtube-auth" },
-        ]);
+        setMessages((prev) => {
+          const cleaned = prev.filter((x) => !(x.type === "widget-youtube-auth" || x.type === "widget-youtube-connected"));
+          return [...cleaned, { id: widgetId, role: "assistant", type: "widget-youtube-auth" }];
+        });
         await saveMessageToDB({ userId, role: "assistant", content: "", attachments: null, type: "widget-youtube-auth" });
       } else {
         const connected = {
@@ -332,7 +374,10 @@ export default function Home() {
             expiresAt: yt.expiresAt,
           },
         };
-        setMessages((prev) => [...prev, connected]);
+        setMessages((prev) => {
+          const cleaned = prev.filter((x) => !(x.type === "widget-youtube-auth" || x.type === "widget-youtube-connected"));
+          return [...cleaned, connected];
+        });
         await saveMessageToDB({ userId, role: "assistant", content: "", attachments: null, type: "widget-youtube-connected", meta: connected.meta });
       }
       return; // no llamamos a la IA
@@ -381,6 +426,8 @@ export default function Home() {
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, loading]);
+
+  // Widgets de control: se mostrarán solo cuando el usuario los solicite (sin auto-insertar)
 
   // Mostrar el widget de autenticación automáticamente cuando no hay login (solo una vez)
   useEffect(() => {
@@ -580,8 +627,8 @@ export default function Home() {
         const ok = await upsertInstagramCreds({ userId, username: u, password: p });
         if (!ok) throw new Error("No fue posible guardar credenciales");
 
-        // Quitar este widget
-        setMessages((prev) => prev.filter((m) => m.id !== widgetId));
+        // Mantener el widget visible (no eliminarlo)
+        // setMessages((prev) => prev.filter((m) => m.id !== widgetId));
 
         // Insertar widget configurado y persistirlo en DB
         const configured = { id: `a-${Date.now()}-ig-ok`, role: "assistant", type: "widget-instagram-configured", username: u };
@@ -662,8 +709,12 @@ export default function Home() {
         try {
           if (!ev?.data || ev.data?.source !== 'fb-oauth') return;
           if (ev.origin !== window.location.origin) return;
-  
-          if (!ev.data.ok) {
+ 
+          // Evitar manejar múltiples veces el mismo evento
+          if (typeof window !== 'undefined' && window.__fb_oauth_handled) return;
+          if (typeof window !== 'undefined') window.__fb_oauth_handled = true;
+           
+           if (!ev.data.ok) {
             setMessages((prev) => [
               ...prev,
               { id: `a-${Date.now()}-fb-error`, role: "assistant", type: "text", content: `Facebook OAuth error: ${ev.data.error}` },
@@ -671,18 +722,18 @@ export default function Home() {
             setConnecting(false);
             return;
           }
-  
+ 
           const d = ev.data.data || {};
           const access_token = d.access_token;
           const expires_in = d.expires_in;
           const profile = d.fb_user || {};
           const permissions = d.granted_scopes || [];
           const expiresAt = expires_in ? new Date(Date.now() + (Number(expires_in) * 1000)).toISOString() : null;
-  
+ 
           const { data: sessionData } = await supabase.auth.getSession();
           const userId = sessionData?.session?.user?.id;
           if (!userId) throw new Error("Sesión inválida");
-  
+ 
           const ok = await upsertFacebookToken({
             userId,
             token: access_token,
@@ -692,20 +743,21 @@ export default function Home() {
             fbName: profile?.name || null,
           });
           if (!ok) throw new Error("No fue posible guardar el token en el perfil");
-  
-          // Quitar este widget
-          setMessages((prev) => prev.filter((m) => m.id !== widgetId));
-  
-          // Insertar widget conectado y persistirlo en DB (sin token)
-          const connected = {
-            id: `a-${Date.now()}-fb-ok`,
-            role: "assistant",
-            type: "widget-facebook-connected",
-            name: profile?.name || "Facebook user",
-            fbId: profile?.id || "",
-            scopes: permissions || null,
-          };
-          setMessages((prev) => [...prev, connected]);
+ 
+         // Insertar widget conectado asegurando que no haya duplicados previos (auth/connected)
+         const connected = {
+           id: `a-${Date.now()}-fb-ok`,
+           role: "assistant",
+           type: "widget-facebook-connected",
+           name: profile?.name || "Facebook user",
+           fbId: profile?.id || "",
+           scopes: permissions || null,
+         };
+         setMessages((prev) => {
+           const cleaned = prev.filter((x) => !(x.type === "widget-facebook-auth" || x.type === "widget-facebook-connected"));
+           return [...cleaned, connected];
+         });
+
           await saveMessageToDB({ userId, role: "assistant", content: "", attachments: null, type: "widget-facebook-connected", meta: { name: connected.name, id: connected.fbId, scopes: connected.scopes } });
         } catch (err) {
           setMessages((prev) => [
@@ -722,6 +774,7 @@ export default function Home() {
   
     const startLogin = () => {
       setConnecting(true);
+      if (typeof window !== 'undefined') window.__fb_oauth_handled = false;
       const w = 600, h = 700;
       const dualScreenLeft = window.screenLeft !== undefined ? window.screenLeft : window.screenX;
       const dualScreenTop = window.screenTop !== undefined ? window.screenTop : window.screenY;
@@ -734,8 +787,7 @@ export default function Home() {
         "fb_oauth",
         `scrollbars=yes,width=${w},height=${h},top=${top},left=${left}`
       );
-    };
-  
+    };  
     return (
       <div className="space-y-3">
         <div className="flex items-center gap-3">
@@ -784,6 +836,108 @@ export default function Home() {
     </div>
   );
   
+  // NUEVO: Widget de cerrar sesión
+  const LogoutWidget = () => {
+    const [working, setWorking] = useState(false);
+    const handleLogout = async () => {
+      try {
+        setWorking(true);
+        if (supabase?.auth?.signOut) {
+          await supabase.auth.signOut();
+        }
+        setIsLoggedIn(false);
+        setMessages((prev) => [
+          ...prev,
+          { id: `a-${Date.now()}-signed-out`, role: "assistant", type: "text", content: "Has cerrado sesión." },
+          { id: `a-${Date.now()}-auth-gate`, role: "assistant", type: "widget-auth-gate" },
+        ]);
+      } catch (e) {
+        setMessages((prev) => [
+          ...prev,
+          { id: `a-${Date.now()}-signout-error`, role: "assistant", type: "text", content: `No se pudo cerrar sesión: ${e?.message || e}` },
+        ]);
+      } finally {
+        setWorking(false);
+      }
+    };
+    return (
+      <div className="flex flex-col gap-2 items-center justify-between rounded-xl border border-gray-200 bg-white p-3">
+        <div className="flex items-center gap-2">
+          <div className="h-1 w-6 rounded-full bg-gradient-to-r from-gray-400 to-gray-300" />
+          <p className="text-sm font-medium text-gray-700">Sesión</p>
+        </div>
+        <button
+          type="button"
+          onClick={handleLogout}
+          disabled={working}
+          className="inline-flex items-center gap-2 rounded-lg bg-gray-700 px-3 py-1.5 text-white text-xs disabled:opacity-50"
+        >
+          {working ? (
+            <span className="size-3.5 rounded-full border-2 border-white/60 border-t-transparent animate-spin" aria-hidden="true"></span>
+          ) : (
+            <svg viewBox="0 0 24 24" className="size-4" aria-hidden="true"><path fill="currentColor" d="M16 13v-2H7V8l-5 4 5 4v-3h9zM20 3h-8a2 2 0 00-2 2v4h2V5h8v14h-8v-4h-2v4a2 2 0 002 2h8a2 2 0 002-2V5a2 2 0 00-2-2z"/></svg>
+          )}
+          Cerrar sesión
+        </button>
+      </div>
+    );
+  };
+
+  // NUEVO: Widget de borrar chat
+  const ClearChatWidget = () => {
+    const [deleting, setDeleting] = useState(false);
+    const handleClear = async () => {
+      if (deleting) return;
+      if (typeof window !== 'undefined') {
+        const ok = window.confirm('¿Seguro que deseas borrar todos los mensajes del chat? Esta acción no se puede deshacer.');
+        if (!ok) return;
+      }
+      try {
+        setDeleting(true);
+        const { data: sessionData } = await supabase.auth.getSession();
+        const userId = sessionData?.session?.user?.id;
+        if (!userId) throw new Error('Sesión inválida');
+        await supabase.from('messages').delete().eq('user_id', userId);
+        // Reiniciar UI
+        setMessages([]);
+        // Ya no reinyectamos controles automáticamente; el usuario puede solicitarlos con un mensaje.
+        // Guardar un mensaje de confirmación opcional
+        setMessages((prev) => [
+          ...prev,
+          { id: `a-${Date.now()}-cleared`, role: 'assistant', type: 'text', content: 'Tu chat ha sido borrado.' },
+        ]);
+      } catch (e) {
+        setMessages((prev) => [
+          ...prev,
+          { id: `a-${Date.now()}-clear-error`, role: 'assistant', type: 'text', content: `No se pudo borrar el chat: ${e?.message || e}` },
+        ]);
+      } finally {
+        setDeleting(false);
+      }
+    };
+    return (
+      <div className="flex flex-col gap-2 items-center justify-between rounded-xl border border-red-200 bg-red-50 p-3">
+        <div className="flex items-center gap-2">
+          <div className="h-1 w-6 rounded-full bg-gradient-to-r from-red-400 to-rose-300" />
+          <p className="text-sm font-medium text-red-700">Borrar chat</p>
+        </div>
+        <button
+          type="button"
+          onClick={handleClear}
+          disabled={deleting}
+          className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-3 py-1.5 text-white text-xs disabled:opacity-50"
+        >
+          {deleting ? (
+            <span className="size-3.5 rounded-full border-2 border-white/60 border-t-transparent animate-spin" aria-hidden="true"></span>
+          ) : (
+            <svg viewBox="0 0 24 24" className="size-4" aria-hidden="true"><path fill="currentColor" d="M6 7h12l-1 13H7L6 7zm3-3h6l1 2H8l1-2z"/></svg>
+          )}
+          Vaciar conversación
+        </button>
+      </div>
+    );
+  };
+
   const PlatformsWidget = () => (
     <div className="space-y-4">
       <div className="flex items-center gap-2">
@@ -914,6 +1068,20 @@ export default function Home() {
                   </AssistantMessage>
                 );
               }
+              if (m.type === "widget-logout") {
+                return (
+                  <AssistantMessage key={m.id} borderClass="border-gray-200">
+                    <LogoutWidget />
+                  </AssistantMessage>
+                );
+              }
+              if (m.type === "widget-clear-chat") {
+                return (
+                  <AssistantMessage key={m.id} borderClass="border-red-200">
+                    <ClearChatWidget />
+                  </AssistantMessage>
+                );
+              }
               // NUEVO: YouTube auth y conectado
               if (m.type === "widget-youtube-auth") {
                 return (
@@ -921,9 +1089,7 @@ export default function Home() {
                     <YouTubeAuthWidget
                       widgetId={m.id}
                       onConnected={async (meta) => {
-                        // Remover el widget de auth
-                        setMessages((prev) => prev.filter((x) => x.id !== m.id));
-                        // Insertar widget conectado
+                        // Insertar widget conectado asegurando que no haya duplicados previos (auth/connected)
                         const connected = {
                           id: `a-${Date.now()}-yt-ok`,
                           role: "assistant",
@@ -935,7 +1101,10 @@ export default function Home() {
                             expiresAt: meta?.expiresAt || null,
                           },
                         };
-                        setMessages((prev) => [...prev, connected]);
+                        setMessages((prev) => {
+                          const cleaned = prev.filter((x) => !(x.type === "widget-youtube-auth" || x.type === "widget-youtube-connected"));
+                          return [...cleaned, connected];
+                        });
                         // Persistir en DB
                         const { data: sessionData } = await supabase.auth.getSession();
                         const userId = sessionData?.session?.user?.id;
