@@ -846,11 +846,13 @@ export default function Home() {
           await supabase.auth.signOut();
         }
         setIsLoggedIn(false);
+        // Limpiar todos los mensajes previos y mostrar solo el AuthGate
+        setMessages([]);
         setMessages((prev) => [
           ...prev,
-          { id: `a-${Date.now()}-signed-out`, role: "assistant", type: "text", content: "Has cerrado sesión." },
           { id: `a-${Date.now()}-auth-gate`, role: "assistant", type: "widget-auth-gate" },
         ]);
+        authGateShownRef.current = true;
       } catch (e) {
         setMessages((prev) => [
           ...prev,
