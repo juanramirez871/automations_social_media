@@ -22,18 +22,64 @@ export default function Home() {
   const saveMessageToDB = async ({ userId, role, content, attachments, type = null, meta = null }) => {
     if (!supabase || !userId) return;
     try {
-      // Intento con columnas extendidas (type/meta)
       await supabase
         .from("messages")
         .insert([{ user_id: userId, role, content, attachments: attachments || null, type, meta }]);
     } catch (e1) {
-      // Fallback si aún no existen las columnas type/meta en la tabla
       try {
         await supabase
           .from("messages")
           .insert([{ user_id: userId, role, content, attachments: attachments || null }]);
       } catch (e2) {
         console.warn("No se pudo guardar el mensaje:", e2?.message || e2);
+      }
+    }
+  };
+
+  // Utilidad: detectar intención de Instagram
+  const isInstagramIntent = (t = "") => /\binstagram\b|\big\b|\binsta\b/i.test(String(t || ""));
+
+  // Leer credenciales IG del perfil
+  const getInstagramCreds = async (userId) => {
+    try {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("instagram_username, instagram_password, userinstagram, passwordinstagram")
+        .eq("id", userId)
+        .maybeSingle();
+      if (error) throw error;
+      const username = data?.instagram_username || data?.userinstagram || null;
+      const password = data?.instagram_password || data?.passwordinstagram || null;
+      return { username, password };
+    } catch (e) {
+      console.warn("No se pudieron obtener credenciales IG:", e?.message || e);
+      return { username: null, password: null };
+    }
+  };
+
+  // Guardar/actualizar credenciales IG en perfil (upsert por id)
+  const upsertInstagramCreds = async ({ userId, username, password }) => {
+    const row = {
+      id: userId,
+      instagram_username: username,
+      instagram_password: password,
+      updated_at: new Date().toISOString(),
+    };
+    try {
+      const { error } = await supabase.from("profiles").upsert(row, { onConflict: "id" });
+      if (error) throw error;
+      return true;
+    } catch (e1) {
+      // Fallback: columnas alternativas
+      try {
+        const { error } = await supabase
+          .from("profiles")
+          .upsert({ id: userId, userinstagram: username, passwordinstagram: password, updated_at: new Date().toISOString() }, { onConflict: "id" });
+        if (error) throw error;
+        return true;
+      } catch (e2) {
+        console.warn("No se pudieron guardar credenciales IG:", e2?.message || e2);
+        return false;
       }
     }
   };
@@ -68,6 +114,10 @@ export default function Home() {
           if (rType === "widget-auth-form") {
             const mode = r?.meta?.mode || "login";
             return { id: r.id, role: "assistant", type: "widget-auth-form", mode };
+          }
+          if (rType === "widget-instagram-configured") {
+            const username = r?.meta?.username || "";
+            return { id: r.id, role: "assistant", type: "widget-instagram-configured", username };
           }
           // Fallback: texto normal
           return { id: r.id, role: "assistant", type: "text", content: r.content };
@@ -139,6 +189,19 @@ export default function Home() {
     // Guardar en DB (omitir URLs blob locales de adjuntos)
     const attachmentsForDB = attachments.map(({ kind, name }) => ({ kind, name }));
     await saveMessageToDB({ userId, role: "user", content: trimmed, attachments: attachmentsForDB, type: attachments.length ? "text+media" : "text" });
+
+    // 1.5) Si la intención es Instagram y no hay credenciales en perfil, mostrar widget para ingresarlas y abortar envío a la IA
+    if (isInstagramIntent(trimmed)) {
+      const { username, password } = await getInstagramCreds(userId);
+      if (!username || !password) {
+        const widgetId = `a-${Date.now()}-ig-cred`;
+        setMessages((prev) => [
+          ...prev,
+          { id: widgetId, role: "assistant", type: "widget-instagram-credentials" },
+        ]);
+        return; // no llamamos a la IA hasta tener credenciales
+      }
+    }
 
     // 2) Enviar sólo el texto a la API y agregar la respuesta del asistente
     if (trimmed) {
@@ -365,7 +428,95 @@ export default function Home() {
     );
   };
 
-  // Widget de plataformas soportadas
+  // Widget: pedir credenciales de Instagram
+  const InstagramCredentialsWidget = ({ widgetId }) => {
+    const [u, setU] = useState("");
+    const [p, setP] = useState("");
+    const [saving, setSaving] = useState(false);
+
+    const submit = async (e) => {
+      e.preventDefault();
+      if (!u || !p) return;
+      setSaving(true);
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const userId = sessionData?.session?.user?.id;
+        if (!userId) throw new Error("Sesión inválida");
+        const ok = await upsertInstagramCreds({ userId, username: u, password: p });
+        if (!ok) throw new Error("No fue posible guardar credenciales");
+
+        // Quitar este widget
+        setMessages((prev) => prev.filter((m) => m.id !== widgetId));
+
+        // Insertar widget configurado y persistirlo en DB
+        const configured = { id: `a-${Date.now()}-ig-ok`, role: "assistant", type: "widget-instagram-configured", username: u };
+        setMessages((prev) => [...prev, configured]);
+
+        const { data: sessionData2 } = await supabase.auth.getSession();
+        const userId2 = sessionData2?.session?.user?.id;
+        if (userId2) {
+          await saveMessageToDB({ userId: userId2, role: "assistant", content: "", attachments: null, type: "widget-instagram-configured", meta: { username: u } });
+        }
+      } catch (err) {
+        setMessages((prev) => [
+          ...prev,
+          { id: `a-${Date.now()}-ig-error`, role: "assistant", type: "text", content: `Error guardando credenciales de Instagram: ${err?.message || err}` },
+        ]);
+      } finally {
+        setSaving(false);
+      }
+    };
+
+    return (
+      <div className="space-y-3">
+        <div className="flex items-center gap-2">
+          <div className="h-1 w-8 rounded-full bg-gradient-to-r from-fuchsia-400 to-pink-400" />
+          <p className="text-sm font-semibold text-gray-700">Conectar Instagram</p>
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="relative size-10 shrink-0 rounded-full bg-gradient-to-br from-pink-400 to-fuchsia-500 flex items-center justify-center shadow-inner">
+            <svg viewBox="0 0 24 24" className="size-5" aria-hidden="true">
+              <path fill="#fff" d="M7 2h10a5 5 0 015 5v10a5 5 0 01-5 5H7a5 5 0 01-5-5V7a5 5 0 015-5zm0 2a3 3 0 00-3 3v10a3 3 0 003 3h10a3 3 0 003-3V7a3 3 0 00-3-3H7zm5 3.5a5 5 0 110 10 5 5 0 010-10zm0 2a3 3 0 100 6 3 3 0 000-6zm6.5-.75a1.25 1.25 0 11-2.5 0 1.25 1.25 0 012.5 0z" />
+            </svg>
+          </div>
+          <div>
+            <p className="text-sm font-medium text-gray-800">Instagram</p>
+            <p className="text-xs text-gray-500">Ingresa tus credenciales</p>
+          </div>
+        </div>
+        <form onSubmit={submit} className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <input type="text" value={u} onChange={(e) => setU(e.target.value)} placeholder="Usuario de Instagram" className="w-full rounded-lg border border-fuchsia-200 px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-fuchsia-300" />
+          <input type="password" value={p} onChange={(e) => setP(e.target.value)} placeholder="Contraseña de Instagram" className="w-full rounded-lg border border-fuchsia-200 px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-fuchsia-300" />
+          <div className="sm:col-span-2">
+            <button type="submit" disabled={saving || !u || !p} className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-fuchsia-500 to-pink-500 px-4 py-2 text-white text-sm disabled:opacity-50">
+              {saving ? (
+                <span className="size-4 rounded-full border-2 border-white/60 border-t-transparent animate-spin" aria-hidden="true"></span>
+              ) : (
+                <svg viewBox="0 0 24 24" className="size-4" aria-hidden="true"><path fill="currentColor" d="M5 12l5 5L20 7"/></svg>
+              )}
+              Guardar y continuar
+            </button>
+          </div>
+        </form>
+        <p className="text-xs text-gray-400">Aviso: las credenciales se guardan en tu perfil.</p>
+      </div>
+    );
+  };
+
+  // Widget: Instagram configurado
+  const InstagramConfiguredWidget = ({ username }) => (
+    <div className="flex items-center gap-3">
+      <div className="relative size-10 shrink-0 rounded-full bg-gradient-to-br from-pink-400 to-fuchsia-500 flex items-center justify-center shadow-inner">
+        <svg viewBox="0 0 24 24" className="size-5" aria-hidden="true">
+          <path fill="#fff" d="M7 2h10a5 5 0 015 5v10a5 5 0 01-5 5H7a5 5 0 01-5-5V7a5 5 0 015-5zm0 2a3 3 0 00-3 3v10a3 3 0 003 3h10a3 3 0 003-3V7a3 3 0 00-3-3H7zm5 3.5a5 5 0 110 10 5 5 0 010-10zm0 2a3 3 0 100 6 3 3 0 000-6zm6.5-.75a1.25 1.25 0 11-2.5 0 1.25 1.25 0 012.5 0z" />
+        </svg>
+      </div>
+      <div>
+        <p className="text-sm font-medium text-gray-800">Instagram conectado</p>
+        <p className="text-xs text-gray-500">@{username} listo para publicar</p>
+      </div>
+    </div>
+  );
   const PlatformsWidget = () => (
     <div className="space-y-4">
       <div className="flex items-center gap-2">
@@ -464,6 +615,20 @@ export default function Home() {
                 return (
                   <AssistantMessage key={m.id} borderClass="border-blue-200">
                     <AuthFormWidget mode={m.mode} />
+                  </AssistantMessage>
+                );
+              }
+              if (m.type === "widget-instagram-credentials") {
+                return (
+                  <AssistantMessage key={m.id} borderClass="border-fuchsia-200">
+                    <InstagramCredentialsWidget widgetId={m.id} />
+                  </AssistantMessage>
+                );
+              }
+              if (m.type === "widget-instagram-configured") {
+                return (
+                  <AssistantMessage key={m.id} borderClass="border-fuchsia-200">
+                    <InstagramConfiguredWidget username={m.username} />
                   </AssistantMessage>
                 );
               }
