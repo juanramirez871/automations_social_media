@@ -31,13 +31,6 @@ export async function POST(req) {
     const hasOnTopic = onTopicKeywords.some((k) => lastText.includes(k));
     const hasOffTopic = offTopicPatterns.some((k) => lastText.includes(k));
 
-    // Widget: "qué redes manejas" / "qué plataformas soportas" (fallback por heurística)
-    const widgetTriggers = [
-      'que redes manejas','qué redes manejas','que redes soportas','qué redes soportas','que plataformas manejas','qué plataformas manejas','que plataformas soportas','qué plataformas soportas','que redes gestionas','qué redes gestionas','que redes atiendes','qué redes atiendes','what networks do you support','what networks do you manage','which networks do you support','which social networks','what social networks',
-      'mis redes','mis redes sociales','mis plataformas','mis cuentas','mis cuentas de redes','mis perfiles','mis perfiles de redes','plataformas que manejo'
-    ];
-    const showPlatformsWidgetHeuristic = false;
-
     // Componer mensajes: siempre incluir la instrucción de sistema de Roro
     const composedUIMessages = [
       { role: 'system', parts: [{ type: 'text', text: roroSystemText }] },
@@ -81,7 +74,7 @@ export async function POST(req) {
 
     const requestInstagramCredentials = tool({
       description:
-        'Muestra un formulario para ingresar credenciales de Instagram cuando el usuario quiera conectar/configurar Instagram o actualizar sus credenciales.',
+        'Muestra un formulario para ingresar credenciales de Instagram cuando el usuario quiera conectar/configurar Instagram o actualizar sus credenciales/cuenta.',
       parameters: { type: 'object', properties: {}, additionalProperties: false },
       execute: async () => {
         wantInstagramCreds = true;
@@ -133,7 +126,7 @@ export async function POST(req) {
       tools: { showSupportedNetworks, requestInstagramCredentials, requestFacebookAuth, requestYouTubeAuth, showLogoutControl, showClearChatControl },
       maxTokens: 1000,
       temperature: 0.7,
-      maxSteps: 6,
+      maxSteps: 3,
     });
 
     // Construir la lista de widgets a renderizar a partir de las herramientas elegidas
