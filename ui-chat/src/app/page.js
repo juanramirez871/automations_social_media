@@ -170,6 +170,17 @@ export default function Home() {
             const scopes = r?.meta?.scopes || null;
             return { id: r.id, role: "assistant", type: "widget-facebook-connected", name: fbName, fbId, scopes };
           }
+          // NUEVO: YouTube widgets
+          if (rType === "widget-youtube-auth") {
+            return { id: r.id, role: "assistant", type: "widget-youtube-auth" };
+          }
+          if (rType === "widget-youtube-connected") {
+            const channelId = r?.meta?.channelId || null;
+            const channelTitle = r?.meta?.channelTitle || null;
+            const grantedScopes = r?.meta?.grantedScopes || null;
+            const expiresAt = r?.meta?.expiresAt || null;
+            return { id: r.id, role: "assistant", type: "widget-youtube-connected", meta: { channelId, channelTitle, grantedScopes, expiresAt } };
+          }
           // Fallback: texto normal
           return { id: r.id, role: "assistant", type: "text", content: r.content };
         }
@@ -907,7 +918,38 @@ export default function Home() {
               if (m.type === "widget-youtube-auth") {
                 return (
                   <AssistantMessage key={m.id} borderClass="border-red-200">
-                    <YouTubeAuthWidget />
+                    <YouTubeAuthWidget
+                      widgetId={m.id}
+                      onConnected={async (meta) => {
+                        // Remover el widget de auth
+                        setMessages((prev) => prev.filter((x) => x.id !== m.id));
+                        // Insertar widget conectado
+                        const connected = {
+                          id: `a-${Date.now()}-yt-ok`,
+                          role: "assistant",
+                          type: "widget-youtube-connected",
+                          meta: {
+                            channelId: meta?.channelId || null,
+                            channelTitle: meta?.channelTitle || null,
+                            grantedScopes: meta?.grantedScopes || null,
+                            expiresAt: meta?.expiresAt || null,
+                          },
+                        };
+                        setMessages((prev) => [...prev, connected]);
+                        // Persistir en DB
+                        const { data: sessionData } = await supabase.auth.getSession();
+                        const userId = sessionData?.session?.user?.id;
+                        if (userId) {
+                          await saveMessageToDB({ userId, role: "assistant", content: "", attachments: null, type: "widget-youtube-connected", meta: connected.meta });
+                        }
+                      }}
+                      onError={(reason) => {
+                        setMessages((prev) => [
+                          ...prev,
+                          { id: `a-${Date.now()}-yt-error`, role: "assistant", type: "text", content: `YouTube OAuth error: ${reason}` },
+                        ]);
+                      }}
+                    />
                   </AssistantMessage>
                 );
               }
@@ -1081,15 +1123,22 @@ const upsertYouTubeToken = async ({ userId, token, refreshToken = null, expiresA
 };
 
 // YouTube widgets
-const YouTubeAuthWidget = () => {
+const YouTubeAuthWidget = ({ widgetId, onConnected, onError }) => {
   const [connecting, setConnecting] = useState(false);
+  const handledRef = useRef(false);
   useEffect(() => {
     const onMsg = async (ev) => {
       try {
         if (!ev?.data || ev.origin !== window.location.origin) return;
         if (ev.data?.source !== 'yt-oauth') return;
+        // Evitar manejar el evento múltiples veces (varios widgets montados o StrictMode)
+        if (handledRef.current || (typeof window !== 'undefined' && window.__yt_oauth_handled)) return;
+        handledRef.current = true;
+        if (typeof window !== 'undefined') window.__yt_oauth_handled = true;
+
         if (!ev.data.ok) {
           setConnecting(false);
+          onError && onError(ev.data?.reason || 'oauth_error');
           return;
         }
         const d = ev.data.data || {};
@@ -1105,16 +1154,20 @@ const YouTubeAuthWidget = () => {
           await upsertYouTubeToken({ userId, token: access_token, refreshToken: refresh_token, expiresAt: expires_at, channelId: channel_id, channelTitle: channel_title, grantedScopes: granted_scopes });
         }
         setConnecting(false);
+        onConnected && onConnected({ channelId: channel_id, channelTitle: channel_title, grantedScopes: granted_scopes, expiresAt: expires_at });
       } catch (e) {
         setConnecting(false);
+        onError && onError(e?.message || 'exception');
       }
     };
     window.addEventListener('message', onMsg);
     return () => window.removeEventListener('message', onMsg);
-  }, []);
-
+  }, [onConnected, onError]);
+ 
   const startLogin = () => {
     setConnecting(true);
+    // Resetear flag global en un nuevo intento
+    if (typeof window !== 'undefined') window.__yt_oauth_handled = false;
     const w = 600, h = 700;
     const dualScreenLeft = window.screenLeft !== undefined ? window.screenLeft : window.screenX;
     const dualScreenTop = window.screenTop !== undefined ? window.screenTop : window.screenY;
