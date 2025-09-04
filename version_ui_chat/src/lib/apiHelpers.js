@@ -139,3 +139,45 @@ export const upsertYouTubeToken = async ({ userId, token, refreshToken = null, e
     return false;
   }
 };
+
+// Leer token de TikTok del perfil
+export const getTikTokToken = async (userId) => {
+  try {
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("tiktok_access_token, tiktok_refresh_token, tiktok_expires_at, tiktok_open_id, tiktok_granted_scopes")
+      .eq("id", userId)
+      .maybeSingle();
+    if (error) throw error;
+    const token = data?.tiktok_access_token || null;
+    const refreshToken = data?.tiktok_refresh_token || null;
+    const expiresAt = data?.tiktok_expires_at || null;
+    const openId = data?.tiktok_open_id || null;
+    const grantedScopes = data?.tiktok_granted_scopes || null;
+    return { token, refreshToken, expiresAt, openId, grantedScopes };
+  } catch (e) {
+    console.warn("No se pudo obtener token de TikTok:", e?.message || e);
+    return { token: null, refreshToken: null, expiresAt: null, openId: null, grantedScopes: null };
+  }
+};
+
+// Guardar/actualizar token de TikTok en perfil
+export const upsertTikTokToken = async ({ userId, token, refreshToken = null, expiresAt = null, openId = null, grantedScopes = null }) => {
+  try {
+    const row = {
+      id: userId,
+      tiktok_access_token: token,
+      tiktok_refresh_token: refreshToken,
+      tiktok_expires_at: expiresAt,
+      tiktok_open_id: openId,
+      tiktok_granted_scopes: grantedScopes,
+      updated_at: new Date().toISOString(),
+    };
+    const { error } = await supabase.from("profiles").upsert(row, { onConflict: "id" });
+    if (error) throw error;
+    return true;
+  } catch (e) {
+    console.error("Error guardando token de TikTok:", e?.message || e);
+    return false;
+  }
+};

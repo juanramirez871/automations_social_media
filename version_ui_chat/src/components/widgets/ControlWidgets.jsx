@@ -80,7 +80,7 @@ export const PlatformsWidget = () => {
     instagram: { connected: false, username: null },
     facebook: { connected: false, userId: null, scopes: null },
     youtube: { connected: false, channelId: null, channelTitle: null },
-    tiktok: { connected: false },
+    tiktok: { connected: false, openId: null },
   });
 
   useEffect(() => {
@@ -95,7 +95,7 @@ export const PlatformsWidget = () => {
         }
         const { data, error } = await supabase
           .from('profiles')
-          .select('instagram_username, userinstagram, facebook_access_token, facebook_user_id, facebook_granted_scopes, youtube_access_token, youtube_channel_id, youtube_channel_title')
+          .select('instagram_username, userinstagram, facebook_access_token, facebook_user_id, facebook_granted_scopes, youtube_access_token, youtube_channel_id, youtube_channel_title, tiktok_access_token, tiktok_open_id, tiktok_granted_scopes')
           .eq('id', userId)
           .maybeSingle();
         if (error) throw error;
@@ -106,13 +106,15 @@ export const PlatformsWidget = () => {
         const hasYT = !!data?.youtube_access_token;
         const ytChannelId = data?.youtube_channel_id || null;
         const ytChannelTitle = data?.youtube_channel_title || null;
+        const hasTT = !!data?.tiktok_access_token;
+        const ttOpenId = data?.tiktok_open_id || null;
 
         if (!cancelled) {
           setStatus({
             instagram: { connected: !!instagramUsername, username: instagramUsername },
             facebook: { connected: hasFB, userId: fbUserId, scopes: fbScopes },
             youtube: { connected: hasYT, channelId: ytChannelId, channelTitle: ytChannelTitle },
-            tiktok: { connected: false },
+            tiktok: { connected: hasTT, openId: ttOpenId },
           });
         }
       } catch (e) {
@@ -202,7 +204,7 @@ export const PlatformsWidget = () => {
               TikTok
               {!loading && <Badge ok={status.tiktok.connected} />}
             </p>
-            <p className="text-xs text-gray-500 truncate">Clips y tendencias</p>
+            <p className="text-xs text-gray-500 truncate">{status.tiktok.connected && status.tiktok.openId ? `OpenID: ${status.tiktok.openId}` : 'Clips y tendencias'}</p>
           </div>
         </div>
       </div>

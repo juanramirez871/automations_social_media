@@ -10,8 +10,9 @@ import { AuthGateWidget as AuthGateWidgetExt, AuthFormWidget as AuthFormWidgetEx
 import { InstagramCredentialsWidget as InstagramCredentialsWidgetExt, InstagramConfiguredWidget as InstagramConfiguredWidgetExt } from "@/components/widgets/InstagramWidgets";
 import { FacebookAuthWidget as FacebookAuthWidgetExt, FacebookConnectedWidget as FacebookConnectedWidgetExt } from "@/components/widgets/FacebookWidgets";
 import { YouTubeAuthWidget as YouTubeAuthWidgetExt, YouTubeConnectedWidget as YouTubeConnectedWidgetExt } from "@/components/widgets/YouTubeWidgets";
+import { TikTokAuthWidget as TikTokAuthWidgetExt, TikTokConnectedWidget as TikTokConnectedWidgetExt } from "@/components/widgets/TikTokWidgets";
 import { LogoutWidget as LogoutWidgetExt, ClearChatWidget as ClearChatWidgetExt, PlatformsWidget as PlatformsWidgetExt } from "@/components/widgets/ControlWidgets";
-import { upsertInstagramCreds, upsertFacebookToken, upsertYouTubeToken } from "@/lib/apiHelpers";
+import { upsertInstagramCreds, upsertFacebookToken, upsertYouTubeToken, upsertTikTokToken } from "@/lib/apiHelpers";
 import { saveMessageToDB, loadHistoryForCurrentUser } from "@/lib/databaseUtils";
 // import { detectInstagramIntent, detectUpdateCredentialsIntent, detectFacebookIntent, detectYouTubeIntent, showPlatformsWidgetHeuristic, showPlatformsWidgetByTool } from "@/lib/intentDetection";
 
@@ -24,7 +25,15 @@ export default function Home() {
   const bottomRef = useRef(null);
   const [lightbox, setLightbox] = useState(null);
 
-  // Subir archivo a Cloudinary vía API interna
+  // Helper to generate robust unique IDs for messages to avoid duplicate React keys
+  const newId = (suffix = "msg") => {
+    try {
+      if (typeof crypto !== "undefined" && crypto?.randomUUID) {
+        return `a-${suffix}-${crypto.randomUUID()}`;
+      }
+    } catch {}
+    return `a-${suffix}-${Date.now()}-${Math.random().toString(36).slice(2,7)}`;
+  };
 
   // Subir archivo a Cloudinary vía API interna
   const uploadToCloudinary = async (file, { folder = 'ui-chat-uploads' } = {}) => {
@@ -95,6 +104,15 @@ export default function Home() {
             const grantedScopes = r?.meta?.grantedScopes || null;
             const expiresAt = r?.meta?.expiresAt || null;
             return { id: r.id, role: "assistant", type: "widget-youtube-connected", meta: { channelId, channelTitle, grantedScopes, expiresAt } };
+          }
+          if (rType === "widget-tiktok-auth") {
+            return { id: r.id, role: "assistant", type: "widget-tiktok-auth" };
+          }
+          if (rType === "widget-tiktok-connected") {
+            const openId = r?.meta?.openId || null;
+            const grantedScopes = r?.meta?.grantedScopes || null;
+            const expiresAt = r?.meta?.expiresAt || null;
+            return { id: r.id, role: "assistant", type: "widget-tiktok-connected", meta: { openId, grantedScopes, expiresAt } };
           }
           if (rType === "widget-logout") {
             return { id: r.id, role: "assistant", type: "widget-logout" };
@@ -227,6 +245,7 @@ export default function Home() {
           "instagram-credentials": "widget-instagram-credentials",
           "facebook-auth": "widget-facebook-auth",
           "youtube-auth": "widget-youtube-auth",
+          "tiktok-auth": "widget-tiktok-auth",
           logout: "widget-logout",
           "clear-chat": "widget-clear-chat",
         };
@@ -583,6 +602,73 @@ export default function Home() {
                   </AssistantMessage>
                 );
               }
+
+              if (m.type === "widget-tiktok-auth") {
+                return (
+                  <AssistantMessage key={m.id} borderClass="border-gray-300">
+                    <TikTokAuthWidgetExt
+                      widgetId={m.id}
+                      onConnected={async (payload) => {
+                        try {
+                          const access_token = payload?.access_token || null;
+                          const refresh_token = payload?.refresh_token || null;
+                          const expires_in = payload?.expires_in || null;
+                          const open_id = payload?.open_id || null;
+                          const granted_scopes = payload?.granted_scopes || [];
+                          const expiresAt = expires_in ? new Date(Date.now() + Number(expires_in) * 1000).toISOString() : null;
+                          const { data: sessionData } = await supabase.auth.getSession();
+                          const userId = sessionData?.session?.user?.id;
+                          if (!userId) throw new Error("Sesión inválida");
+                          const ok = await upsertTikTokToken({
+                            userId,
+                            token: access_token,
+                            refreshToken: refresh_token,
+                            expiresAt,
+                            openId: open_id,
+                            grantedScopes: granted_scopes,
+                          });
+                          if (!ok) throw new Error("No fue posible guardar el token de TikTok");
+
+                          const connected = {
+                            id: newId('tt-ok'),
+                            role: "assistant",
+                            type: "widget-tiktok-connected",
+                            openId: open_id || null,
+                            grantedScopes: granted_scopes || [],
+                            expiresAt,
+                          };
+                          setMessages((prev) => [...prev, connected]);
+                          await saveMessageToDB({ userId, role: "assistant", content: "", attachments: null, type: "widget-tiktok-connected", meta: { openId: connected.openId, grantedScopes: connected.grantedScopes, expiresAt } });
+                        } catch (err) {
+                          setMessages((prev) => [
+                            ...prev,
+                            { id: newId('tt-error'), role: "assistant", type: "text", content: `TikTok OAuth error: ${err?.message || err}` },
+                          ]);
+                        }
+                      }}
+                      onError={(reason) => {
+                        setMessages((prev) => [
+                          ...prev,
+                          { id: newId('tt-error'), role: "assistant", type: "text", content: `TikTok OAuth error: ${reason}` },
+                        ]);
+                      }}
+                    />
+                  </AssistantMessage>
+                );
+              }
+              if (m.type === "widget-tiktok-connected") {
+                const meta = m.meta || {};
+                return (
+                  <AssistantMessage key={m.id} borderClass="border-gray-300">
+                    <TikTokConnectedWidgetExt
+                      openId={m.openId ?? meta.openId}
+                      grantedScopes={m.grantedScopes ?? meta.grantedScopes}
+                      expiresAt={m.expiresAt ?? meta.expiresAt}
+                    />
+                  </AssistantMessage>
+                );
+              }
+
               return (
                 <AssistantMessage key={m.id} borderClass="border-gray-200">
                   {m.content}

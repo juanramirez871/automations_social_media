@@ -55,6 +55,7 @@ export async function POST(req) {
     let wantInstagramCreds = false;
     let wantFacebookAuth = false;
     let wantYouTubeAuth = false;
+    let wantTikTokAuth = false;
     let wantLogout = false;
     let wantClearChat = false;
 
@@ -102,6 +103,16 @@ export async function POST(req) {
       },
     });
 
+    const requestTikTokAuth = tool({
+      description:
+        'Muestra el widget de autenticación de TikTok cuando el usuario quiera conectar/configurar TikTok o actualizar cuenta.',
+      parameters: { type: 'object', properties: {}, additionalProperties: false },
+      execute: async () => {
+        wantTikTokAuth = true;
+        return { shown: true, widget: 'tiktok-auth' };
+      },
+    });
+
     const showLogoutControl = tool({
       description: 'Muestra el control para cerrar sesión cuando el usuario pida cerrar sesión o salir.',
       parameters: { type: 'object', properties: {}, additionalProperties: false },
@@ -123,7 +134,7 @@ export async function POST(req) {
     const { text } = await generateText({
       model: google('gemini-2.5-flash'),
       messages: convertToModelMessages(normalized),
-      tools: { showSupportedNetworks, requestInstagramCredentials, requestFacebookAuth, requestYouTubeAuth, showLogoutControl, showClearChatControl },
+      tools: { showSupportedNetworks, requestInstagramCredentials, requestFacebookAuth, requestYouTubeAuth, requestTikTokAuth, showLogoutControl, showClearChatControl },
       maxTokens: 1000,
       temperature: 0.7,
       maxSteps: 3,
@@ -135,6 +146,7 @@ export async function POST(req) {
     if (wantInstagramCreds) widgets.push('instagram-credentials');
     if (wantFacebookAuth) widgets.push('facebook-auth');
     if (wantYouTubeAuth) widgets.push('youtube-auth');
+    if (wantTikTokAuth) widgets.push('tiktok-auth');
     if (wantLogout) widgets.push('logout');
     if (wantClearChat) widgets.push('clear-chat');
 
