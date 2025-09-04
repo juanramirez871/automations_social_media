@@ -333,6 +333,27 @@ export default function Home() {
       setPublishStage('idle');
     }
 
+    // NUEVO: intención de cancelar el flujo de publicación actual
+    const lower = trimmed.toLowerCase();
+    const cancelPhrases = [
+      'cancelar', 'cancela', 'cancel',
+      'olvídalo', 'olvidalo', 'olvidalo',
+      'ya no', 'no quiero', 'mejor no',
+      'detente', 'detener', 'parar',
+      'abort', 'aborta', 'anular',
+      'no continuar', 'no sigas', 'stop'
+    ];
+    const wantsCancelPublish = cancelPhrases.some((p) => lower.includes(p));
+    if (publishStage !== 'idle' && wantsCancelPublish) {
+      // Romper el flujo de publicación solo si el usuario expresa cancelación
+      const confirm = { id: newId('cancel-publish'), role: 'assistant', type: 'text', content: 'Entendido, cancelé el flujo de publicación. Cuando quieras, podemos volver a empezar.' };
+      setPublishStage('idle');
+      setPublishTargets([]);
+      setMessages((prev) => [...prev, confirm]);
+      await saveMessageToDB({ userId, role: 'assistant', content: confirm.content, attachments: null, type: 'text' });
+      return;
+    }
+
     // Flujo de publicación lineal: aplicar gating según etapa (solo si no se solicitó reiniciar)
     if (!wantsNewPublish && publishStage === 'await-media') {
       if (uploadedAttachments.length === 0) {
