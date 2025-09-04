@@ -254,7 +254,7 @@ export const PlatformsWidget = () => {
   );
 };
 
-export const PostPublishWidget = ({ onContinue, defaultSelected = [] }) => {
+export const PostPublishWidget = ({ onContinue, defaultSelected = [], onChangeTargets }) => {
   const makeInitialTargets = (arr) => {
     const base = { instagram: false, facebook: false, youtube: false, tiktok: false };
     if (Array.isArray(arr)) {
@@ -273,7 +273,15 @@ export const PostPublishWidget = ({ onContinue, defaultSelected = [] }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [Array.isArray(defaultSelected) ? defaultSelected.join('|') : '']);
 
-  const toggle = (k) => setTargets((prev) => ({ ...prev, [k]: !prev[k] }));
+  const toggle = (k) =>
+    setTargets((prev) => {
+      const next = { ...prev, [k]: !prev[k] };
+      if (typeof onChangeTargets === 'function') {
+        const arr = ['instagram', 'facebook', 'youtube', 'tiktok'].filter((p) => next[p]);
+        try { onChangeTargets(arr); } catch {}
+      }
+      return next;
+    });
 
   const chip = (k, label, color) => (
     <button

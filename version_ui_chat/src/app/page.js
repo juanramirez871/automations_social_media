@@ -42,6 +42,7 @@ export default function Home() {
   // Estado del flujo de publicación lineal
   const [publishStage, setPublishStage] = useState('idle'); // 'idle' | 'await-media' | 'await-description'
   const [publishTargets, setPublishTargets] = useState([]);
+  const [widgetTargetDrafts, setWidgetTargetDrafts] = useState({});
 
   // Helper to generate robust unique IDs for messages to avoid duplicate React keys
   const newId = (suffix = "msg") => {
@@ -82,6 +83,7 @@ export default function Home() {
 
       let restoreTargets = null;
       let sawAwaitMedia = false;
+      const draftsByWidget = {};
 
       const normalized = (rows || []).map((r) => {
         const rType = r.type || (r.role === "user" ? (Array.isArray(r.attachments) && r.attachments.length ? "text+media" : "text") : "text");
@@ -92,19 +94,19 @@ export default function Home() {
             return { id: r.id, role: "assistant", type: "widget-platforms" };
           }
           if (rType === "widget-post-publish") {
-            return { id: r.id, role: "assistant", type: "widget-post-publish" };
+            return { id: r.id, role: "assistant", type: "widget-post-publish", widgetKey: r?.meta?.widgetKey };
           }
           if (rType === "widget-await-media") {
             const targets = Array.isArray(r?.meta?.targets) ? r.meta.targets : null;
             if (targets) {
-              // Guardar para restaurar selección tras recarga
-              if (!restoreTargets) restoreTargets = targets;
+              // Guardar SIEMPRE la última selección para restaurar tras recarga (flujo global)
+              restoreTargets = targets;
             }
             sawAwaitMedia = true;
             return { id: r.id, role: "assistant", type: "widget-await-media", meta: targets ? { targets } : undefined };
           }
           if (rType === "internal-targets") {
-            // Mensaje interno para restaurar targets si la columna meta no existe o no se guardó
+            // Mensaje interno para restaurar targets; ahora también soporta drafts por widget
             try {
               let parsed = null;
               if (typeof r.content === 'string' && r.content.trim()) {
@@ -113,35 +115,37 @@ export default function Home() {
                 parsed = { targets: r.meta.targets };
               }
               const t = Array.isArray(parsed) ? parsed : (Array.isArray(parsed?.targets) ? parsed.targets : null);
-              if (t && !restoreTargets) restoreTargets = t;
+              const key = parsed?.widgetKey || parsed?.widgetId || r?.meta?.widgetKey || r?.meta?.widgetId || null;
+              if (key && t) {
+                draftsByWidget[key] = t;
+              }
+              if (t) restoreTargets = t; // Mantener la última selección
             } catch (_) {}
             return null; // No renderizar en UI
           }
           if (rType === "widget-auth-gate") {
-            // Por defecto no re-renderizamos el gate tras login.
+            return { id: r.id, role: "assistant", type: "widget-auth-gate" };
           }
           if (rType === "widget-auth-form") {
-            const mode = r?.meta?.mode || "login";
-            return { id: r.id, role: "assistant", type: "widget-auth-form", mode };
+            return { id: r.id, role: "assistant", type: "widget-auth-form" };
           }
           if (rType === "widget-instagram-credentials") {
             return { id: r.id, role: "assistant", type: "widget-instagram-credentials" };
           }
           if (rType === "widget-instagram-configured") {
-            const username = r?.meta?.username || "";
-            return { id: r.id, role: "assistant", type: "widget-instagram-configured", username };
+            const name = r?.meta?.name || null;
+            const id = r?.meta?.id || null;
+            return { id: r.id, role: "assistant", type: "widget-instagram-configured", name, igId: id };
           }
-
           if (rType === "widget-facebook-auth") {
             return { id: r.id, role: "assistant", type: "widget-facebook-auth" };
           }
           if (rType === "widget-facebook-connected") {
-            const fbName = r?.meta?.name || "";
-            const fbId = r?.meta?.id || "";
+            const fbId = r?.meta?.fbId || null;
+            const name = r?.meta?.name || null;
             const scopes = r?.meta?.scopes || null;
-            return { id: r.id, role: "assistant", type: "widget-facebook-connected", name: fbName, fbId, scopes };
+            return { id: r.id, role: "assistant", type: "widget-facebook-connected", fbId, name, scopes };
           }
-
           if (rType === "widget-youtube-auth") {
             return { id: r.id, role: "assistant", type: "widget-youtube-auth" };
           }
@@ -224,6 +228,19 @@ export default function Home() {
       // Mostrar todos los widgets sin desduplicación
       setMessages(normalized);
 
+      // Fallback: si hay targets guardados pero no existe draft ligado por widgetId (p. ej. porque se guardó con un id temporal),
+      // asignar esos targets al último widget-post-publish para que se restaure tras recargar.
+      const lastPostPublish = (() => {
+        for (let i = normalized.length - 1; i >= 0; i--) {
+          const m = normalized[i];
+          if (m.role === 'assistant' && m.type === 'widget-post-publish') return m;
+        }
+        return null;
+      })();
+      if (lastPostPublish && restoreTargets && !(draftsByWidget[lastPostPublish.widgetKey || lastPostPublish.id])) {
+        draftsByWidget[lastPostPublish.widgetKey || lastPostPublish.id] = restoreTargets;
+      }
+
       // Restaurar estado del flujo
       if (lastAskDescIndex >= 0 && !finalSummaryAfter) {
         setPublishStage('await-description');
@@ -235,6 +252,7 @@ export default function Home() {
       if (restoreTargets && Array.isArray(restoreTargets)) {
         setPublishTargets(restoreTargets);
       }
+      setWidgetTargetDrafts(draftsByWidget);
       setIsLoggedIn(true);
     } catch (e) {
       console.warn("No se pudo cargar el historial:", e?.message || e);
@@ -391,10 +409,13 @@ export default function Home() {
           "clear-chat": "widget-clear-chat",
         };
 
+        const widgetAdditionsMeta = [];
         for (const w of widgets) {
           const t = widgetTypeMap[w];
           if (t) {
-            additions.push({ id: `a-${Date.now()}-w-${w}`, role: "assistant", type: t });
+            const widgetKey = newId('wkey');
+            additions.push({ id: newId(`w-${w}`), role: "assistant", type: t, widgetKey });
+            widgetAdditionsMeta.push({ type: t, widgetKey });
           }
         }
 
@@ -404,11 +425,8 @@ export default function Home() {
         if (assistantText) {
           await saveMessageToDB({ userId, role: "assistant", content: assistantText, attachments: null, type: "text" });
         }
-        for (const w of widgets) {
-          const t = widgetTypeMap[w];
-          if (t) {
-            await saveMessageToDB({ userId, role: "assistant", content: "", attachments: null, type: t });
-          }
+        for (const wm of widgetAdditionsMeta) {
+          await saveMessageToDB({ userId, role: "assistant", content: "", attachments: null, type: wm.type, meta: { widgetKey: wm.widgetKey } });
         }
       } catch (e) {
         setMessages((prev) => [
@@ -720,13 +738,23 @@ export default function Home() {
                         await saveMessageToDB({ userId, role: 'assistant', content: 'Paso 2: Por favor sube las imágenes o videos para el post.', attachments: null, type: 'text' });
                         await saveMessageToDB({ userId, role: 'assistant', content: '', attachments: null, type: 'widget-await-media', meta: { targets: selected || [] } });
                         // Persistencia redundante de redes seleccionadas (por si no existe la columna meta)
-                        await saveMessageToDB({ userId, role: 'assistant', content: JSON.stringify({ targets: selected || [] }), attachments: null, type: 'internal-targets' });
+                        const key = m.widgetKey || m.id;
+                        await saveMessageToDB({ userId, role: 'assistant', content: JSON.stringify({ targets: selected || [], widgetKey: key, widgetId: m.id }), attachments: null, type: 'internal-targets' });
                       } catch (e) {
                         setMessages((prev) => [
                           ...prev,
                           { id: `a-${Date.now()}-err`, role: 'assistant', type: 'text', content: 'No pude continuar con el flujo de publicación.' },
                         ]);
                       }
+                    }} defaultSelected={widgetTargetDrafts[m.widgetKey || m.id] || []} onChangeTargets={async (arr) => {
+                      try {
+                        const { data: sessionData } = await getSessionOnce();
+                        const userId = sessionData?.session?.user?.id;
+                        if (!userId) return;
+                        const key = m.widgetKey || m.id;
+                        setWidgetTargetDrafts((prev) => ({ ...prev, [key]: arr }));
+                        await saveMessageToDB({ userId, role: 'assistant', content: JSON.stringify({ widgetKey: key, widgetId: m.id, targets: arr, draft: true }), attachments: null, type: 'internal-targets' });
+                      } catch (_) {}
                     }} />
                   </AssistantMessage>
                 );
