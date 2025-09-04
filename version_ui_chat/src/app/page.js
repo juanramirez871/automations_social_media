@@ -219,7 +219,10 @@ export default function Home() {
         deduped.unshift(m);
       }
 
-      setMessages(deduped);
+      // setMessages(deduped); // deshabilitado: siempre mostrar todos los widgets
+
+      // Mostrar todos los widgets sin desduplicación
+      setMessages(normalized);
 
       // Restaurar estado del flujo
       if (lastAskDescIndex >= 0 && !finalSummaryAfter) {
@@ -729,10 +732,14 @@ export default function Home() {
                 );
               }
               if (m.type === "widget-await-media") {
+                const sel = Array.isArray(m?.meta?.targets) ? m.meta.targets : [];
                 return (
                   <AssistantMessage key={m.id} borderClass="border-indigo-100">
                     <div className="text-sm leading-relaxed">
-                      Para continuar, adjunta al menos una imagen o video usando el botón de adjuntos debajo del cuadro de texto. Formatos aceptados: JPG, PNG, MP4, MOV, WEBM.
+                      <div className="mb-1">Para continuar, adjunta al menos una imagen o video usando el botón de adjuntos debajo del cuadro de texto. Formatos aceptados: JPG, PNG, MP4, MOV, WEBM.</div>
+                      {sel && sel.length > 0 && (
+                        <div className="text-[11px] text-gray-500">Seleccionaste: {sel.join(', ')}</div>
+                      )}
                     </div>
                   </AssistantMessage>
                 );

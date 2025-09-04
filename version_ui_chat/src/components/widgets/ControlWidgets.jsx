@@ -254,8 +254,24 @@ export const PlatformsWidget = () => {
   );
 };
 
-export const PostPublishWidget = ({ onContinue }) => {
-  const [targets, setTargets] = useState({ instagram: false, facebook: false, youtube: false, tiktok: false });
+export const PostPublishWidget = ({ onContinue, defaultSelected = [] }) => {
+  const makeInitialTargets = (arr) => {
+    const base = { instagram: false, facebook: false, youtube: false, tiktok: false };
+    if (Array.isArray(arr)) {
+      for (const k of arr) {
+        if (k in base) base[k] = true;
+      }
+    }
+    return base;
+  };
+
+  const [targets, setTargets] = useState(() => makeInitialTargets(defaultSelected));
+
+  useEffect(() => {
+    // Sincronizar cuando cambie la selección por defecto (por ejemplo, tras recargar)
+    setTargets(makeInitialTargets(defaultSelected));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [Array.isArray(defaultSelected) ? defaultSelected.join('|') : '']);
 
   const toggle = (k) => setTargets((prev) => ({ ...prev, [k]: !prev[k] }));
 
