@@ -338,6 +338,21 @@ export const PostPublishWidget = ({ onContinue, defaultSelected = [], onChangeTa
 };
 
 export const CaptionSuggestWidget = ({ caption = '', onAccept, onRegenerate, onCustom }) => {
+  const [busy, setBusy] = useState(false);
+  const [active, setActive] = useState(null); // 'regenerate' | 'custom' | 'accept' | null
+
+  const handle = async (kind, fn, arg) => {
+    if (typeof fn !== 'function') return;
+    try {
+      setBusy(true);
+      setActive(kind);
+      await fn(arg);
+    } finally {
+      setBusy(false);
+      setActive(null);
+    }
+  };
+
   return (
     <div className="flex flex-col gap-3 rounded-xl border border-emerald-200 bg-white p-4">
       <div className="flex items-center gap-2">
@@ -350,23 +365,44 @@ export const CaptionSuggestWidget = ({ caption = '', onAccept, onRegenerate, onC
       <div className="flex items-center justify-end gap-2">
         <button
           type="button"
-          onClick={() => typeof onRegenerate === 'function' && onRegenerate()}
-          className="inline-flex items-center gap-2 rounded-lg bg-gray-100 px-3 py-1.5 text-xs text-gray-800 hover:bg-gray-200"
+          onClick={() => handle('regenerate', onRegenerate)}
+          disabled={busy}
+          aria-busy={busy && active === 'regenerate'}
+          className="inline-flex items-center gap-2 rounded-lg bg-gray-100 px-3 py-1.5 text-xs text-gray-800 transition-all duration-200 ease-out hover:bg-gray-200 hover:-translate-y-0.5 hover:shadow-sm active:scale-95 disabled:opacity-50 disabled:pointer-events-none"
         >
+          {active === 'regenerate' ? (
+            <span className="size-3.5 rounded-full border-2 border-gray-700/40 border-t-transparent animate-spin" aria-hidden="true"></span>
+          ) : (
+            <svg viewBox="0 0 24 24" className="size-4" aria-hidden="true"><path fill="currentColor" d="M12 6v3l4-4-4-4v3C7.6 4 4 7.6 4 12c0 1.7.6 3.3 1.6 4.6l1.5-1.3C6.4 14.5 6 13.3 6 12c0-3.3 2.7-6 6-6zm6.4-.6L16.9 6.7C17.6 7.5 18 8.7 18 10c0 3.3-2.7 6-6 6v-3l-4 4 4 4v-3c4.4 0 8-3.6 8-8 0-1.7-.6-3.3-1.6-4.6z"/></svg>
+          )}
           Regenerar
         </button>
         <button
           type="button"
-          onClick={() => typeof onCustom === 'function' && onCustom()}
-          className="inline-flex items-center gap-2 rounded-lg bg-amber-100 px-3 py-1.5 text-xs text-amber-900 hover:bg-amber-200"
+          onClick={() => handle('custom', onCustom)}
+          disabled={busy}
+          aria-busy={busy && active === 'custom'}
+          className="inline-flex items-center gap-2 rounded-lg bg-amber-100 px-3 py-1.5 text-xs text-amber-900 transition-all duration-200 ease-out hover:bg-amber-200 hover:-translate-y-0.5 hover:shadow-sm active:scale-95 disabled:opacity-50 disabled:pointer-events-none"
         >
+          {active === 'custom' ? (
+            <span className="size-3.5 rounded-full border-2 border-amber-900/40 border-t-transparent animate-spin" aria-hidden="true"></span>
+          ) : (
+            <svg viewBox="0 0 24 24" className="size-4" aria-hidden="true"><path fill="currentColor" d="M3 6a3 3 0 013-3h7l5 5v10a3 3 0 01-3 3H6a3 3 0 01-3-3V6zm12 0H6a1 1 0 00-1 1v10c0 .6.4 1 1 1h10a1 1 0 001-1V9h-2a1 1 0 01-1-1V6z"/></svg>
+          )}
           Escribir la mía
         </button>
         <button
           type="button"
-          onClick={() => typeof onAccept === 'function' && onAccept(caption)}
-          className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs text-white hover:bg-emerald-700"
+          onClick={() => handle('accept', onAccept, caption)}
+          disabled={busy}
+          aria-busy={busy && active === 'accept'}
+          className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs text-white transition-all duration-200 ease-out hover:bg-emerald-700 hover:-translate-y-0.5 hover:shadow-sm active:scale-95 disabled:opacity-50 disabled:pointer-events-none"
         >
+          {active === 'accept' ? (
+            <span className="size-3.5 rounded-full border-2 border-white/60 border-t-transparent animate-spin" aria-hidden="true"></span>
+          ) : (
+            <svg viewBox="0 0 24 24" className="size-4" aria-hidden="true"><path fill="currentColor" d="M5 12l5 5L20 7"/></svg>
+          )}
           Usar esta
         </button>
       </div>
