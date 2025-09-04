@@ -14,6 +14,21 @@ import { TikTokAuthWidget as TikTokAuthWidgetExt, TikTokConnectedWidget as TikTo
 import { LogoutWidget as LogoutWidgetExt, ClearChatWidget as ClearChatWidgetExt, PlatformsWidget as PlatformsWidgetExt } from "@/components/widgets/ControlWidgets";
 import { upsertInstagramCreds, upsertFacebookToken, upsertYouTubeToken, upsertTikTokToken } from "@/lib/apiHelpers";
 import { saveMessageToDB, loadHistoryForCurrentUser } from "@/lib/databaseUtils";
+
+// Session cache (module-scope) to avoid duplicate supabase.auth.getSession() calls
+let __sessionCache = null;
+let __sessionInflight = null;
+async function getSessionOnce() {
+  if (__sessionCache) return { data: __sessionCache };
+  if (__sessionInflight) return await __sessionInflight;
+  __sessionInflight = (async () => {
+    const res = await supabase.auth.getSession();
+    __sessionCache = res?.data || null;
+    __sessionInflight = null;
+    return { data: __sessionCache };
+  })();
+  return await __sessionInflight;
+}
 // import { detectInstagramIntent, detectUpdateCredentialsIntent, detectFacebookIntent, detectYouTubeIntent, showPlatformsWidgetHeuristic, showPlatformsWidgetByTool } from "@/lib/intentDetection";
 
 export default function Home() {
@@ -56,11 +71,11 @@ export default function Home() {
   const loadHistoryAndNormalize = async () => {
     try {
       setHistoryLoading(true);
-      const { data: sessionData } = await supabase.auth.getSession();
+      const { data: sessionData } = await getSessionOnce();
       const userId = sessionData?.session?.user?.id;
       if (!userId) return;
 
-      const rows = await loadHistoryForCurrentUser();
+      const rows = await loadHistoryForCurrentUser(userId);
 
       const normalized = (rows || []).map((r) => {
         const rType = r.type || (r.role === "user" ? (Array.isArray(r.attachments) && r.attachments.length ? "text+media" : "text") : "text");
@@ -165,7 +180,7 @@ export default function Home() {
       return;
     }
 
-    const { data: sessionData } = await supabase.auth.getSession();
+    const { data: sessionData } = await getSessionOnce();
     const hasSession = Boolean(sessionData?.session);
     if (!hasSession) {
       if (!authGateShownRef.current) {
@@ -297,7 +312,7 @@ export default function Home() {
         }
         return;
       }
-      const { data } = await supabase.auth.getSession();
+      const { data } = await getSessionOnce();
       const hasSession = Boolean(data?.session);
       if (hasSession) {
         await loadHistoryAndNormalize();
@@ -406,7 +421,7 @@ export default function Home() {
                     <InstagramCredentialsWidgetExt
                       widgetId={m.id}
                       onSubmit={async ({ username, password }) => {
-                        const { data: sessionData } = await supabase.auth.getSession();
+                        const { data: sessionData } = await getSessionOnce();
                         const userId = sessionData?.session?.user?.id;
                         if (!userId) {
                           setMessages((prev) => [
@@ -420,7 +435,7 @@ export default function Home() {
                           if (!ok) throw new Error("No fue posible guardar credenciales");
                           const configured = { id: `a-${Date.now()}-ig-ok`, role: "assistant", type: "widget-instagram-configured", username };
                           setMessages((prev) => [...prev, configured]);
-                          const { data: sessionData2 } = await supabase.auth.getSession();
+                          const { data: sessionData2 } = await getSessionOnce();
                           const userId2 = sessionData2?.session?.user?.id;
                           if (userId2) {
                             await saveMessageToDB({ userId: userId2, role: "assistant", content: "", attachments: null, type: "widget-instagram-configured", meta: { username } });
@@ -456,7 +471,7 @@ export default function Home() {
                           const profile = payload?.fb_user || {};
                           const permissions = payload?.granted_scopes || [];
                           const expiresAt = expires_in ? new Date(Date.now() + (Number(expires_in) * 1000)).toISOString() : null;
-                          const { data: sessionData } = await supabase.auth.getSession();
+                          const { data: sessionData } = await getSessionOnce();
                           const userId = sessionData?.session?.user?.id;
                           if (!userId) throw new Error("Sesión inválida");
                           const ok = await upsertFacebookToken({
@@ -511,6 +526,12 @@ export default function Home() {
                       onLogout={async () => {
                         try {
                           await supabase.auth.signOut();
+                          // clear session cache
+                          __sessionCache = null;
+                          __sessionInflight = null;
+                          if (typeof window !== 'undefined' && window.__session_cache_once) {
+                            try { delete window.__session_cache_once; } catch {}
+                          }
                           setMessages((prev) => [
                             ...prev,
                             { id: `a-${Date.now()}-logout`, role: "assistant", type: "text", content: "Has cerrado sesión correctamente." },
@@ -549,7 +570,7 @@ export default function Home() {
                         try {
                           const { access_token, expires_in, channel, granted_scopes } = payload || {};
                           const expiresAt = expires_in ? new Date(Date.now() + Number(expires_in) * 1000).toISOString() : null;
-                          const { data: sessionData } = await supabase.auth.getSession();
+                          const { data: sessionData } = await getSessionOnce();
                           const userId = sessionData?.session?.user?.id;
                           if (!userId) throw new Error("Sesión inválida");
                           const ok = await upsertYouTubeToken({
@@ -616,7 +637,7 @@ export default function Home() {
                           const open_id = payload?.open_id || null;
                           const granted_scopes = payload?.granted_scopes || [];
                           const expiresAt = expires_in ? new Date(Date.now() + Number(expires_in) * 1000).toISOString() : null;
-                          const { data: sessionData } = await supabase.auth.getSession();
+                          const { data: sessionData } = await getSessionOnce();
                           const userId = sessionData?.session?.user?.id;
                           if (!userId) throw new Error("Sesión inválida");
                           const ok = await upsertTikTokToken({

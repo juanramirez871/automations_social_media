@@ -3,6 +3,44 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
 
+// Simple in-memory cache to avoid multiple concurrent/duplicate profile fetches (dev StrictMode safe)
+const profileStatusCache = new Map(); // key: userId -> { data }
+const profileStatusInflight = new Map(); // key: userId -> Promise<{ data, error }>
+
+async function fetchProfileStatusOnce(userId) {
+  if (!userId) return { data: null, error: new Error("missing_user_id") };
+  // Serve from cache if present
+  if (profileStatusCache.has(userId)) {
+    return { data: profileStatusCache.get(userId), error: null };
+  }
+  // Reuse in-flight promise if exists
+  if (profileStatusInflight.has(userId)) {
+    try {
+      const res = await profileStatusInflight.get(userId);
+      return res;
+    } catch (e) {
+      return { data: null, error: e };
+    }
+  }
+  // Create and store in-flight promise
+  const p = (async () => {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('instagram_username, userinstagram, facebook_access_token, facebook_user_id, facebook_granted_scopes, youtube_access_token, youtube_channel_id, youtube_channel_title, tiktok_access_token, tiktok_open_id, tiktok_granted_scopes')
+      .eq('id', userId)
+      .maybeSingle();
+    if (!error && data) profileStatusCache.set(userId, data);
+    profileStatusInflight.delete(userId);
+    return { data, error };
+  })();
+  profileStatusInflight.set(userId, p);
+  try {
+    return await p;
+  } catch (e) {
+    return { data: null, error: e };
+  }
+}
+
 export const LogoutWidget = ({ onLogout }) => {
   const [working, setWorking] = useState(false);
   const handleLogout = async () => {
@@ -87,18 +125,22 @@ export const PlatformsWidget = () => {
     let cancelled = false;
     const fetchStatus = async () => {
       try {
-        const { data: sessionData } = await supabase.auth.getSession();
+        // small in-file session cache to avoid repeated getSession calls
+        if (!window.__session_cache_once) {
+          window.__session_cache_once = (async () => {
+            return await supabase.auth.getSession();
+          })();
+        }
+        const { data: sessionData } = await window.__session_cache_once;
         const userId = sessionData?.session?.user?.id;
         if (!userId) {
           if (!cancelled) setLoading(false);
           return;
         }
-        const { data, error } = await supabase
-          .from('profiles')
-          .select('instagram_username, userinstagram, facebook_access_token, facebook_user_id, facebook_granted_scopes, youtube_access_token, youtube_channel_id, youtube_channel_title, tiktok_access_token, tiktok_open_id, tiktok_granted_scopes')
-          .eq('id', userId)
-          .maybeSingle();
+
+        const { data, error } = await fetchProfileStatusOnce(userId);
         if (error) throw error;
+
         const instagramUsername = data?.instagram_username || data?.userinstagram || null;
         const hasFB = !!data?.facebook_access_token;
         const fbUserId = data?.facebook_user_id || null;

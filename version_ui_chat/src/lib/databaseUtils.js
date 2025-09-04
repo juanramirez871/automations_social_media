@@ -34,11 +34,9 @@ export const saveMessageToDB = async ({ userId, role, content = "", type, attach
   }
 };
 
-// Cargar historial de mensajes para el usuario actual
-export const loadHistoryForCurrentUser = async () => {
+// Cargar historial de mensajes para el usuario actual (proveer userId para evitar getSession adicional)
+export const loadHistoryForCurrentUser = async (userId) => {
   try {
-    const { data: sessionData } = await supabase.auth.getSession();
-    const userId = sessionData?.session?.user?.id;
     if (!userId) return [];
 
     const { data, error } = await supabase
