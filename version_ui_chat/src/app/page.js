@@ -39,6 +39,9 @@ export default function Home() {
   const authGateShownRef = useRef(false);
   const bottomRef = useRef(null);
   const [lightbox, setLightbox] = useState(null);
+  // Estado del flujo de publicación lineal
+  const [publishStage, setPublishStage] = useState('idle'); // 'idle' | 'await-media' | 'await-description'
+  const [publishTargets, setPublishTargets] = useState([]);
 
   // Helper to generate robust unique IDs for messages to avoid duplicate React keys
   const newId = (suffix = "msg") => {
@@ -77,6 +80,9 @@ export default function Home() {
 
       const rows = await loadHistoryForCurrentUser(userId);
 
+      let restoreTargets = null;
+      let sawAwaitMedia = false;
+
       const normalized = (rows || []).map((r) => {
         const rType = r.type || (r.role === "user" ? (Array.isArray(r.attachments) && r.attachments.length ? "text+media" : "text") : "text");
 
@@ -84,6 +90,18 @@ export default function Home() {
         if (r.role === "assistant") {
           if (rType === "widget-platforms") {
             return { id: r.id, role: "assistant", type: "widget-platforms" };
+          }
+          if (rType === "widget-post-publish") {
+            return { id: r.id, role: "assistant", type: "widget-post-publish" };
+          }
+          if (rType === "widget-await-media") {
+            const targets = Array.isArray(r?.meta?.targets) ? r.meta.targets : null;
+            if (targets) {
+              // Guardar para restaurar selección tras recarga
+              if (!restoreTargets) restoreTargets = targets;
+            }
+            sawAwaitMedia = true;
+            return { id: r.id, role: "assistant", type: "widget-await-media", meta: targets ? { targets } : undefined };
           }
           if (rType === "widget-auth-gate") {
             // Por defecto no re-renderizamos el gate tras login.
@@ -155,11 +173,51 @@ export default function Home() {
         return { id: r.id, role: "user", type: "text", text: (r.content || ""), attachments: [] };
       }).filter(Boolean);
 
-      setMessages((prev) => {
-        const histIds = new Set((normalized || []).map((m) => m.id));
-        const keep = (prev || []).filter((m) => !histIds.has(m?.id));
-        return [...normalized, ...keep];
-      });
+      // Analizar stage por contenido de mensajes
+      let lastAskDescIndex = -1;
+      for (let i = 0; i < normalized.length; i++) {
+        const m = normalized[i];
+        if (m.role === 'assistant' && m.type === 'text' && typeof m.content === 'string' && m.content.startsWith('Paso 3:')) {
+          lastAskDescIndex = i;
+        }
+      }
+      let finalSummaryAfter = false;
+      if (lastAskDescIndex >= 0) {
+        for (let j = lastAskDescIndex + 1; j < normalized.length; j++) {
+          const m = normalized[j];
+          if (m.role === 'assistant' && m.type === 'text' && /^Perfecto\. Redes:/i.test(m.content || '')) {
+            finalSummaryAfter = true;
+            break;
+          }
+        }
+      }
+
+      // Desduplicar widgets únicos conservando el último
+      const uniqueTypes = new Set(["widget-post-publish", "widget-await-media"]);
+      const seenUnique = new Set();
+      const deduped = [];
+      for (let i = normalized.length - 1; i >= 0; i--) {
+        const m = normalized[i];
+        if (m.role === 'assistant' && uniqueTypes.has(m.type)) {
+          if (seenUnique.has(m.type)) continue;
+          seenUnique.add(m.type);
+        }
+        deduped.unshift(m);
+      }
+
+      setMessages(deduped);
+
+      // Restaurar estado del flujo
+      if (lastAskDescIndex >= 0 && !finalSummaryAfter) {
+        setPublishStage('await-description');
+      } else if (sawAwaitMedia && lastAskDescIndex < 0) {
+        setPublishStage('await-media');
+      } else {
+        setPublishStage('idle');
+      }
+      if (restoreTargets && Array.isArray(restoreTargets)) {
+        setPublishTargets(restoreTargets);
+      }
       setIsLoggedIn(true);
     } catch (e) {
       console.warn("No se pudo cargar el historial:", e?.message || e);
@@ -233,6 +291,54 @@ export default function Home() {
     const attachmentsForDB = uploadedAttachments.map(({ kind, url, publicId, name }) => ({ kind, url, publicId, name }));
     await saveMessageToDB({ userId, role: "user", content: trimmed, attachments: attachmentsForDB, type: uploadedAttachments.length ? "text+media" : "text" });
 
+    // Detectar si el usuario quiere iniciar un nuevo flujo de publicación explícitamente
+    const wantsNewPublish = /\b(publicar|postear|subir|programar)\b/i.test(trimmed) && /(post|publicaci\u00F3n|video|reel|contenido)/i.test(trimmed);
+    if (wantsNewPublish && publishStage !== 'idle') {
+      // Reiniciar el gating para permitir que aparezca el selector nuevamente
+      setPublishStage('idle');
+    }
+
+    // Flujo de publicación lineal: aplicar gating según etapa (solo si no se solicitó reiniciar)
+    if (!wantsNewPublish && publishStage === 'await-media') {
+      if (uploadedAttachments.length === 0) {
+        setMessages((prev) => [
+          ...prev,
+          { id: newId('need-media'), role: 'assistant', type: 'text', content: 'Necesito que adjuntes al menos una imagen o video para continuar.' },
+        ]);
+        return;
+      } else {
+        setPublishStage('await-description');
+        const step3 = { id: newId('ask-description'), role: 'assistant', type: 'text', content: 'Paso 3: Ahora escribe la descripción para el post.' };
+        setMessages((prev) => [
+          ...prev,
+          step3,
+        ]);
+        await saveMessageToDB({ userId, role: 'assistant', content: step3.content, attachments: null, type: 'text' });
+        return;
+      }
+    }
+
+    if (!wantsNewPublish && publishStage === 'await-description') {
+      if (!trimmed) {
+        setMessages((prev) => [
+          ...prev,
+          { id: newId('need-description'), role: 'assistant', type: 'text', content: 'Por favor escribe la descripción del post para continuar.' },
+        ]);
+        return;
+      } else {
+        const targets = (publishTargets || []).join(', ');
+        const summary = `Perfecto. Redes: ${targets || '—'}. Descripción recibida. El flujo termina aquí por ahora.`;
+        setMessages((prev) => [
+          ...prev,
+          { id: newId('done-publish'), role: 'assistant', type: 'text', content: summary },
+        ]);
+        await saveMessageToDB({ userId, role: 'assistant', content: summary, attachments: null, type: 'text' });
+        setPublishStage('idle');
+        setPublishTargets([]);
+        return;
+      }
+    }
+
     // La detección de intención para publicar la decide el modelo mediante tools (showPostPublishSelection)
 
     // Desde aquí en adelante, ya no se hace detección manual de intención.
@@ -297,6 +403,10 @@ export default function Home() {
       }
     }
   };
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "auto" });
+  }, []);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -557,8 +667,17 @@ export default function Home() {
                       const { data: sessionData } = await getSessionOnce();
                       const userId = sessionData?.session?.user?.id;
                       if (!userId) return;
-                      await fetch('/api/clear', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId }) });
+                      try {
+                        const res = await fetch('/api/clear', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId }) });
+                        if (!res.ok) throw new Error('API clear fallo');
+                      } catch (e) {
+                        // Fallback: borrar directo con supabase del cliente autenticado
+                        if (supabase) {
+                          await supabase.from('messages').delete().eq('user_id', userId);
+                        }
+                      }
                       setMessages([]);
+                      await loadHistoryAndNormalize();
                     }} />
                   </AssistantMessage>
                 );
@@ -566,7 +685,39 @@ export default function Home() {
               if (m.type === "widget-post-publish") {
                 return (
                   <AssistantMessage key={m.id} borderClass="border-indigo-200">
-                    <PostPublishWidgetExt />
+                    <PostPublishWidgetExt onContinue={async (selected) => {
+                      try {
+                        const { data: sessionData } = await getSessionOnce();
+                        const userId = sessionData?.session?.user?.id;
+                        if (!userId) return;
+                        // Guardar en estado y pasar a pedir medios
+                        setPublishTargets(selected || []);
+                        setPublishStage('await-media');
+                        // Insertar instrucción clara del paso 2 y el widget de espera
+                        setMessages((prev) => [
+                          ...prev,
+                          { id: `a-${Date.now()}-ask-media`, role: 'assistant', type: 'text', content: 'Paso 2: Por favor sube las imágenes o videos para el post.' },
+                          { id: `a-${Date.now()}-await-media`, role: 'assistant', type: 'widget-await-media', meta: { targets: selected || [] } },
+                        ]);
+                        // Persistir ambos mensajes para que no desaparezcan tras recargar
+                        await saveMessageToDB({ userId, role: 'assistant', content: 'Paso 2: Por favor sube las imágenes o videos para el post.', attachments: null, type: 'text' });
+                        await saveMessageToDB({ userId, role: 'assistant', content: '', attachments: null, type: 'widget-await-media' });
+                      } catch (e) {
+                        setMessages((prev) => [
+                          ...prev,
+                          { id: `a-${Date.now()}-err`, role: 'assistant', type: 'text', content: 'No pude continuar con el flujo de publicación.' },
+                        ]);
+                      }
+                    }} />
+                  </AssistantMessage>
+                );
+              }
+              if (m.type === "widget-await-media") {
+                return (
+                  <AssistantMessage key={m.id} borderClass="border-indigo-100">
+                    <div className="text-sm leading-relaxed">
+                      Para continuar, adjunta al menos una imagen o video usando el botón de adjuntos debajo del cuadro de texto. Formatos aceptados: JPG, PNG, MP4, MOV, WEBM.
+                    </div>
                   </AssistantMessage>
                 );
               }

@@ -254,7 +254,7 @@ export const PlatformsWidget = () => {
   );
 };
 
-export const PostPublishWidget = () => {
+export const PostPublishWidget = ({ onContinue }) => {
   const [targets, setTargets] = useState({ instagram: false, facebook: false, youtube: false, tiktok: false });
 
   const toggle = (k) => setTargets((prev) => ({ ...prev, [k]: !prev[k] }));
@@ -270,13 +270,16 @@ export const PostPublishWidget = () => {
     </button>
   );
 
+  const selected = ['instagram','facebook','youtube','tiktok'].filter(k => targets[k]);
+  const canContinue = selected.length > 0;
+
   return (
     <div className="flex flex-col gap-3 rounded-xl border border-gray-200 bg-white p-4">
       <div className="flex items-center gap-2">
         <div className="h-1 w-8 rounded-full bg-gradient-to-r from-indigo-400 to-fuchsia-400" />
         <p className="text-sm font-semibold text-gray-800">¿Dónde quieres publicar?</p>
       </div>
-      <p className="text-xs text-gray-600">Selecciona una o varias plataformas. Puedes continuar luego.</p>
+      <p className="text-xs text-gray-600">Selecciona una o varias plataformas para continuar.</p>
       <div className="flex flex-wrap gap-2">
         {chip('instagram', 'Instagram', {
           activeBg: 'bg-fuchsia-50', activeText: 'text-fuchsia-700', activeBorder: 'border-fuchsia-200', dotActive: 'bg-fuchsia-500',
@@ -296,9 +299,14 @@ export const PostPublishWidget = () => {
         })}
       </div>
       <div className="flex items-center justify-end gap-2">
-        <span className="text-[11px] text-gray-500">Selección: {['instagram','facebook','youtube','tiktok'].filter(k => targets[k]).join(', ') || 'ninguna'}</span>
-        <button type="button" disabled className="inline-flex items-center gap-2 rounded-lg bg-gray-200 px-3 py-1.5 text-xs text-gray-600 disabled:opacity-60">
-          Continuar (próximamente)
+        <span className="text-[11px] text-gray-500">Selección: {selected.join(', ') || 'ninguna'}</span>
+        <button
+          type="button"
+          onClick={() => canContinue && typeof onContinue === 'function' && onContinue(selected)}
+          disabled={!canContinue}
+          className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs text-white disabled:opacity-60"
+        >
+          Continuar
         </button>
       </div>
     </div>
