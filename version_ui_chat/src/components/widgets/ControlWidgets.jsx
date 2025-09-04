@@ -253,3 +253,54 @@ export const PlatformsWidget = () => {
     </div>
   );
 };
+
+export const PostPublishWidget = () => {
+  const [targets, setTargets] = useState({ instagram: false, facebook: false, youtube: false, tiktok: false });
+
+  const toggle = (k) => setTargets((prev) => ({ ...prev, [k]: !prev[k] }));
+
+  const chip = (k, label, color) => (
+    <button
+      type="button"
+      onClick={() => toggle(k)}
+      className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-medium transition-all ${targets[k] ? `${color.activeBg} ${color.activeText} ${color.activeBorder}` : `${color.inactiveBg} ${color.inactiveText} ${color.inactiveBorder}`}`}
+    >
+      <span className={`size-1.5 rounded-full ${targets[k] ? color.dotActive : color.dotInactive}`}></span>
+      {label}
+    </button>
+  );
+
+  return (
+    <div className="flex flex-col gap-3 rounded-xl border border-gray-200 bg-white p-4">
+      <div className="flex items-center gap-2">
+        <div className="h-1 w-8 rounded-full bg-gradient-to-r from-indigo-400 to-fuchsia-400" />
+        <p className="text-sm font-semibold text-gray-800">¿Dónde quieres publicar?</p>
+      </div>
+      <p className="text-xs text-gray-600">Selecciona una o varias plataformas. Puedes continuar luego.</p>
+      <div className="flex flex-wrap gap-2">
+        {chip('instagram', 'Instagram', {
+          activeBg: 'bg-fuchsia-50', activeText: 'text-fuchsia-700', activeBorder: 'border-fuchsia-200', dotActive: 'bg-fuchsia-500',
+          inactiveBg: 'bg-white', inactiveText: 'text-gray-700', inactiveBorder: 'border-gray-200', dotInactive: 'bg-gray-300',
+        })}
+        {chip('facebook', 'Facebook', {
+          activeBg: 'bg-blue-50', activeText: 'text-blue-700', activeBorder: 'border-blue-200', dotActive: 'bg-blue-500',
+          inactiveBg: 'bg-white', inactiveText: 'text-gray-700', inactiveBorder: 'border-gray-200', dotInactive: 'bg-gray-300',
+        })}
+        {chip('youtube', 'YouTube', {
+          activeBg: 'bg-red-50', activeText: 'text-red-700', activeBorder: 'border-red-200', dotActive: 'bg-red-500',
+          inactiveBg: 'bg-white', inactiveText: 'text-gray-700', inactiveBorder: 'border-gray-200', dotInactive: 'bg-gray-300',
+        })}
+        {chip('tiktok', 'TikTok', {
+          activeBg: 'bg-gray-50', activeText: 'text-gray-900', activeBorder: 'border-gray-300', dotActive: 'bg-gray-900',
+          inactiveBg: 'bg-white', inactiveText: 'text-gray-700', inactiveBorder: 'border-gray-200', dotInactive: 'bg-gray-300',
+        })}
+      </div>
+      <div className="flex items-center justify-end gap-2">
+        <span className="text-[11px] text-gray-500">Selección: {['instagram','facebook','youtube','tiktok'].filter(k => targets[k]).join(', ') || 'ninguna'}</span>
+        <button type="button" disabled className="inline-flex items-center gap-2 rounded-lg bg-gray-200 px-3 py-1.5 text-xs text-gray-600 disabled:opacity-60">
+          Continuar (próximamente)
+        </button>
+      </div>
+    </div>
+  );
+};

@@ -11,7 +11,7 @@ import { InstagramCredentialsWidget as InstagramCredentialsWidgetExt, InstagramC
 import { FacebookAuthWidget as FacebookAuthWidgetExt, FacebookConnectedWidget as FacebookConnectedWidgetExt } from "@/components/widgets/FacebookWidgets";
 import { YouTubeAuthWidget as YouTubeAuthWidgetExt, YouTubeConnectedWidget as YouTubeConnectedWidgetExt } from "@/components/widgets/YouTubeWidgets";
 import { TikTokAuthWidget as TikTokAuthWidgetExt, TikTokConnectedWidget as TikTokConnectedWidgetExt } from "@/components/widgets/TikTokWidgets";
-import { LogoutWidget as LogoutWidgetExt, ClearChatWidget as ClearChatWidgetExt, PlatformsWidget as PlatformsWidgetExt } from "@/components/widgets/ControlWidgets";
+import { LogoutWidget as LogoutWidgetExt, ClearChatWidget as ClearChatWidgetExt, PlatformsWidget as PlatformsWidgetExt, PostPublishWidget as PostPublishWidgetExt } from "@/components/widgets/ControlWidgets";
 import { upsertInstagramCreds, upsertFacebookToken, upsertYouTubeToken, upsertTikTokToken } from "@/lib/apiHelpers";
 import { saveMessageToDB, loadHistoryForCurrentUser } from "@/lib/databaseUtils";
 
@@ -233,6 +233,8 @@ export default function Home() {
     const attachmentsForDB = uploadedAttachments.map(({ kind, url, publicId, name }) => ({ kind, url, publicId, name }));
     await saveMessageToDB({ userId, role: "user", content: trimmed, attachments: attachmentsForDB, type: uploadedAttachments.length ? "text+media" : "text" });
 
+    // La detección de intención para publicar la decide el modelo mediante tools (showPostPublishSelection)
+
     // Desde aquí en adelante, ya no se hace detección manual de intención.
     // En su lugar, se envía el mensaje al endpoint /api/chat el cual decide qué widgets mostrar vía tools
     if (trimmed) {
@@ -257,6 +259,7 @@ export default function Home() {
 
         const widgetTypeMap = {
           platforms: "widget-platforms",
+          "post-publish": "widget-post-publish",
           "instagram-credentials": "widget-instagram-credentials",
           "facebook-auth": "widget-facebook-auth",
           "youtube-auth": "widget-youtube-auth",
@@ -550,17 +553,23 @@ export default function Home() {
               if (m.type === "widget-clear-chat") {
                 return (
                   <AssistantMessage key={m.id} borderClass="border-red-200">
-                    <ClearChatWidgetExt
-                      onClear={() => {
-                        setMessages([
-                          { id: '1', role: 'assistant', type: 'text', content: 'Hola! Soy tu asistente de redes sociales. ¿En qué plataforma quieres trabajar hoy? Escribe "plataformas" para ver opciones.' },
-                        ]);
-                      }}
-                    />
+                    <ClearChatWidgetExt onClear={async () => {
+                      const { data: sessionData } = await getSessionOnce();
+                      const userId = sessionData?.session?.user?.id;
+                      if (!userId) return;
+                      await fetch('/api/clear', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId }) });
+                      setMessages([]);
+                    }} />
                   </AssistantMessage>
                 );
               }
-
+              if (m.type === "widget-post-publish") {
+                return (
+                  <AssistantMessage key={m.id} borderClass="border-indigo-200">
+                    <PostPublishWidgetExt />
+                  </AssistantMessage>
+                );
+              }
               if (m.type === "widget-youtube-auth") {
                 return (
                   <AssistantMessage key={m.id} borderClass="border-red-200">

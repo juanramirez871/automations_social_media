@@ -58,6 +58,7 @@ export async function POST(req) {
     let wantTikTokAuth = false;
     let wantLogout = false;
     let wantClearChat = false;
+    let wantPostPublish = false;
 
     const showSupportedNetworks = tool({
       description:
@@ -70,6 +71,16 @@ export async function POST(req) {
       execute: async () => {
         wantPlatforms = true;
         return { shown: true, networks: ['instagram','facebook','youtube','tiktok'] };
+      },
+    });
+
+    const showPostPublishSelection = tool({
+      description:
+        'Muestra el widget para seleccionar en qué plataformas (Instagram, Facebook, YouTube, TikTok) publicar/subir un post. Úsala cuando el usuario quiera publicar, subir, postear o programar contenido en redes sociales.',
+      parameters: { type: 'object', properties: {}, additionalProperties: false },
+      execute: async () => {
+        wantPostPublish = true;
+        return { shown: true, widget: 'post-publish' };
       },
     });
 
@@ -134,7 +145,7 @@ export async function POST(req) {
     const { text } = await generateText({
       model: google('gemini-2.5-flash'),
       messages: convertToModelMessages(normalized),
-      tools: { showSupportedNetworks, requestInstagramCredentials, requestFacebookAuth, requestYouTubeAuth, requestTikTokAuth, showLogoutControl, showClearChatControl },
+      tools: { showSupportedNetworks, showPostPublishSelection, requestInstagramCredentials, requestFacebookAuth, requestYouTubeAuth, requestTikTokAuth, showLogoutControl, showClearChatControl },
       maxTokens: 1000,
       temperature: 0.7,
       maxSteps: 3,
@@ -143,6 +154,7 @@ export async function POST(req) {
     // Construir la lista de widgets a renderizar a partir de las herramientas elegidas
     const widgets = [];
     if (wantPlatforms) widgets.push('platforms');
+    if (wantPostPublish) widgets.push('post-publish');
     if (wantInstagramCreds) widgets.push('instagram-credentials');
     if (wantFacebookAuth) widgets.push('facebook-auth');
     if (wantYouTubeAuth) widgets.push('youtube-auth');
