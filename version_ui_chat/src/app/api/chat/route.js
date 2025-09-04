@@ -59,6 +59,7 @@ export async function POST(req) {
     let wantLogout = false;
     let wantClearChat = false;
     let wantPostPublish = false;
+    let wantCaptionSuggest = false;
 
     const showSupportedNetworks = tool({
       description:
@@ -142,10 +143,28 @@ export async function POST(req) {
       },
     });
 
+    const suggestCaption = tool({
+      description:
+        'Genera una descripción profesional breve para la publicación del usuario, con tono natural y hashtags relevantes. Úsala cuando el usuario ya proporcionó una descripción o pida ayuda con el copy.',
+      parameters: {
+        type: 'object',
+        properties: {
+          prompt: { type: 'string', description: 'Descripción base o ideas provistas por el usuario' },
+          platforms: { type: 'array', items: { type: 'string' }, description: 'Plataformas destino (para ajustar hashtags y tono)' }
+        },
+        required: [],
+        additionalProperties: false,
+      },
+      execute: async ({ prompt = '', platforms = [] } = {}) => {
+        wantCaptionSuggest = true;
+        return { shown: true, widget: 'caption-suggest', prompt, platforms };
+      },
+    });
+
     const { text } = await generateText({
       model: google('gemini-2.5-flash'),
       messages: convertToModelMessages(normalized),
-      tools: { showSupportedNetworks, showPostPublishSelection, requestInstagramCredentials, requestFacebookAuth, requestYouTubeAuth, requestTikTokAuth, showLogoutControl, showClearChatControl },
+      tools: { showSupportedNetworks, showPostPublishSelection, requestInstagramCredentials, requestFacebookAuth, requestYouTubeAuth, requestTikTokAuth, showLogoutControl, showClearChatControl, suggestCaption },
       maxTokens: 1000,
       temperature: 0.7,
       maxSteps: 3,
@@ -161,6 +180,7 @@ export async function POST(req) {
     if (wantTikTokAuth) widgets.push('tiktok-auth');
     if (wantLogout) widgets.push('logout');
     if (wantClearChat) widgets.push('clear-chat');
+    if (wantCaptionSuggest) widgets.push('caption-suggest');
 
     return Response.json({ text, widgets });
   } catch (error) {

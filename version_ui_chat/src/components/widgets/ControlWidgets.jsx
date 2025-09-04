@@ -336,3 +336,40 @@ export const PostPublishWidget = ({ onContinue, defaultSelected = [], onChangeTa
     </div>
   );
 };
+
+export const CaptionSuggestWidget = ({ caption = '', onAccept, onRegenerate, onCustom }) => {
+  return (
+    <div className="flex flex-col gap-3 rounded-xl border border-emerald-200 bg-white p-4">
+      <div className="flex items-center gap-2">
+        <div className="h-1 w-8 rounded-full bg-gradient-to-r from-emerald-400 to-teal-400" />
+        <p className="text-sm font-semibold text-gray-800">Descripción sugerida</p>
+      </div>
+      <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm text-gray-800 whitespace-pre-wrap">
+        {caption || '—'}
+      </div>
+      <div className="flex items-center justify-end gap-2">
+        <button
+          type="button"
+          onClick={() => typeof onRegenerate === 'function' && onRegenerate()}
+          className="inline-flex items-center gap-2 rounded-lg bg-gray-100 px-3 py-1.5 text-xs text-gray-800 hover:bg-gray-200"
+        >
+          Regenerar
+        </button>
+        <button
+          type="button"
+          onClick={() => typeof onCustom === 'function' && onCustom()}
+          className="inline-flex items-center gap-2 rounded-lg bg-amber-100 px-3 py-1.5 text-xs text-amber-900 hover:bg-amber-200"
+        >
+          Escribir la mía
+        </button>
+        <button
+          type="button"
+          onClick={() => typeof onAccept === 'function' && onAccept(caption)}
+          className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs text-white hover:bg-emerald-700"
+        >
+          Usar esta
+        </button>
+      </div>
+    </div>
+  );
+};

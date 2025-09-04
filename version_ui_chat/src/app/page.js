@@ -12,6 +12,7 @@ import { FacebookAuthWidget as FacebookAuthWidgetExt, FacebookConnectedWidget as
 import { YouTubeAuthWidget as YouTubeAuthWidgetExt, YouTubeConnectedWidget as YouTubeConnectedWidgetExt } from "@/components/widgets/YouTubeWidgets";
 import { TikTokAuthWidget as TikTokAuthWidgetExt, TikTokConnectedWidget as TikTokConnectedWidgetExt } from "@/components/widgets/TikTokWidgets";
 import { LogoutWidget as LogoutWidgetExt, ClearChatWidget as ClearChatWidgetExt, PlatformsWidget as PlatformsWidgetExt, PostPublishWidget as PostPublishWidgetExt } from "@/components/widgets/ControlWidgets";
+import { CaptionSuggestWidget as CaptionSuggestWidgetExt } from "@/components/widgets/ControlWidgets";
 import { upsertInstagramCreds, upsertFacebookToken, upsertYouTubeToken, upsertTikTokToken } from "@/lib/apiHelpers";
 import { saveMessageToDB, loadHistoryForCurrentUser } from "@/lib/databaseUtils";
 
@@ -43,6 +44,7 @@ export default function Home() {
   const [publishStage, setPublishStage] = useState('idle'); // 'idle' | 'await-media' | 'await-description'
   const [publishTargets, setPublishTargets] = useState([]);
   const [widgetTargetDrafts, setWidgetTargetDrafts] = useState({});
+  const [customCaptionMode, setCustomCaptionMode] = useState(false);
 
   // Helper to generate robust unique IDs for messages to avoid duplicate React keys
   const newId = (suffix = "msg") => {
@@ -171,6 +173,12 @@ export default function Home() {
           if (rType === "widget-clear-chat") {
             return { id: r.id, role: "assistant", type: "widget-clear-chat" };
           }
+          if (rType === "widget-caption-suggest") {
+            const caption = r?.meta?.caption || '';
+            const base = r?.meta?.base || '';
+            const targets = Array.isArray(r?.meta?.targets) ? r.meta.targets : [];
+            return { id: r.id, role: "assistant", type: "widget-caption-suggest", meta: { caption, base, targets } };
+          }
 
           return { id: r.id, role: "assistant", type: "text", content: r.content };
         }
@@ -203,7 +211,7 @@ export default function Home() {
       if (lastAskDescIndex >= 0) {
         for (let j = lastAskDescIndex + 1; j < normalized.length; j++) {
           const m = normalized[j];
-          if (m.role === 'assistant' && m.type === 'text' && /^Perfecto\. Redes:/i.test(m.content || '')) {
+          if (m.role === 'assistant' && m.type === 'text' && /El flujo termina aquí por ahora\./i.test(m.content || '')) {
             finalSummaryAfter = true;
             break;
           }
@@ -349,6 +357,7 @@ export default function Home() {
       const confirm = { id: newId('cancel-publish'), role: 'assistant', type: 'text', content: 'Entendido, cancelé el flujo de publicación. Cuando quieras, podemos volver a empezar.' };
       setPublishStage('idle');
       setPublishTargets([]);
+      setCustomCaptionMode(false);
       setMessages((prev) => [...prev, confirm]);
       await saveMessageToDB({ userId, role: 'assistant', content: confirm.content, attachments: null, type: 'text' });
       return;
@@ -364,6 +373,7 @@ export default function Home() {
         return;
       } else {
         setPublishStage('await-description');
+        setCustomCaptionMode(false);
         const step3 = { id: newId('ask-description'), role: 'assistant', type: 'text', content: 'Paso 3: Ahora escribe la descripción para el post.' };
         setMessages((prev) => [
           ...prev,
@@ -382,16 +392,49 @@ export default function Home() {
         ]);
         return;
       } else {
-        const targets = (publishTargets || []).join(', ');
-        const summary = `Perfecto. Redes: ${targets || '—'}. Descripción recibida. El flujo termina aquí por ahora.`;
-        setMessages((prev) => [
-          ...prev,
-          { id: newId('done-publish'), role: 'assistant', type: 'text', content: summary },
-        ]);
-        await saveMessageToDB({ userId, role: 'assistant', content: summary, attachments: null, type: 'text' });
-        setPublishStage('idle');
-        setPublishTargets([]);
-        return;
+        // Si el usuario eligió "Escribir la mía", tomar su siguiente mensaje como final
+        if (customCaptionMode) {
+          const targets = (publishTargets || []).join(', ');
+          const finalMsg = `Perfecto. Redes: ${targets || '—'}. Descripción final:\n${trimmed}`;
+          setMessages((prev) => [
+            ...prev,
+            { id: newId('caption-final-user'), role: 'assistant', type: 'text', content: finalMsg },
+          ]);
+          await saveMessageToDB({ userId, role: 'assistant', content: finalMsg, attachments: null, type: 'text' });
+          setPublishStage('idle');
+          setPublishTargets([]);
+          setCustomCaptionMode(false);
+          return;
+        }
+        // Generar una descripción profesional en base al texto del usuario
+        const targetsArr = publishTargets || [];
+        const targets = targetsArr.join(', ');
+        const prompt = `Genera una descripción profesional y atractiva en español para redes sociales, con base en este texto del usuario. Requisitos: 2-4 líneas, tono natural y claro, 2-5 hashtags relevantes (sin exceso), 0-2 emojis discretos, incluir un CTA sutil si aplica. Devuelve solo el texto final (sin comillas ni explicaciones).\n\nTexto base:\n${trimmed}\n\nPlataformas destino: ${targets || 'generales'}`;
+        try {
+          const res = await fetch('/api/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ messages: [{ role: 'user', content: prompt }] }),
+          });
+          const data = await res.json();
+          const suggestion = (data?.text || '').trim();
+          const preface = { id: newId('caption-preface'), role: 'assistant', type: 'text', content: `Perfecto. Redes: ${targets || '—'}. Te propongo esta descripción:` };
+          const capMeta = { caption: suggestion || trimmed, base: trimmed, targets: targetsArr };
+          const capWidget = { id: newId('caption-suggest'), role: 'assistant', type: 'widget-caption-suggest', meta: capMeta };
+          setMessages((prev) => [...prev, preface, capWidget]);
+          await saveMessageToDB({ userId, role: 'assistant', content: preface.content, attachments: null, type: 'text' });
+          await saveMessageToDB({ userId, role: 'assistant', content: '', attachments: null, type: 'widget-caption-suggest', meta: capMeta });
+          // Nos mantenemos en await-description para permitir "regenerar" o "escribir la mía".
+          return;
+        } catch (e) {
+          const fallback = `Perfecto. Redes: ${targets || '—'}. Usa esta descripción o edítala: ${trimmed}`;
+          setMessages((prev) => [...prev, { id: newId('caption-fallback'), role: 'assistant', type: 'text', content: fallback }]);
+          await saveMessageToDB({ userId, role: 'assistant', content: fallback, attachments: null, type: 'text' });
+          setPublishStage('idle');
+          setPublishTargets([]);
+          setCustomCaptionMode(false);
+          return;
+        }
       }
     }
 
@@ -422,6 +465,7 @@ export default function Home() {
         const widgetTypeMap = {
           platforms: "widget-platforms",
           "post-publish": "widget-post-publish",
+          "caption-suggest": "widget-caption-suggest",
           "instagram-credentials": "widget-instagram-credentials",
           "facebook-auth": "widget-facebook-auth",
           "youtube-auth": "widget-youtube-auth",
@@ -749,6 +793,7 @@ export default function Home() {
                         // Guardar en estado y pasar a pedir medios
                         setPublishTargets(selected || []);
                         setPublishStage('await-media');
+                        setCustomCaptionMode(false);
                         // Insertar instrucción clara del paso 2 y el widget de espera
                         setMessages((prev) => [
                           ...prev,
@@ -790,6 +835,68 @@ export default function Home() {
                         <div className="text-[11px] text-gray-500">Seleccionaste: {sel.join(', ')}</div>
                       )}
                     </div>
+                  </AssistantMessage>
+                );
+              }
+              // NUEVO: Render del widget de sugerencia de descripción
+              if (m.type === "widget-caption-suggest") {
+                const meta = m.meta || {};
+                const caption = meta.caption || '';
+                const base = meta.base || '';
+                const targets = Array.isArray(meta.targets) ? meta.targets : [];
+                return (
+                  <AssistantMessage key={m.id} borderClass="border-emerald-200">
+                    <CaptionSuggestWidgetExt
+                      caption={caption}
+                      onAccept={async (finalCaption) => {
+                        try {
+                          const { data: sessionData } = await getSessionOnce();
+                          const userId = sessionData?.session?.user?.id;
+                          const t = targets && targets.length ? targets.join(', ') : '—';
+                          const summary = `Perfecto. Redes: ${t}. Descripción final:\n${finalCaption || caption || base || '—'}`;
+                          setMessages((prev) => [
+                            ...prev,
+                            { id: newId('caption-final'), role: 'assistant', type: 'text', content: summary },
+                          ]);
+                          if (userId) {
+                            await saveMessageToDB({ userId, role: 'assistant', content: summary, attachments: null, type: 'text' });
+                          }
+                          setPublishStage('idle');
+                          setPublishTargets([]);
+                          setCustomCaptionMode(false);
+                        } catch (_) {}
+                      }}
+                      onRegenerate={async () => {
+                        try {
+                          const { data: sessionData } = await getSessionOnce();
+                          const userId = sessionData?.session?.user?.id;
+                          const t = targets && targets.length ? targets.join(', ') : 'generales';
+                          const prompt = `Genera una descripción profesional y atractiva en español para redes sociales, con base en este texto del usuario. Requisitos: 2-4 líneas, tono natural y claro, 2-5 hashtags relevantes (sin exceso), 0-2 emojis discretos, incluir un CTA sutil si aplica. Devuelve solo el texto final (sin comillas ni explicaciones).\n\nTexto base:\n${base || caption}\n\nPlataformas destino: ${t}`;
+                          const res = await fetch('/api/chat', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ messages: [{ role: 'user', content: prompt }] }),
+                          });
+                          const data = await res.json();
+                          const suggestion = (data?.text || '').trim() || caption || base || '';
+                          const pre = { id: newId('caption-preface-2'), role: 'assistant', type: 'text', content: 'Otra propuesta:' };
+                          const capMeta = { caption: suggestion, base: base || caption || '', targets };
+                          const capWidget = { id: newId('caption-suggest-2'), role: 'assistant', type: 'widget-caption-suggest', meta: capMeta };
+                          setMessages((prev) => [...prev, pre, capWidget]);
+                          if (userId) {
+                            await saveMessageToDB({ userId, role: 'assistant', content: pre.content, attachments: null, type: 'text' });
+                            await saveMessageToDB({ userId, role: 'assistant', content: '', attachments: null, type: 'widget-caption-suggest', meta: capMeta });
+                          }
+                        } catch (_) {}
+                      }}
+                      onCustom={() => {
+                        setCustomCaptionMode(true);
+                        setMessages((prev) => [
+                          ...prev,
+                          { id: newId('caption-custom'), role: 'assistant', type: 'text', content: 'Perfecto, escribe la descripción que prefieras y la usaré como final.' },
+                        ]);
+                      }}
+                    />
                   </AssistantMessage>
                 );
               }
