@@ -103,6 +103,20 @@ export default function Home() {
             sawAwaitMedia = true;
             return { id: r.id, role: "assistant", type: "widget-await-media", meta: targets ? { targets } : undefined };
           }
+          if (rType === "internal-targets") {
+            // Mensaje interno para restaurar targets si la columna meta no existe o no se guardó
+            try {
+              let parsed = null;
+              if (typeof r.content === 'string' && r.content.trim()) {
+                parsed = JSON.parse(r.content);
+              } else if (r?.meta?.targets) {
+                parsed = { targets: r.meta.targets };
+              }
+              const t = Array.isArray(parsed) ? parsed : (Array.isArray(parsed?.targets) ? parsed.targets : null);
+              if (t && !restoreTargets) restoreTargets = t;
+            } catch (_) {}
+            return null; // No renderizar en UI
+          }
           if (rType === "widget-auth-gate") {
             // Por defecto no re-renderizamos el gate tras login.
           }
@@ -701,7 +715,9 @@ export default function Home() {
                         ]);
                         // Persistir ambos mensajes para que no desaparezcan tras recargar
                         await saveMessageToDB({ userId, role: 'assistant', content: 'Paso 2: Por favor sube las imágenes o videos para el post.', attachments: null, type: 'text' });
-                        await saveMessageToDB({ userId, role: 'assistant', content: '', attachments: null, type: 'widget-await-media' });
+                        await saveMessageToDB({ userId, role: 'assistant', content: '', attachments: null, type: 'widget-await-media', meta: { targets: selected || [] } });
+                        // Persistencia redundante de redes seleccionadas (por si no existe la columna meta)
+                        await saveMessageToDB({ userId, role: 'assistant', content: JSON.stringify({ targets: selected || [] }), attachments: null, type: 'internal-targets' });
                       } catch (e) {
                         setMessages((prev) => [
                           ...prev,
