@@ -409,12 +409,12 @@ export default function Home() {
         // Generar una descripción profesional en base al texto del usuario
         const targetsArr = publishTargets || [];
         const targets = targetsArr.join(', ');
-        const prompt = `Genera una descripción profesional y atractiva en español para redes sociales, con base en este texto del usuario. Requisitos: 2-4 líneas, tono natural y claro, 2-5 hashtags relevantes (sin exceso), 0-2 emojis discretos, incluir un CTA sutil si aplica. Devuelve solo el texto final (sin comillas ni explicaciones).\n\nTexto base:\n${trimmed}\n\nPlataformas destino: ${targets || 'generales'}`;
+        const prompt = `Genera una descripción profesional y atractiva en español para redes sociales, con base en este texto del usuario. Requisitos: 2-4 líneas, tono natural y claro, 2-5 hashtags relevantes (sin exceso), 0-2 emojis discretos, incluir un CTA sutil si aplica. Devuelve solo el texto final del caption. Contexto de plataformas: ${targets || 'generales'}. Texto base: ${trimmed}`;
         try {
           const res = await fetch('/api/chat', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ messages: [{ role: 'user', content: prompt }] }),
+            body: JSON.stringify({ mode: 'caption', prompt: `${trimmed}\nPlataformas destino: ${targets || 'generales'}` }),
           });
           const data = await res.json();
           const suggestion = (data?.text || '').trim();
@@ -871,11 +871,11 @@ export default function Home() {
                           const { data: sessionData } = await getSessionOnce();
                           const userId = sessionData?.session?.user?.id;
                           const t = targets && targets.length ? targets.join(', ') : 'generales';
-                          const prompt = `Genera una descripción profesional y atractiva en español para redes sociales, con base en este texto del usuario. Requisitos: 2-4 líneas, tono natural y claro, 2-5 hashtags relevantes (sin exceso), 0-2 emojis discretos, incluir un CTA sutil si aplica. Devuelve solo el texto final (sin comillas ni explicaciones).\n\nTexto base:\n${base || caption}\n\nPlataformas destino: ${t}`;
+                          const prompt = `Genera una descripción profesional y atractiva en español para redes sociales, con base en este texto del usuario. Requisitos: 2-4 líneas, tono natural y claro, 2-5 hashtags relevantes (sin exceso), 0-2 emojis discretos, incluir un CTA sutil si aplica. Devuelve solo el texto final del caption. Contexto de plataformas: ${t}. Texto base: ${base || caption || ''}`;
                           const res = await fetch('/api/chat', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ messages: [{ role: 'user', content: prompt }] }),
+                            body: JSON.stringify({ mode: 'caption', prompt: `${base || caption || ''}\nPlataformas destino: ${t}` }),
                           });
                           const data = await res.json();
                           const suggestion = (data?.text || '').trim() || caption || base || '';

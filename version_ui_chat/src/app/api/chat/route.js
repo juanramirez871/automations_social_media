@@ -3,7 +3,40 @@ import { generateText, convertToModelMessages, tool } from 'ai';
 
 export async function POST(req) {
   try {
-    const { messages } = await req.json();
+    const payload = await req.json();
+    const { messages, mode, prompt } = payload || {};
+
+    // Modo dedicado para generar un caption de forma directa (sin tools)
+    if (mode === 'caption') {
+      try {
+        const captionSystem = `Eres un redactor experto de captions en español para redes sociales.
+- Escribe una descripción breve y profesional (2-4 líneas), tono natural y claro.
+- Incluye 2-5 hashtags relevantes (al final), 0-2 emojis discretos si corresponde.
+- Agrega un CTA sutil solo si aplica.
+Reglas de salida: Devuelve únicamente el texto final del caption, sin comillas, sin encabezados ni explicaciones.`;
+        const userText = typeof prompt === 'string' && prompt
+          ? prompt
+          : (Array.isArray(messages) && messages.length > 0 ? (typeof messages[messages.length - 1]?.content === 'string' ? messages[messages.length - 1].content : '') : '');
+
+        const { text } = await generateText({
+          model: google('gemini-2.5-flash'),
+          messages: convertToModelMessages([
+            { role: 'system', parts: [{ type: 'text', text: captionSystem }] },
+            { role: 'user', parts: [{ type: 'text', text: userText }] },
+          ]),
+          maxTokens: 400,
+          temperature: 0.7,
+        });
+
+        return Response.json({ text, widgets: [] });
+      } catch (error) {
+        console.error('Error en API chat (caption mode):', error);
+        return new Response(
+          JSON.stringify({ error: 'Error generando la descripción' }),
+          { status: 500, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
+    }
 
     const roroSystemText = `Eres Roro, un asistente experto en redes sociales para crear, planear y publicar contenido.
 - Sugerir optimizaciones específicas por plataforma (longitud del copy, tono, hashtags, CTA, horarios, formatos, relación imagen/video/copy).
@@ -37,7 +70,7 @@ export async function POST(req) {
       ...(!hasOnTopic && hasOffTopic
         ? [{ role: 'system', parts: [{ type: 'text', text: 'El mensaje del usuario parece fuera del ámbito de redes sociales. Responde exactamente: "No puedo ayudarte con eso" y no agregues nada más.' }] }]
         : []),
-      ...messages,
+      ...(Array.isArray(messages) ? messages : []),
     ];
 
     // Normalizar a formato con parts para evitar errores
