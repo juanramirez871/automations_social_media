@@ -78,6 +78,8 @@ export const InstagramAuthWidget = ({ widgetId, onConnected, onError }) => {
       try {
         if (!ev?.data || ev.origin !== window.location.origin) return;
         if (ev.data?.source !== 'ig-oauth') return;
+        // Filtra por widgetId si viene especificado desde el backend
+        if (ev.data?.widgetId && widgetId && ev.data.widgetId !== widgetId) return;
         if (handledRef.current) return;
         handledRef.current = true;
 
@@ -114,8 +116,9 @@ export const InstagramAuthWidget = ({ widgetId, onConnected, onError }) => {
     const height = window.innerHeight || document.documentElement.clientHeight || screen.height;
     const left = ((width - w) / 2) + dualScreenLeft;
     const top = ((height - h) / 2) + dualScreenTop;
+    const url = `/api/instagram/login${widgetId ? `?widgetId=${encodeURIComponent(widgetId)}` : ''}`;
     window.open(
-      "/api/instagram/login",
+      url,
       "ig_oauth",
       `scrollbars=yes,width=${w},height=${h},top=${top},left=${left}`
     );

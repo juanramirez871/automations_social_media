@@ -685,7 +685,11 @@ export default function Home() {
                             igId: user?.id || null,
                             expiresAt,
                           };
-                          setMessages((prev) => [...prev, connected]);
+                          // Reemplazar cualquier widget conectado previo por el nuevo
+                          setMessages((prev) => {
+                            const filtered = prev.filter((mm) => mm.type !== "widget-instagram-connected");
+                            return [...filtered, connected];
+                          });
                           await saveMessageToDB({ userId, role: "assistant", content: "", attachments: null, type: "widget-instagram-connected", meta: { username: connected.username, igId: connected.igId, expiresAt: connected.expiresAt } });
                         } catch (err) {
                           setMessages((prev) => [
