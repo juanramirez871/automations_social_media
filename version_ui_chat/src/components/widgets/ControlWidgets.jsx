@@ -409,3 +409,70 @@ export const CaptionSuggestWidget = ({ caption = '', onAccept, onRegenerate, onC
     </div>
   );
 };
+
+export const ScheduleWidget = ({ defaultValue = null, onConfirm }) => {
+  const [busy, setBusy] = useState(false);
+  const [value, setValue] = useState(() => {
+    if (defaultValue) return defaultValue;
+    // Default: next full half-hour in local time
+    const now = new Date();
+    now.setMinutes(now.getMinutes() + (30 - (now.getMinutes() % 30 || 30)));
+    now.setSeconds(0, 0);
+    const pad = (n) => String(n).padStart(2, '0');
+    const local = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
+    return local;
+  });
+
+  const minValue = (() => {
+    const now = new Date();
+    now.setMinutes(now.getMinutes() - 1);
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
+  })();
+
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Local';
+
+  const handleConfirm = async () => {
+    if (!onConfirm || typeof onConfirm !== 'function') return;
+    if (!value) return;
+    try {
+      setBusy(true);
+      await onConfirm(value);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="flex flex-col gap-4 rounded-xl border border-violet-200 bg-white p-4">
+      <div className="flex items-center gap-2">
+        <div className="h-1 w-8 rounded-full bg-gradient-to-r from-violet-400 to-purple-400" />
+        <p className="text-sm font-semibold text-gray-800">Programar publicación</p>
+      </div>
+      <div className="text-xs text-gray-600">Elige la fecha y hora para subir el post. Zona horaria: <span className="font-medium">{tz}</span>.</div>
+      <div className="flex items-center gap-3">
+        <input
+          type="datetime-local"
+          value={value || ''}
+          onChange={(e) => setValue(e.target.value)}
+          min={minValue}
+          className="block w-full max-w-[280px] rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-violet-400 focus:border-violet-300"
+        />
+        <button
+          type="button"
+          onClick={handleConfirm}
+          disabled={busy || !value}
+          aria-busy={busy}
+          className="inline-flex items-center gap-2 rounded-lg bg-violet-600 px-3 py-2 text-xs text-white transition-all duration-200 ease-out hover:bg-violet-700 hover:-translate-y-0.5 hover:shadow-sm active:scale-95 disabled:opacity-50 disabled:pointer-events-none"
+        >
+          {busy ? (
+            <span className="size-3.5 rounded-full border-2 border-white/60 border-t-transparent animate-spin" aria-hidden="true"></span>
+          ) : (
+            <svg viewBox="0 0 24 24" className="size-4" aria-hidden="true"><path fill="currentColor" d="M7 10h5v5H7z"/><path fill="currentColor" d="M19 3h-1V1h-2v2H8V1H6v2H5a2 2 0 00-2 2v13a2 2 0 002 2h14a2 2 0 002-2V5a2 2 0 00-2-2zm0 15H5V8h14v10z"/></svg>
+          )}
+          Confirmar
+        </button>
+      </div>
+    </div>
+  );
+};

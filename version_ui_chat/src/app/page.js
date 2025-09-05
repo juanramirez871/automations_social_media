@@ -12,7 +12,7 @@ import { FacebookAuthWidget as FacebookAuthWidgetExt, FacebookConnectedWidget as
 import { YouTubeAuthWidget as YouTubeAuthWidgetExt, YouTubeConnectedWidget as YouTubeConnectedWidgetExt } from "@/components/widgets/YouTubeWidgets";
 import { TikTokAuthWidget as TikTokAuthWidgetExt, TikTokConnectedWidget as TikTokConnectedWidgetExt } from "@/components/widgets/TikTokWidgets";
 import { LogoutWidget as LogoutWidgetExt, ClearChatWidget as ClearChatWidgetExt, PlatformsWidget as PlatformsWidgetExt, PostPublishWidget as PostPublishWidgetExt } from "@/components/widgets/ControlWidgets";
-import { CaptionSuggestWidget as CaptionSuggestWidgetExt } from "@/components/widgets/ControlWidgets";
+import { CaptionSuggestWidget as CaptionSuggestWidgetExt, ScheduleWidget as ScheduleWidgetExt } from "@/components/widgets/ControlWidgets";
 import { upsertInstagramCreds, upsertFacebookToken, upsertYouTubeToken, upsertTikTokToken } from "@/lib/apiHelpers";
 import { saveMessageToDB, loadHistoryForCurrentUser } from "@/lib/databaseUtils";
 
@@ -178,6 +178,10 @@ export default function Home() {
             const base = r?.meta?.base || '';
             const targets = Array.isArray(r?.meta?.targets) ? r.meta.targets : [];
             return { id: r.id, role: "assistant", type: "widget-caption-suggest", meta: { caption, base, targets } };
+          }
+          if (rType === "widget-schedule") {
+            const defaultValue = r?.meta?.defaultValue || r?.meta?.value || null;
+            return { id: r.id, role: "assistant", type: "widget-schedule", meta: { defaultValue } };
           }
 
           return { id: r.id, role: "assistant", type: "text", content: r.content };
@@ -396,13 +400,18 @@ export default function Home() {
         if (customCaptionMode) {
           const targets = (publishTargets || []).join(', ');
           const finalMsg = `Perfecto. Redes: ${targets || '—'}. Descripción final:\n${trimmed}`;
+          const schedulePreface = { id: newId('schedule-preface-user'), role: 'assistant', type: 'text', content: 'Paso final: agenda la subida del post. Indica la fecha y hora.' };
+          const scheduleWidget = { id: newId('schedule-widget-user'), role: 'assistant', type: 'widget-schedule', meta: { defaultValue: null } };
           setMessages((prev) => [
             ...prev,
             { id: newId('caption-final-user'), role: 'assistant', type: 'text', content: finalMsg },
+            schedulePreface,
+            scheduleWidget,
           ]);
           await saveMessageToDB({ userId, role: 'assistant', content: finalMsg, attachments: null, type: 'text' });
+          await saveMessageToDB({ userId, role: 'assistant', content: schedulePreface.content, attachments: null, type: 'text' });
+          await saveMessageToDB({ userId, role: 'assistant', content: '', attachments: null, type: 'widget-schedule', meta: { defaultValue: null } });
           setPublishStage('idle');
-          setPublishTargets([]);
           setCustomCaptionMode(false);
           return;
         }
@@ -428,10 +437,13 @@ export default function Home() {
           return;
         } catch (e) {
           const fallback = `Perfecto. Redes: ${targets || '—'}. Usa esta descripción o edítala: ${trimmed}`;
-          setMessages((prev) => [...prev, { id: newId('caption-fallback'), role: 'assistant', type: 'text', content: fallback }]);
+          const schedulePreface = { id: newId('schedule-preface-fallback'), role: 'assistant', type: 'text', content: 'Paso final: agenda la subida del post. Indica la fecha y hora.' };
+          const scheduleWidget = { id: newId('schedule-widget-fallback'), role: 'assistant', type: 'widget-schedule', meta: { defaultValue: null } };
+          setMessages((prev) => [...prev, { id: newId('caption-fallback'), role: 'assistant', type: 'text', content: fallback }, schedulePreface, scheduleWidget]);
           await saveMessageToDB({ userId, role: 'assistant', content: fallback, attachments: null, type: 'text' });
+          await saveMessageToDB({ userId, role: 'assistant', content: schedulePreface.content, attachments: null, type: 'text' });
+          await saveMessageToDB({ userId, role: 'assistant', content: '', attachments: null, type: 'widget-schedule', meta: { defaultValue: null } });
           setPublishStage('idle');
-          setPublishTargets([]);
           setCustomCaptionMode(false);
           return;
         }
@@ -854,15 +866,20 @@ export default function Home() {
                           const userId = sessionData?.session?.user?.id;
                           const t = targets && targets.length ? targets.join(', ') : '—';
                           const summary = `Perfecto. Redes: ${t}. Descripción final:\n${finalCaption || caption || base || '—'}`;
+                          const schedulePreface = { id: newId('schedule-preface'), role: 'assistant', type: 'text', content: 'Paso final: agenda la subida del post. Indica la fecha y hora.' };
+                          const scheduleWidget = { id: newId('schedule-widget'), role: 'assistant', type: 'widget-schedule', meta: { defaultValue: null } };
                           setMessages((prev) => [
                             ...prev,
                             { id: newId('caption-final'), role: 'assistant', type: 'text', content: summary },
+                            schedulePreface,
+                            scheduleWidget,
                           ]);
                           if (userId) {
                             await saveMessageToDB({ userId, role: 'assistant', content: summary, attachments: null, type: 'text' });
+                            await saveMessageToDB({ userId, role: 'assistant', content: schedulePreface.content, attachments: null, type: 'text' });
+                            await saveMessageToDB({ userId, role: 'assistant', content: '', attachments: null, type: 'widget-schedule', meta: { defaultValue: null } });
                           }
                           setPublishStage('idle');
-                          setPublishTargets([]);
                           setCustomCaptionMode(false);
                         } catch (_) {}
                       }}
@@ -895,6 +912,33 @@ export default function Home() {
                           ...prev,
                           { id: newId('caption-custom'), role: 'assistant', type: 'text', content: 'Perfecto, escribe la descripción que prefieras y la usaré como final.' },
                         ]);
+                      }}
+                    />
+                  </AssistantMessage>
+                );
+              }
+              if (m.type === "widget-schedule") {
+                const def = m?.meta?.defaultValue || null;
+                return (
+                  <AssistantMessage key={m.id} borderClass="border-violet-200">
+                    <ScheduleWidgetExt
+                      defaultValue={def}
+                      onConfirm={async (value) => {
+                        try {
+                          const { data: sessionData } = await getSessionOnce();
+                          const userId = sessionData?.session?.user?.id;
+                          const when = new Date(value);
+                          const pretty = isNaN(when.getTime()) ? value : when.toLocaleString();
+                          const confirm = { id: newId('schedule-confirm'), role: 'assistant', type: 'text', content: `Perfecto. Programé la subida para ${pretty}.` };
+                          setMessages((prev) => [...prev, confirm]);
+                          if (userId) {
+                            await saveMessageToDB({ userId, role: 'assistant', content: '', attachments: null, type: 'internal-schedule', meta: { value } });
+                            await saveMessageToDB({ userId, role: 'assistant', content: confirm.content, attachments: null, type: 'text' });
+                          }
+                          setPublishStage('idle');
+                          setPublishTargets([]);
+                          setCustomCaptionMode(false);
+                        } catch (_) {}
                       }}
                     />
                   </AssistantMessage>
