@@ -125,6 +125,10 @@ export default function Home() {
             } catch (_) {}
             return null; // No renderizar en UI
           }
+          if (rType === "internal-schedule") {
+            // Mensaje interno para almacenar el horario de publicación. No debe mostrarse en el chat.
+            return null; // No renderizar en UI
+          }
           if (rType === "widget-auth-gate") {
             return { id: r.id, role: "assistant", type: "widget-auth-gate" };
           }
