@@ -26,7 +26,7 @@ async function fetchProfileStatusOnce(userId) {
   const p = (async () => {
     const { data, error } = await supabase
       .from('profiles')
-      .select('instagram_username, userinstagram, facebook_access_token, facebook_user_id, facebook_granted_scopes, youtube_access_token, youtube_channel_id, youtube_channel_title, tiktok_access_token, tiktok_open_id, tiktok_granted_scopes')
+      .select('instagram_username, facebook_access_token, facebook_user_id, facebook_granted_scopes, youtube_access_token, youtube_channel_id, youtube_channel_title, tiktok_access_token, tiktok_open_id, tiktok_granted_scopes')
       .eq('id', userId)
       .maybeSingle();
     if (!error && data) profileStatusCache.set(userId, data);
@@ -141,7 +141,7 @@ export const PlatformsWidget = () => {
         const { data, error } = await fetchProfileStatusOnce(userId);
         if (error) throw error;
 
-        const instagramUsername = data?.instagram_username || data?.userinstagram || null;
+        const instagramUsername = data?.instagram_username  || null;
         const hasFB = !!data?.facebook_access_token;
         const fbUserId = data?.facebook_user_id || null;
         const fbScopes = data?.facebook_granted_scopes || null;

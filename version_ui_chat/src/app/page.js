@@ -7,13 +7,13 @@ import UserMessage from "@/components/UserMessage";
 import Composer from "@/components/Composer";
 import { supabase } from "@/lib/supabaseClient";
 import { AuthGateWidget as AuthGateWidgetExt, AuthFormWidget as AuthFormWidgetExt } from "@/components/widgets/AuthWidgets";
-import { InstagramCredentialsWidget as InstagramCredentialsWidgetExt, InstagramConfiguredWidget as InstagramConfiguredWidgetExt } from "@/components/widgets/InstagramWidgets";
+import { InstagramAuthWidget as InstagramAuthWidgetExt, InstagramConnectedWidget as InstagramConnectedWidgetExt } from "@/components/widgets/InstagramWidgets";
 import { FacebookAuthWidget as FacebookAuthWidgetExt, FacebookConnectedWidget as FacebookConnectedWidgetExt } from "@/components/widgets/FacebookWidgets";
 import { YouTubeAuthWidget as YouTubeAuthWidgetExt, YouTubeConnectedWidget as YouTubeConnectedWidgetExt } from "@/components/widgets/YouTubeWidgets";
 import { TikTokAuthWidget as TikTokAuthWidgetExt, TikTokConnectedWidget as TikTokConnectedWidgetExt } from "@/components/widgets/TikTokWidgets";
 import { LogoutWidget as LogoutWidgetExt, ClearChatWidget as ClearChatWidgetExt, PlatformsWidget as PlatformsWidgetExt, PostPublishWidget as PostPublishWidgetExt } from "@/components/widgets/ControlWidgets";
 import { CaptionSuggestWidget as CaptionSuggestWidgetExt, ScheduleWidget as ScheduleWidgetExt } from "@/components/widgets/ControlWidgets";
-import { upsertInstagramCreds, upsertFacebookToken, upsertYouTubeToken, upsertTikTokToken } from "@/lib/apiHelpers";
+import { upsertInstagramToken, upsertFacebookToken, upsertYouTubeToken, upsertTikTokToken } from "@/lib/apiHelpers";
 import { saveMessageToDB, loadHistoryForCurrentUser } from "@/lib/databaseUtils";
 
 // Session cache (module-scope) to avoid duplicate supabase.auth.getSession() calls
@@ -136,12 +136,22 @@ export default function Home() {
             return { id: r.id, role: "assistant", type: "widget-auth-form" };
           }
           if (rType === "widget-instagram-credentials") {
-            return { id: r.id, role: "assistant", type: "widget-instagram-credentials" };
+            // Compatibilidad retro: mapear al nuevo flujo OAuth unificado
+            return { id: r.id, role: "assistant", type: "widget-instagram-auth" };
           }
-          if (rType === "widget-instagram-configured") {
-            const name = r?.meta?.name || null;
-            const id = r?.meta?.id || null;
-            return { id: r.id, role: "assistant", type: "widget-instagram-configured", name, igId: id };
+          if (rType === "widget-instagram-auth") {
+            return { id: r.id, role: "assistant", type: "widget-instagram-auth" };
+          }
+           if (rType === "widget-instagram-configured") {
+             const name = r?.meta?.name || null;
+             const id = r?.meta?.id || null;
+             return { id: r.id, role: "assistant", type: "widget-instagram-configured", name, igId: id };
+           }
+          if (rType === "widget-instagram-connected") {
+            const username = r?.meta?.username || r?.meta?.name || null;
+            const igId = r?.meta?.igId || r?.meta?.id || null;
+            const expiresAt = r?.meta?.expiresAt || null;
+            return { id: r.id, role: "assistant", type: "widget-instagram-connected", username, igId, expiresAt };
           }
           if (rType === "widget-facebook-auth") {
             return { id: r.id, role: "assistant", type: "widget-facebook-auth" };
@@ -482,7 +492,7 @@ export default function Home() {
           platforms: "widget-platforms",
           "post-publish": "widget-post-publish",
           "caption-suggest": "widget-caption-suggest",
-          "instagram-credentials": "widget-instagram-credentials",
+          "instagram-auth": "widget-instagram-auth",
           "facebook-auth": "widget-facebook-auth",
           "youtube-auth": "widget-youtube-auth",
           "tiktok-auth": "widget-tiktok-auth",
@@ -644,50 +654,63 @@ export default function Home() {
                   </AssistantMessage>
                 );
               }
-              if (m.type === "widget-instagram-credentials") {
+              if (m.type === "widget-instagram-credentials" || m.type === "widget-instagram-auth") {
                 return (
                   <AssistantMessage key={m.id} borderClass="border-fuchsia-200">
-                    <InstagramCredentialsWidgetExt
+                    <InstagramAuthWidgetExt
                       widgetId={m.id}
-                      onSubmit={async ({ username, password }) => {
-                        const { data: sessionData } = await getSessionOnce();
-                        const userId = sessionData?.session?.user?.id;
-                        if (!userId) {
-                          setMessages((prev) => [
-                            ...prev,
-                            { id: `a-${Date.now()}-ig-error`, role: "assistant", type: "text", content: `Error guardando credenciales de Instagram: Sesión inválida` },
-                          ]);
-                          return;
-                        }
+                      onConnected={async (payload) => {
                         try {
-                          const ok = await upsertInstagramCreds({ userId, username, password });
-                          if (!ok) throw new Error("No fue posible guardar credenciales");
-                          const configured = { id: `a-${Date.now()}-ig-ok`, role: "assistant", type: "widget-instagram-configured", username };
-                          setMessages((prev) => [...prev, configured]);
-                          const { data: sessionData2 } = await getSessionOnce();
-                          const userId2 = sessionData2?.session?.user?.id;
-                          if (userId2) {
-                            await saveMessageToDB({ userId: userId2, role: "assistant", content: "", attachments: null, type: "widget-instagram-configured", meta: { username } });
-                          }
+                          const access_token = payload?.access_token;
+                          const expires_in = payload?.expires_in;
+                          const user = payload?.user || {};
+                          const expiresAt = expires_in ? new Date(Date.now() + Number(expires_in) * 1000).toISOString() : null;
+                          const { data: sessionData } = await getSessionOnce();
+                          const userId = sessionData?.session?.user?.id;
+                          if (!userId) throw new Error("Sesión inválida");
+                          const ok = await upsertInstagramToken({
+                            userId,
+                            token: access_token,
+                            expiresAt,
+                            igUserId: user?.id || null,
+                            igUsername: user?.username || null,
+                            grantedScopes: null,
+                          });
+                          if (!ok) throw new Error("No fue posible guardar el token de Instagram");
+                          const connected = {
+                            id: `a-${Date.now()}-ig-ok`,
+                            role: "assistant",
+                            type: "widget-instagram-connected",
+                            username: user?.username || null,
+                            igId: user?.id || null,
+                            expiresAt,
+                          };
+                          setMessages((prev) => [...prev, connected]);
+                          await saveMessageToDB({ userId, role: "assistant", content: "", attachments: null, type: "widget-instagram-connected", meta: { username: connected.username, igId: connected.igId, expiresAt: connected.expiresAt } });
                         } catch (err) {
                           setMessages((prev) => [
                             ...prev,
-                            { id: `a-${Date.now()}-ig-error`, role: "assistant", type: "text", content: `Error guardando credenciales de Instagram: ${err?.message || err}` },
+                            { id: `a-${Date.now()}-ig-error`, role: "assistant", type: "text", content: `Instagram OAuth error: ${err?.message || err}` },
                           ]);
                         }
+                      }}
+                      onError={(reason) => {
+                        setMessages((prev) => [
+                          ...prev,
+                          { id: `a-${Date.now()}-ig-error`, role: "assistant", type: "text", content: `Instagram OAuth error: ${reason}` },
+                        ]);
                       }}
                     />
                   </AssistantMessage>
                 );
               }
-              if (m.type === "widget-instagram-configured") {
+              if (m.type === "widget-instagram-configured" || m.type === "widget-instagram-connected") {
                 return (
                   <AssistantMessage key={m.id} borderClass="border-fuchsia-200">
-                    <InstagramConfiguredWidgetExt username={m.username} />
+                    <InstagramConnectedWidgetExt igId={m.igId} username={m.username || m.name} expiresAt={m.expiresAt} />
                   </AssistantMessage>
                 );
               }
- 
               if (m.type === "widget-facebook-auth") {
                 return (
                   <AssistantMessage key={m.id} borderClass="border-blue-200">

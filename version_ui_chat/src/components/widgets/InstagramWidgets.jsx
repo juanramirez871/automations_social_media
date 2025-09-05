@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 export const InstagramCredentialsWidget = ({ widgetId, onSubmit }) => {
   const [u, setU] = useState("");
@@ -64,6 +64,106 @@ export const InstagramConfiguredWidget = ({ username }) => (
     <div>
       <p className="text-sm font-medium text-gray-800">Instagram conectado</p>
       <p className="text-xs text-gray-500">@{username} listo para publicar</p>
+    </div>
+  </div>
+);
+
+// Nuevo: OAuth para Instagram
+export const InstagramAuthWidget = ({ widgetId, onConnected, onError }) => {
+  const [connecting, setConnecting] = useState(false);
+  const handledRef = useRef(false);
+
+  useEffect(() => {
+    const onMsg = (ev) => {
+      try {
+        if (!ev?.data || ev.origin !== window.location.origin) return;
+        if (ev.data?.source !== 'ig-oauth') return;
+        if (handledRef.current) return;
+        handledRef.current = true;
+
+        if (!ev.data.ok) {
+          setConnecting(false);
+          onError && onError(ev.data?.error || 'oauth_error');
+          return;
+        }
+
+        const d = ev.data.data || {};
+        const payload = {
+          access_token: d.access_token,
+          expires_in: d.expires_in || null,
+          user: d.user || {},
+        };
+        onConnected && onConnected(payload);
+      } catch (e) {
+        onError && onError(e?.message || 'unknown_error');
+      } finally {
+        setConnecting(false);
+      }
+    };
+    window.addEventListener('message', onMsg);
+    return () => window.removeEventListener('message', onMsg);
+  }, [widgetId, onConnected, onError]);
+
+  const startLogin = () => {
+    setConnecting(true);
+    handledRef.current = false;
+    const w = 600, h = 700;
+    const dualScreenLeft = window.screenLeft !== undefined ? window.screenLeft : window.screenX;
+    const dualScreenTop = window.screenTop !== undefined ? window.screenTop : window.screenY;
+    const width = window.innerWidth || document.documentElement.clientWidth || screen.width;
+    const height = window.innerHeight || document.documentElement.clientHeight || screen.height;
+    const left = ((width - w) / 2) + dualScreenLeft;
+    const top = ((height - h) / 2) + dualScreenTop;
+    window.open(
+      "/api/instagram/login",
+      "ig_oauth",
+      `scrollbars=yes,width=${w},height=${h},top=${top},left=${left}`
+    );
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-3">
+        <div className="relative size-10 shrink-0 rounded-full bg-gradient-to-br from-pink-400 to-fuchsia-500 flex items-center justify-center shadow-inner">
+          <svg viewBox="0 0 24 24" className="size-5" aria-hidden="true">
+            <path fill="#fff" d="M7 2h10a5 5 0 015 5v10a5 5 0 01-5 5H7a5 5 0 01-5-5V7a5 5 0 015-5zm0 2a3 3 0 00-3 3v10a3 3 0 003 3h10a3 3 0 003-3V7a3 3 0 00-3-3H7zm5 3.5a5 5 0 110 10 5 5 0 010-10zm0 2a3 3 0 100 6 3 3 0 000-6zm6.5-.75a1.25 1.25 0 11-2.5 0 1.25 1.25 0 012.5 0z" />
+          </svg>
+        </div>
+        <div>
+          <p className="text-sm font-medium text-gray-800">Instagram</p>
+          <p className="text-xs text-gray-500">Conectar con OAuth</p>
+        </div>
+      </div>
+      <button
+        type="button"
+        onClick={startLogin}
+        disabled={connecting}
+        className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-fuchsia-500 to-pink-500 px-4 py-2 text-white text-sm disabled:opacity-50"
+      >
+        {connecting ? (
+          <span className="size-4 rounded-full border-2 border-white/60 border-t-transparent animate-spin" aria-hidden="true"></span>
+        ) : (
+          <svg viewBox="0 0 24 24" className="size-4" aria-hidden="true"><path fill="currentColor" d="M5 12l5 5L20 7"/></svg>
+        )}
+        {connecting ? "Conectando…" : "Login con Instagram"}
+      </button>
+    </div>
+  );
+};
+
+export const InstagramConnectedWidget = ({ igId, username, expiresAt }) => (
+  <div className="flex items-center gap-3">
+    <div className="relative size-10 shrink-0 rounded-full bg-gradient-to-br from-pink-400 to-fuchsia-500 flex items-center justify-center shadow-inner">
+      <svg viewBox="0 0 24 24" className="size-5" aria-hidden="true">
+        <path fill="#fff" d="M7 2h10a5 5 0 015 5v10a5 5 0 01-5 5H7a5 5 0 01-5-5V7a5 5 0 015-5zm0 2a3 3 0 00-3 3v10a3 3 0 003 3h10a3 3 0 003-3V7a3 3 0 00-3-3H7zm5 3.5a5 5 0 110 10 5 5 0 010-10zm0 2a3 3 0 100 6 3 3 0 000-6zm6.5-.75a1.25 1.25 0 11-2.5 0 1.25 1.25 0 012.5 0z" />
+      </svg>
+    </div>
+    <div>
+      <p className="text-sm font-medium text-gray-800">Instagram conectado</p>
+      <p className="text-xs text-gray-500">{username ? `@${username}` : (igId ? `ID ${igId}` : 'Cuenta conectada')}</p>
+      {expiresAt && (
+        <p className="text-[11px] text-gray-400 mt-1">Token expira: {new Date(expiresAt).toLocaleString()}</p>
+      )}
     </div>
   </div>
 );

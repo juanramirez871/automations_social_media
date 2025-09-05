@@ -55,6 +55,48 @@ export const upsertInstagramCreds = async ({ userId, username, password }) => {
   }
 };
 
+// Leer token de Instagram del perfil
+export const getInstagramToken = async (userId) => {
+  try {
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("instagram_access_token, instagram_expires_at, instagram_user_id, instagram_username, instagram_granted_scopes")
+      .eq("id", userId)
+      .maybeSingle();
+    if (error) throw error;
+    const token = data?.instagram_access_token || null;
+    const expiresAt = data?.instagram_expires_at || null;
+    const igUserId = data?.instagram_user_id || null;
+    const igUsername = data?.instagram_username || null;
+    const grantedScopes = data?.instagram_granted_scopes || null;
+    return { token, expiresAt, igUserId, igUsername, grantedScopes };
+  } catch (e) {
+    console.warn("No se pudo obtener token de Instagram:", e?.message || e);
+    return { token: null, expiresAt: null, igUserId: null, igUsername: null, grantedScopes: null };
+  }
+};
+
+// Guardar/actualizar token de Instagram en perfil
+export const upsertInstagramToken = async ({ userId, token, expiresAt = null, igUserId = null, igUsername = null, grantedScopes = null }) => {
+  try {
+    const row = {
+      id: userId,
+      instagram_access_token: token,
+      instagram_expires_at: expiresAt,
+      instagram_user_id: igUserId,
+      instagram_username: igUsername,
+      instagram_granted_scopes: grantedScopes,
+      updated_at: new Date().toISOString(),
+    };
+    const { error } = await supabase.from("profiles").upsert(row, { onConflict: "id" });
+    if (error) throw error;
+    return true;
+  } catch (e) {
+    console.error("Error guardando token de Instagram:", e?.message || e);
+    return false;
+  }
+};
+
 // Leer token de Facebook del perfil
 export const getFacebookToken = async (userId) => {
   try {

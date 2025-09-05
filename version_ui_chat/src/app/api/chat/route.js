@@ -10,9 +10,9 @@ export async function POST(req) {
     if (mode === 'caption') {
       try {
         const captionSystem = `Eres un redactor experto de captions en español para redes sociales.
-- Escribe una descripción breve y profesional (2-4 líneas), tono natural y claro.
-- Incluye 2-5 hashtags relevantes (al final), 0-2 emojis discretos si corresponde.
-- Agrega un CTA sutil solo si aplica.
+Escribe una descripción breve y profesional (2-4 líneas), tono natural y claro.
+Incluye 2-5 hashtags relevantes (al final), 0-2 emojis discretos si corresponde.
+Agrega un CTA sutil solo si aplica.
 Reglas de salida: Devuelve únicamente el texto final del caption, sin comillas, sin encabezados ni explicaciones.`;
         const userText = typeof prompt === 'string' && prompt
           ? prompt
@@ -39,9 +39,9 @@ Reglas de salida: Devuelve únicamente el texto final del caption, sin comillas,
     }
 
     const roroSystemText = `Eres Roro, un asistente experto en redes sociales para crear, planear y publicar contenido.
-- Sugerir optimizaciones específicas por plataforma (longitud del copy, tono, hashtags, CTA, horarios, formatos, relación imagen/video/copy).
-- Mantenerte estrictamente dentro del tema de redes sociales y automatización de publicaciones.
-- Sé conciso, profesional y útil.`;
+Sugerir optimizaciones específicas por plataforma (longitud del copy, tono, hashtags, CTA, horarios, formatos, relación imagen/video/copy).
+Mantenerte estrictamente dentro del tema de redes sociales y automatización de publicaciones.
+Sé conciso, profesional y útil.`;
 
     const extractText = (m) => {
       if (typeof m?.content === 'string' && m.content) return m.content;
@@ -85,7 +85,7 @@ Reglas de salida: Devuelve únicamente el texto final del caption, sin comillas,
 
     // Herramientas (tools) que la IA puede elegir para mostrar widgets
     let wantPlatforms = false;
-    let wantInstagramCreds = false;
+    let wantInstagramAuth = false;
     let wantFacebookAuth = false;
     let wantYouTubeAuth = false;
     let wantTikTokAuth = false;
@@ -118,13 +118,13 @@ Reglas de salida: Devuelve únicamente el texto final del caption, sin comillas,
       },
     });
 
-    const requestInstagramCredentials = tool({
+    const requestInstagramAuth = tool({
       description:
-        'Muestra un formulario para ingresar credenciales de Instagram cuando el usuario quiera conectar/configurar Instagram o actualizar sus credenciales/cuenta.',
+        'Muestra el widget de autenticación OAuth de Instagram cuando el usuario quiera conectar/configurar Instagram o actualizar su cuenta.',
       parameters: { type: 'object', properties: {}, additionalProperties: false },
       execute: async () => {
-        wantInstagramCreds = true;
-        return { shown: true, widget: 'instagram-credentials' };
+        wantInstagramAuth = true;
+        return { shown: true, widget: 'instagram-auth' };
       },
     });
 
@@ -197,7 +197,7 @@ Reglas de salida: Devuelve únicamente el texto final del caption, sin comillas,
     const { text } = await generateText({
       model: google('gemini-2.5-flash'),
       messages: convertToModelMessages(normalized),
-      tools: { showSupportedNetworks, showPostPublishSelection, requestInstagramCredentials, requestFacebookAuth, requestYouTubeAuth, requestTikTokAuth, showLogoutControl, showClearChatControl, suggestCaption },
+      tools: { showSupportedNetworks, showPostPublishSelection, requestInstagramAuth, requestFacebookAuth, requestYouTubeAuth, requestTikTokAuth, showLogoutControl, showClearChatControl, suggestCaption },
       maxTokens: 1000,
       temperature: 0.7,
       maxSteps: 3,
@@ -207,7 +207,7 @@ Reglas de salida: Devuelve únicamente el texto final del caption, sin comillas,
     const widgets = [];
     if (wantPlatforms) widgets.push('platforms');
     if (wantPostPublish) widgets.push('post-publish');
-    if (wantInstagramCreds) widgets.push('instagram-credentials');
+    if (wantInstagramAuth) widgets.push('instagram-auth');
     if (wantFacebookAuth) widgets.push('facebook-auth');
     if (wantYouTubeAuth) widgets.push('youtube-auth');
     if (wantTikTokAuth) widgets.push('tiktok-auth');
