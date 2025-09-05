@@ -11,6 +11,9 @@ function randomState(len = 32) {
 
 export async function GET(request) {
   try {
+    const url = new URL(request.url);
+    const widgetId = url.searchParams.get("widgetId") || null;
+
     const state = randomState();
     const authUrl = new URL("https://www.instagram.com/oauth/authorize");
     authUrl.searchParams.set("client_id", process.env.INSTAGRAM_APP_ID);
@@ -34,6 +37,16 @@ export async function GET(request) {
       path: "/",
       maxAge: 10 * 60,
     });
+
+    if (widgetId) {
+      res.cookies.set("ig_oauth_widget", widgetId, {
+        httpOnly: true,
+        sameSite: "lax",
+        secure: process.env.NODE_ENV === "production",
+        path: "/",
+        maxAge: 10 * 60,
+      });
+    }
 
     return res;
   } catch (e) {

@@ -78,8 +78,9 @@ export const InstagramAuthWidget = ({ widgetId, onConnected, onError }) => {
       try {
         if (!ev?.data || ev.origin !== window.location.origin) return;
         if (ev.data?.source !== 'ig-oauth') return;
-        // Filtra por widgetId si viene especificado desde el backend
-        if (ev.data?.widgetId && widgetId && ev.data.widgetId !== widgetId) return;
+        // Filtrar por widgetId que inició el flujo: desde callback via cookie o query
+        const msgWidgetId = ev.data?.widgetId || null;
+        if (widgetId && msgWidgetId && msgWidgetId !== widgetId) return;
         if (handledRef.current) return;
         handledRef.current = true;
 

@@ -117,9 +117,15 @@ export async function GET(request) {
       }
     } catch {}
 
+    // Leer widgetId opcional desde cookie para filtrar en el cliente
+    const cookiesStr2 = request.headers.get("cookie") || "";
+    const widgetMatch = cookiesStr2.match(/(?:^|; )ig_oauth_widget=([^;]+)/);
+    const widgetIdFromCookie = widgetMatch ? decodeURIComponent(widgetMatch[1]) : null;
+
     const payload = {
       source: "ig-oauth",
       ok: true,
+      widgetId: widgetIdFromCookie || undefined,
       data: {
         access_token,
         expires_in,
@@ -137,8 +143,9 @@ export async function GET(request) {
       </script>
     </body></html>`;
     const res = new NextResponse(html, { headers: { "Content-Type": "text/html; charset=utf-8" } });
-    // clear state cookie
+    // clear state cookie y widget cookie
     res.cookies.set("ig_oauth_state", "", { path: "/", maxAge: 0 });
+    res.cookies.set("ig_oauth_widget", "", { path: "/", maxAge: 0 });
     return res;
   } catch (e) {
     const html = `<!DOCTYPE html><html><body>

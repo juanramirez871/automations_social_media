@@ -45,6 +45,7 @@ export default function Home() {
   const [publishTargets, setPublishTargets] = useState([]);
   const [widgetTargetDrafts, setWidgetTargetDrafts] = useState({});
   const [customCaptionMode, setCustomCaptionMode] = useState(false);
+  const igConnectPersistingRef = useRef(false);
 
   // Helper to generate robust unique IDs for messages to avoid duplicate React keys
   const newId = (suffix = "msg") => {
@@ -660,44 +661,52 @@ export default function Home() {
                     <InstagramAuthWidgetExt
                       widgetId={m.id}
                       onConnected={async (payload) => {
-                        try {
-                          const access_token = payload?.access_token;
-                          const expires_in = payload?.expires_in;
-                          const user = payload?.user || {};
-                          const expiresAt = expires_in ? new Date(Date.now() + Number(expires_in) * 1000).toISOString() : null;
-                          const { data: sessionData } = await getSessionOnce();
-                          const userId = sessionData?.session?.user?.id;
-                          if (!userId) throw new Error("Sesión inválida");
-                          const ok = await upsertInstagramToken({
-                            userId,
-                            token: access_token,
-                            expiresAt,
-                            igUserId: user?.id || null,
-                            igUsername: user?.username || null,
-                            grantedScopes: null,
-                          });
-                          if (!ok) throw new Error("No fue posible guardar el token de Instagram");
-                          const connected = {
-                            id: `a-${Date.now()}-ig-ok`,
-                            role: "assistant",
-                            type: "widget-instagram-connected",
-                            username: user?.username || null,
-                            igId: user?.id || null,
-                            expiresAt,
-                          };
-                          // Reemplazar cualquier widget conectado previo por el nuevo
-                          setMessages((prev) => {
-                            const filtered = prev.filter((mm) => mm.type !== "widget-instagram-connected");
-                            return [...filtered, connected];
-                          });
-                          await saveMessageToDB({ userId, role: "assistant", content: "", attachments: null, type: "widget-instagram-connected", meta: { username: connected.username, igId: connected.igId, expiresAt: connected.expiresAt } });
-                        } catch (err) {
-                          setMessages((prev) => [
-                            ...prev,
-                            { id: `a-${Date.now()}-ig-error`, role: "assistant", type: "text", content: `Instagram OAuth error: ${err?.message || err}` },
-                          ]);
-                        }
-                      }}
+                        if (igConnectPersistingRef.current) return;
+                        igConnectPersistingRef.current = true;
+                         try {
+                           const access_token = payload?.access_token;
+                           const expires_in = payload?.expires_in;
+                           const user = payload?.user || {};
+                           const expiresAt = expires_in ? new Date(Date.now() + Number(expires_in) * 1000).toISOString() : null;
+                           const { data: sessionData } = await getSessionOnce();
+                           const userId = sessionData?.session?.user?.id;
+                           if (!userId) throw new Error("Sesión inválida");
+                           const ok = await upsertInstagramToken({
+                             userId,
+                             token: access_token,
+                             expiresAt,
+                             igUserId: user?.id || null,
+                             igUsername: user?.username || null,
+                             grantedScopes: null,
+                           });
+                           if (!ok) throw new Error("No fue posible guardar el token de Instagram");
+                           const connected = {
+                             id: `a-${Date.now()}-ig-ok`,
+                             role: "assistant",
+                             type: "widget-instagram-connected",
+                             username: user?.username || null,
+                             igId: user?.id || null,
+                             expiresAt,
+                           };
+                           // Reemplazar cualquier widget conectado previo por el nuevo
+                           setMessages((prev) => {
+                             const filtered = prev.filter((mm) => mm.type !== "widget-instagram-connected");
+                             return [...filtered, connected];
+                           });
+                           // NUEVO: asegurar unicidad en DB (dejar solo uno por usuario)
+                           try {
+                             await supabase.from('messages').delete().eq('user_id', userId).eq('type', 'widget-instagram-connected');
+                           } catch (_) {}
+                           await saveMessageToDB({ userId, role: "assistant", content: "", attachments: null, type: "widget-instagram-connected", meta: { username: connected.username, igId: connected.igId, expiresAt: connected.expiresAt } });
+                         } catch (err) {
+                           setMessages((prev) => [
+                             ...prev,
+                             { id: `a-${Date.now()}-ig-error`, role: "assistant", type: "text", content: `Instagram OAuth error: ${err?.message || err}` },
+                           ]);
+                         } finally {
+                           igConnectPersistingRef.current = false;
+                         }
+                       }}
                       onError={(reason) => {
                         setMessages((prev) => [
                           ...prev,
