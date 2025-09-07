@@ -516,7 +516,12 @@ export const ScheduleWidget = ({ defaultValue = null, onConfirm, publishData = n
       {publishStatus === 'publishing' && (
         <div className="flex items-center gap-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
           <span className="size-4 rounded-full border-2 border-blue-500/60 border-t-transparent animate-spin" aria-hidden="true"></span>
-          <span className="text-sm text-blue-700">Publicando en Instagram...</span>
+          <span className="text-sm text-blue-700">
+            Publicando en {publishData?.platforms?.length > 1 
+              ? publishData.platforms.join(', ').replace(/,([^,]*)$/, ' y$1')
+              : publishData?.platforms?.[0] || 'redes sociales'
+            }...
+          </span>
         </div>
       )}
       
@@ -525,7 +530,12 @@ export const ScheduleWidget = ({ defaultValue = null, onConfirm, publishData = n
           <svg viewBox="0 0 24 24" className="size-4 text-green-600" aria-hidden="true">
             <path fill="currentColor" d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
           </svg>
-          <span className="text-sm text-green-700">¡Publicado exitosamente en Instagram!</span>
+          <span className="text-sm text-green-700">
+            ¡Publicado exitosamente en {publishData?.platforms?.length > 1 
+              ? publishData.platforms.join(', ').replace(/,([^,]*)$/, ' y$1')
+              : publishData?.platforms?.[0] || 'redes sociales'
+            }!
+          </span>
         </div>
       )}
       

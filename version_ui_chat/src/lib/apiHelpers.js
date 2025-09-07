@@ -118,7 +118,7 @@ export const getFacebookToken = async (userId) => {
 };
 
 // Guardar/actualizar token de Facebook en perfil
-export const upsertFacebookToken = async ({ userId, token, expiresAt = null, fbUserId = null, grantedScopes = null, fbName = null }) => {
+export const upsertFacebookToken = async ({ userId, token, expiresAt = null, fbUserId = null, grantedScopes = null, fbName = null, pageId = null, pageName = null }) => {
   try {
     const row = {
       id: userId,
@@ -127,6 +127,8 @@ export const upsertFacebookToken = async ({ userId, token, expiresAt = null, fbU
       facebook_user_id: fbUserId,
       facebook_granted_scopes: grantedScopes,
       facebook_user_name: fbName,
+      facebook_page_id: pageId,
+      facebook_page_name: pageName,
       updated_at: new Date().toISOString(),
     };
     const { error } = await supabase.from("profiles").upsert(row, { onConflict: "id" });

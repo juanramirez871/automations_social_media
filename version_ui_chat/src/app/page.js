@@ -762,14 +762,39 @@ export default function Home() {
                       widgetId={m.id}
                       onConnected={async (payload) => {
                         try {
+                          console.log('🎉 Facebook conectado - payload recibido:', payload);
+                          
                           const access_token = payload?.access_token;
                           const expires_in = payload?.expires_in;
                           const profile = payload?.fb_user || {};
                           const permissions = payload?.granted_scopes || [];
+                          // El widget ahora reenvía pageId/pageName directamente
+                          const pageId = payload?.pageId ?? payload?.data?.pageId ?? null;
+                          const pageName = payload?.pageName ?? payload?.data?.pageName ?? null;
+                          
+                          console.log('🔍 Payload completo recibido:', JSON.stringify(payload, null, 2));
+                          console.log('🔍 Debug extracción Facebook:');
+                          console.log('  - payload.pageId:', payload?.pageId);
+                          console.log('  - payload.data.pageId:', payload?.data?.pageId);
+                          console.log('  - pageId final:', pageId);
+                          console.log('  - pageName final:', pageName);
                           const expiresAt = expires_in ? new Date(Date.now() + (Number(expires_in) * 1000)).toISOString() : null;
+                          
+                          console.log('📋 Datos extraídos Facebook:', {
+                            access_token: access_token ? `${access_token.substring(0, 20)}...` : null,
+                            expires_in,
+                            profile,
+                            pageId,
+                            pageName,
+                            permissions
+                          });
+                          
                           const { data: sessionData } = await getSessionOnce();
                           const userId = sessionData?.session?.user?.id;
                           if (!userId) throw new Error("Sesión inválida");
+                          
+                          console.log('💾 Guardando token Facebook en base de datos...');
+                          
                           const ok = await upsertFacebookToken({
                             userId,
                             token: access_token,
@@ -777,7 +802,11 @@ export default function Home() {
                             fbUserId: profile?.id || null,
                             grantedScopes: permissions,
                             fbName: profile?.name || null,
+                            pageId: pageId,
+                            pageName: pageName,
                           });
+                          
+                          console.log('💾 Resultado de guardado Facebook:', ok ? 'ÉXITO' : 'ERROR');
                           if (!ok) throw new Error("No fue posible guardar el token en el perfil");
                           const connected = {
                             id: `a-${Date.now()}-fb-ok`,
@@ -1044,8 +1073,8 @@ export default function Home() {
                   
                   console.log('🖼️ URLs extraídas:', { imageUrl: !!imageUrl, videoUrl: !!videoUrl });
                   
-                  // Usar targets del flujo actual
-                  const platforms = publishTargets.includes('instagram') ? ['instagram'] : ['instagram'];
+                  // Usar targets del flujo actual (plataformas seleccionadas)
+                  const platforms = publishTargets && publishTargets.length > 0 ? publishTargets : ['instagram'];
                   
                   const result = {
                     caption,

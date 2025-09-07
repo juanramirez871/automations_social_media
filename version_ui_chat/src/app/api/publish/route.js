@@ -39,6 +39,44 @@ async function getInstagramTokenServer(supabase, userId) {
   }
 }
 
+// Función para obtener token de Facebook (versión servidor)
+async function getFacebookTokenServer(supabase, userId) {
+  try {
+    console.log('🔍 Buscando token de Facebook para userId:', userId);
+    
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("facebook_access_token, facebook_expires_at, facebook_page_id, facebook_page_name")
+      .eq("id", userId)
+      .maybeSingle();
+      
+    console.log('📊 Resultado de consulta DB Facebook:', { data, error });
+    
+    if (error) {
+      console.error('❌ Error en consulta DB Facebook:', error);
+      throw error;
+    }
+    
+    const token = data?.facebook_access_token || null;
+    const expiresAt = data?.facebook_expires_at || null;
+    const pageId = data?.facebook_page_id || null;
+    const pageName = data?.facebook_page_name || null;
+    
+    console.log('🔑 Token Facebook extraído:', {
+      hasToken: !!token,
+      tokenLength: token?.length || 0,
+      pageId,
+      pageName,
+      expiresAt
+    });
+    
+    return { token, expiresAt, pageId, pageName };
+  } catch (e) {
+    console.error("❌ Error obteniendo token de Facebook:", e?.message || e);
+    return { token: null, expiresAt: null, pageId: null, pageName: null };
+  }
+}
+
 export async function POST(request) {
   try {
     const { caption, imageUrl, videoUrl, platforms = ['instagram'], userId } = await request.json();
@@ -175,6 +213,113 @@ export async function POST(request) {
         console.error('Error publicando en Instagram:', error);
         results.push({
           platform: 'instagram',
+          success: false,
+          error: error.message,
+        });
+      }
+    }
+    
+    // Publicar en Facebook si está en las plataformas seleccionadas
+    if (platforms.includes('facebook')) {
+      try {
+        // Obtener token de Facebook del usuario
+        const { token, expiresAt, pageId } = await getFacebookTokenServer(supabase, userId);
+        
+        if (!token) {
+          throw new Error('No hay token de Facebook configurado');
+        }
+        
+        if (!pageId) {
+          throw new Error('No hay página de Facebook configurada');
+        }
+        
+        // Verificar si el token ha expirado
+        if (expiresAt && new Date(expiresAt) < new Date()) {
+          throw new Error('Token de Facebook expirado');
+        }
+        
+        console.log('📤 Publicando en Facebook página ID:', pageId);
+        
+        // Publicar usando Facebook Graph API con endpoints correctos
+        let endpoint = '';
+        const params = new URLSearchParams();
+        const hasImage = !!imageUrl;
+        const hasVideo = !!videoUrl;
+        const message = caption || '';
+
+        if (hasImage) {
+          // Fotos: POST /{page-id}/photos con url y caption
+          endpoint = `https://graph.facebook.com/v18.0/${pageId}/photos`;
+          params.set('url', imageUrl);
+          params.set('caption', message);
+          params.set('access_token', token);
+          params.set('published', 'true');
+        } else if (hasVideo) {
+          // Videos: POST /{page-id}/videos con file_url y description
+          endpoint = `https://graph.facebook.com/v18.0/${pageId}/videos`;
+          params.set('file_url', videoUrl);
+          params.set('description', message);
+          params.set('access_token', token);
+          params.set('published', 'true');
+        } else {
+          // Solo texto: POST /{page-id}/feed con message
+          endpoint = `https://graph.facebook.com/v18.0/${pageId}/feed`;
+          params.set('message', message);
+          params.set('access_token', token);
+        }
+
+        console.log('📋 Payload para Facebook:', {
+          endpoint,
+          hasMessage: !!message,
+          hasImage,
+          hasVideo,
+          tokenStart: token.substring(0, 20) + '...'
+        });
+
+        const facebookResponse = await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          body: params.toString(),
+        });
+        
+        console.log('📥 Respuesta de Facebook:', {
+          status: facebookResponse.status,
+          statusText: facebookResponse.statusText,
+          ok: facebookResponse.ok
+        });
+        
+        const facebookData = await facebookResponse.json();
+        console.log('📋 Datos de respuesta de Facebook:', facebookData);
+        
+        if (!facebookResponse.ok) {
+          console.error('❌ Error de Facebook API:', facebookData);
+          const errorMsg = facebookData.error?.message || 'Error publicando en Facebook';
+          const errorCode = facebookData.error?.code || 'unknown';
+          const errorType = facebookData.error?.type || 'unknown';
+          
+          console.error('🔍 Detalles del error Facebook:', {
+            message: errorMsg,
+            code: errorCode,
+            type: errorType,
+            fullError: facebookData.error
+          });
+          
+          throw new Error(`Facebook API Error (${errorCode}): ${errorMsg}`);
+        }
+        
+        results.push({
+          platform: 'facebook',
+          success: true,
+          id: facebookData.post_id || facebookData.id,
+          url: `https://www.facebook.com/${facebookData.post_id || facebookData.id}`,
+        });
+        
+      } catch (error) {
+        console.error('Error publicando en Facebook:', error);
+        results.push({
+          platform: 'facebook',
           success: false,
           error: error.message,
         });

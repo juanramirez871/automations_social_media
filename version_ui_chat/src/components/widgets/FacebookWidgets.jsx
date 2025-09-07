@@ -26,6 +26,9 @@ export const FacebookAuthWidget = ({ widgetId, onConnected, onError }) => {
           expires_in: d.expires_in,
           fb_user: d.fb_user || {},
           granted_scopes: d.granted_scopes || [],
+          pageId: d.pageId || null,
+          pageName: d.pageName || null,
+          userToken: d.userToken || null,
         };
         onConnected && onConnected(payload);
       } catch (err) {
