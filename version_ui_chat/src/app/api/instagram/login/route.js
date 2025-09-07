@@ -15,18 +15,22 @@ export async function GET(request) {
     const widgetId = url.searchParams.get("widgetId") || null;
 
     const state = randomState();
-    const authUrl = new URL("https://www.instagram.com/oauth/authorize");
-    authUrl.searchParams.set("client_id", process.env.INSTAGRAM_APP_ID);
+    
+    // Instagram Business Login (usando Facebook OAuth pero con variables específicas)
+    const authUrl = new URL("https://www.facebook.com/v18.0/dialog/oauth");
+    authUrl.searchParams.set("client_id", process.env.INSTAGRAM_APP_ID || process.env.FACEBOOK_APP_ID);
     authUrl.searchParams.set(
       "redirect_uri",
-      process.env.INSTAGRAM_REDIRECT_URI
+      process.env.INSTAGRAM_REDIRECT_URI || `${url.origin}/api/instagram/callback`
     );
     authUrl.searchParams.set(
       "scope",
-      "instagram_business_basic,instagram_business_manage_messages,instagram_business_manage_comments,instagram_business_content_publish,instagram_business_manage_insights"
+      "instagram_basic,instagram_content_publish,pages_read_engagement,business_management"
     );
     authUrl.searchParams.set("response_type", "code");
     authUrl.searchParams.set("state", state);
+    
+    console.log('🔗 Redirigiendo a Instagram Business OAuth:', authUrl.toString());
 
     const res = NextResponse.redirect(authUrl.toString(), { status: 302 });
 

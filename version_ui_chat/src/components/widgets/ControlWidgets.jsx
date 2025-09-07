@@ -410,8 +410,10 @@ export const CaptionSuggestWidget = ({ caption = '', onAccept, onRegenerate, onC
   );
 };
 
-export const ScheduleWidget = ({ defaultValue = null, onConfirm }) => {
+export const ScheduleWidget = ({ defaultValue = null, onConfirm, publishData = null }) => {
   const [busy, setBusy] = useState(false);
+  const [publishStatus, setPublishStatus] = useState(null); // 'publishing' | 'success' | 'error'
+  const [publishError, setPublishError] = useState(null);
   const [value, setValue] = useState(() => {
     if (defaultValue) return defaultValue;
     // Default: next full half-hour in local time
@@ -435,9 +437,67 @@ export const ScheduleWidget = ({ defaultValue = null, onConfirm }) => {
   const handleConfirm = async () => {
     if (!onConfirm || typeof onConfirm !== 'function') return;
     if (!value) return;
+    
     try {
       setBusy(true);
-      await onConfirm(value);
+      setPublishStatus('publishing');
+      setPublishError(null);
+      
+      // Si hay datos de publicación, publicar inmediatamente
+      if (publishData) {
+        console.log('🚀 Iniciando publicación con datos:', publishData);
+        
+        // Obtener userId de la sesión actual
+        console.log('📋 Obteniendo sesión de usuario...');
+        const { data: { session } } = await supabase.auth.getSession();
+        console.log('👤 Sesión obtenida:', session?.user?.id ? 'Usuario válido' : 'Sin usuario');
+        
+        if (!session?.user?.id) {
+          throw new Error('No hay sesión de usuario válida');
+        }
+        
+        const requestBody = {
+          caption: publishData.caption || '',
+          imageUrl: publishData.imageUrl || null,
+          videoUrl: publishData.videoUrl || null,
+          platforms: publishData.platforms || ['instagram'],
+          userId: session.user.id,
+        };
+        
+        console.log('📤 Enviando petición a /api/publish con:', requestBody);
+        
+        const response = await fetch('/api/publish', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(requestBody),
+        });
+        
+        console.log('📥 Respuesta recibida. Status:', response.status, 'OK:', response.ok);
+        
+        const result = await response.json();
+        console.log('📋 Resultado parseado:', result);
+        
+        if (!response.ok || !result.success) {
+          console.error('❌ Error en publicación:', result);
+          console.log('📄 Response completa:', response);
+          throw new Error(result.error || result.message || 'Error en la publicación');
+        }
+        
+        console.log('✅ Publicación exitosa!');
+        
+        setPublishStatus('success');
+        // Llamar onConfirm con el resultado de la publicación
+        await onConfirm({ scheduledDate: value, publishResult: result });
+      } else {
+        // Solo programar sin publicar
+        await onConfirm(value);
+      }
+    } catch (error) {
+      console.error('Error en publicación:', error);
+      setPublishStatus('error');
+      setPublishError(error.message);
     } finally {
       setBusy(false);
     }
@@ -449,7 +509,34 @@ export const ScheduleWidget = ({ defaultValue = null, onConfirm }) => {
         <div className="h-1 w-8 rounded-full bg-gradient-to-r from-violet-400 to-purple-400" />
         <p className="text-sm font-semibold text-gray-800">Programar publicación</p>
       </div>
-      <div className="text-xs text-gray-600">Elige la fecha y hora para subir el post. Zona horaria: <span className="font-medium">{tz}</span>.</div>
+      <div className="text-xs text-gray-600">
+        {publishData ? 'Elige cuándo publicar el contenido' : 'Elige la fecha y hora para programar el post'}. Zona horaria: <span className="font-medium">{tz}</span>.
+      </div>
+      
+      {publishStatus === 'publishing' && (
+        <div className="flex items-center gap-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+          <span className="size-4 rounded-full border-2 border-blue-500/60 border-t-transparent animate-spin" aria-hidden="true"></span>
+          <span className="text-sm text-blue-700">Publicando en Instagram...</span>
+        </div>
+      )}
+      
+      {publishStatus === 'success' && (
+        <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-lg">
+          <svg viewBox="0 0 24 24" className="size-4 text-green-600" aria-hidden="true">
+            <path fill="currentColor" d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+          </svg>
+          <span className="text-sm text-green-700">¡Publicado exitosamente en Instagram!</span>
+        </div>
+      )}
+      
+      {publishStatus === 'error' && (
+        <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg">
+          <svg viewBox="0 0 24 24" className="size-4 text-red-600" aria-hidden="true">
+            <path fill="currentColor" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+          </svg>
+          <span className="text-sm text-red-700">Error: {publishError}</span>
+        </div>
+      )}
       <div className="flex items-center gap-3">
         <input
           type="datetime-local"
@@ -467,10 +554,14 @@ export const ScheduleWidget = ({ defaultValue = null, onConfirm }) => {
         >
           {busy ? (
             <span className="size-3.5 rounded-full border-2 border-white/60 border-t-transparent animate-spin" aria-hidden="true"></span>
+          ) : publishData ? (
+            <svg viewBox="0 0 24 24" className="size-4" aria-hidden="true">
+              <path fill="currentColor" d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+            </svg>
           ) : (
             <svg viewBox="0 0 24 24" className="size-4" aria-hidden="true"><path fill="currentColor" d="M7 10h5v5H7z"/><path fill="currentColor" d="M19 3h-1V1h-2v2H8V1H6v2H5a2 2 0 00-2 2v13a2 2 0 002 2h14a2 2 0 002-2V5a2 2 0 00-2-2zm0 15H5V8h14v10z"/></svg>
           )}
-          Confirmar
+          {publishData ? 'Publicar ahora' : 'Programar'}
         </button>
       </div>
     </div>

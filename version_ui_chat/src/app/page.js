@@ -661,16 +661,28 @@ export default function Home() {
                     <InstagramAuthWidgetExt
                       widgetId={m.id}
                       onConnected={async (payload) => {
+                        console.log('🎉 Instagram conectado - payload recibido:', payload);
+                        
                         if (igConnectPersistingRef.current) return;
                         igConnectPersistingRef.current = true;
                          try {
                            const access_token = payload?.access_token;
                            const expires_in = payload?.expires_in;
                            const user = payload?.user || {};
+                           
+                           console.log('📋 Datos extraídos:', {
+                             access_token: access_token ? `${access_token.substring(0, 20)}...` : null,
+                             expires_in,
+                             user,
+                             pageId: payload?.pageId,
+                             pageName: payload?.pageName
+                           });
                            const expiresAt = expires_in ? new Date(Date.now() + Number(expires_in) * 1000).toISOString() : null;
                            const { data: sessionData } = await getSessionOnce();
                            const userId = sessionData?.session?.user?.id;
                            if (!userId) throw new Error("Sesión inválida");
+                           console.log('💾 Guardando token en base de datos...');
+                           
                            const ok = await upsertInstagramToken({
                              userId,
                              token: access_token,
@@ -679,6 +691,9 @@ export default function Home() {
                              igUsername: user?.username || null,
                              grantedScopes: null,
                            });
+                           
+                           console.log('💾 Resultado de guardado:', ok ? 'ÉXITO' : 'ERROR');
+                           
                            if (!ok) throw new Error("No fue posible guardar el token de Instagram");
                            const connected = {
                              id: `a-${Date.now()}-ig-ok`,
@@ -688,16 +703,32 @@ export default function Home() {
                              igId: user?.id || null,
                              expiresAt,
                            };
+                           console.log('🎨 Creando widget conectado:', connected);
+                           
                            // Reemplazar cualquier widget conectado previo por el nuevo
                            setMessages((prev) => {
                              const filtered = prev.filter((mm) => mm.type !== "widget-instagram-connected");
+                             console.log('🔄 Actualizando mensajes - antes:', prev.length, 'después:', filtered.length + 1);
                              return [...filtered, connected];
                            });
+                           
+                           console.log('🗄️ Guardando widget en base de datos...');
+                           
                            // NUEVO: asegurar unicidad en DB (dejar solo uno por usuario)
                            try {
                              await supabase.from('messages').delete().eq('user_id', userId).eq('type', 'widget-instagram-connected');
                            } catch (_) {}
-                           await saveMessageToDB({ userId, role: "assistant", content: "", attachments: null, type: "widget-instagram-connected", meta: { username: connected.username, igId: connected.igId, expiresAt: connected.expiresAt } });
+                           
+                           const dbResult = await saveMessageToDB({ 
+                             userId, 
+                             role: "assistant", 
+                             content: "", 
+                             attachments: null, 
+                             type: "widget-instagram-connected", 
+                             meta: { username: connected.username, igId: connected.igId, expiresAt: connected.expiresAt } 
+                           });
+                           
+                           console.log('🗄️ Resultado guardado DB:', dbResult ? 'ÉXITO' : 'ERROR');
                          } catch (err) {
                            setMessages((prev) => [
                              ...prev,
@@ -959,26 +990,174 @@ export default function Home() {
               }
               if (m.type === "widget-schedule") {
                 const def = m?.meta?.defaultValue || null;
+                
+                // Recopilar datos de publicación del flujo actual
+                const publishData = (() => {
+                  console.log('🔍 Recopilando datos de publicación...');
+                  console.log('📝 Total de mensajes:', messages.length);
+                  
+                  // Buscar el último mensaje con media del usuario
+                  const userMediaMessages = messages.filter(msg => 
+                    msg.role === 'user' && 
+                    msg.type === 'text+media' && 
+                    Array.isArray(msg.attachments) && 
+                    msg.attachments.length > 0
+                  );
+                  
+                  console.log('📷 Mensajes con media encontrados:', userMediaMessages.length);
+                  
+                  if (userMediaMessages.length === 0) {
+                    console.log('❌ No hay mensajes con media');
+                    return null;
+                  }
+                  
+                  const lastMediaMessage = userMediaMessages[userMediaMessages.length - 1];
+                  const attachments = lastMediaMessage.attachments || [];
+                  console.log('📎 Attachments del último mensaje:', attachments);
+                  
+                  // Buscar la última descripción aceptada o generada
+                  let caption = '';
+                  const captionMessages = messages.filter(msg => 
+                    msg.role === 'assistant' && 
+                    msg.type === 'text' && 
+                    msg.content && 
+                    (msg.content.includes('Descripción final:') || msg.content.includes('Redes:'))
+                  );
+                  
+                  console.log('💬 Mensajes de caption encontrados:', captionMessages.length);
+                  console.log('💬 Contenidos de caption:', captionMessages.map(m => m.content.substring(0, 100)));
+                  
+                  if (captionMessages.length > 0) {
+                    const lastCaptionMsg = captionMessages[captionMessages.length - 1];
+                    const match = lastCaptionMsg.content.match(/Descripción final:\s*(.+)$/s);
+                    if (match) {
+                      caption = match[1].trim();
+                      console.log('✅ Caption extraído:', caption);
+                    } else {
+                      console.log('⚠️ No se pudo extraer caption del mensaje:', lastCaptionMsg.content);
+                    }
+                  }
+                  
+                  // Extraer URLs de media
+                  const imageUrl = attachments.find(a => a.kind === 'image')?.url || null;
+                  const videoUrl = attachments.find(a => a.kind === 'video')?.url || null;
+                  
+                  console.log('🖼️ URLs extraídas:', { imageUrl: !!imageUrl, videoUrl: !!videoUrl });
+                  
+                  // Usar targets del flujo actual
+                  const platforms = publishTargets.includes('instagram') ? ['instagram'] : ['instagram'];
+                  
+                  const result = {
+                    caption,
+                    imageUrl,
+                    videoUrl,
+                    platforms
+                  };
+                  
+                  console.log('📦 PublishData final:', result);
+                  return result;
+                })();
+                
                 return (
                   <AssistantMessage key={m.id} borderClass="border-violet-200">
                     <ScheduleWidgetExt
                       defaultValue={def}
-                      onConfirm={async (value) => {
+                      publishData={publishData}
+                      onConfirm={async (result) => {
                         try {
                           const { data: sessionData } = await getSessionOnce();
                           const userId = sessionData?.session?.user?.id;
-                          const when = new Date(value);
-                          const pretty = isNaN(when.getTime()) ? value : when.toLocaleString();
-                          const confirm = { id: newId('schedule-confirm'), role: 'assistant', type: 'text', content: `Perfecto. Programé la subida para ${pretty}.` };
-                          setMessages((prev) => [...prev, confirm]);
-                          if (userId) {
-                            await saveMessageToDB({ userId, role: 'assistant', content: '', attachments: null, type: 'internal-schedule', meta: { value } });
-                            await saveMessageToDB({ userId, role: 'assistant', content: confirm.content, attachments: null, type: 'text' });
+                          
+                          if (result.publishResult) {
+                            // Publicación inmediata exitosa
+                            const publishResult = result.publishResult;
+                            const instagramResult = publishResult.results?.find(r => r.platform === 'instagram');
+                            
+                            let confirmMessage = '';
+                            if (instagramResult?.success) {
+                              confirmMessage = `¡Perfecto! Tu contenido se publicó exitosamente en Instagram.`;
+                              if (instagramResult.url) {
+                                confirmMessage += ` Puedes verlo aquí: ${instagramResult.url}`;
+                              }
+                            } else {
+                              confirmMessage = `Hubo un problema al publicar: ${instagramResult?.error || 'Error desconocido'}`;
+                            }
+                            
+                            const confirm = { 
+                              id: newId('publish-confirm'), 
+                              role: 'assistant', 
+                              type: 'text', 
+                              content: confirmMessage 
+                            };
+                            
+                            setMessages((prev) => [...prev, confirm]);
+                            
+                            if (userId) {
+                              await saveMessageToDB({ 
+                                userId, 
+                                role: 'assistant', 
+                                content: '', 
+                                attachments: null, 
+                                type: 'internal-publish-result', 
+                                meta: { 
+                                  scheduledDate: result.scheduledDate,
+                                  publishResult: publishResult,
+                                  platform: 'instagram'
+                                } 
+                              });
+                              await saveMessageToDB({ 
+                                userId, 
+                                role: 'assistant', 
+                                content: confirm.content, 
+                                attachments: null, 
+                                type: 'text' 
+                              });
+                            }
+                          } else {
+                            // Solo programación (comportamiento anterior)
+                            const when = new Date(result);
+                            const pretty = isNaN(when.getTime()) ? result : when.toLocaleString();
+                            const confirm = { 
+                              id: newId('schedule-confirm'), 
+                              role: 'assistant', 
+                              type: 'text', 
+                              content: `Perfecto. Programé la subida para ${pretty}.` 
+                            };
+                            
+                            setMessages((prev) => [...prev, confirm]);
+                            
+                            if (userId) {
+                              await saveMessageToDB({ 
+                                userId, 
+                                role: 'assistant', 
+                                content: '', 
+                                attachments: null, 
+                                type: 'internal-schedule', 
+                                meta: { value: result } 
+                              });
+                              await saveMessageToDB({ 
+                                userId, 
+                                role: 'assistant', 
+                                content: confirm.content, 
+                                attachments: null, 
+                                type: 'text' 
+                              });
+                            }
                           }
+                          
                           setPublishStage('idle');
                           setPublishTargets([]);
                           setCustomCaptionMode(false);
-                        } catch (_) {}
+                        } catch (error) {
+                          console.error('Error en onConfirm:', error);
+                          const errorMsg = { 
+                            id: newId('schedule-error'), 
+                            role: 'assistant', 
+                            type: 'text', 
+                            content: `Error: ${error.message}` 
+                          };
+                          setMessages((prev) => [...prev, errorMsg]);
+                        }
                       }}
                     />
                   </AssistantMessage>
