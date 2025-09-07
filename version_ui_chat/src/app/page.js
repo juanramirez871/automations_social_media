@@ -1225,27 +1225,31 @@ export default function Home() {
                       widgetId={m.id}
                       onConnected={async (payload) => {
                         try {
-                          const { access_token, expires_in, channel, granted_scopes } = payload || {};
-                          const expiresAt = expires_in ? new Date(Date.now() + Number(expires_in) * 1000).toISOString() : null;
+                          const { access_token, refresh_token, expires_in, expires_at, channelId, channelTitle, channel, granted_scopes, grantedScopes } = payload || {};
+                          const expiresAt = expires_at || (expires_in ? new Date(Date.now() + Number(expires_in) * 1000).toISOString() : null);
                           const { data: sessionData } = await getSessionOnce();
                           const userId = sessionData?.session?.user?.id;
                           if (!userId) throw new Error("Sesión inválida");
+                          const chId = channelId || channel?.id || null;
+                          const chTitle = channelTitle || channel?.title || null;
+                          const scopes = Array.isArray(granted_scopes) ? granted_scopes : (Array.isArray(grantedScopes) ? grantedScopes : []);
                           const ok = await upsertYouTubeToken({
                             userId,
                             token: access_token,
+                            refreshToken: refresh_token || null,
                             expiresAt,
-                            channelId: channel?.id || null,
-                            channelTitle: channel?.title || null,
-                            grantedScopes: granted_scopes || [],
+                            channelId: chId,
+                            channelTitle: chTitle,
+                            grantedScopes: scopes,
                           });
                           if (!ok) throw new Error("No fue posible guardar el token de YouTube");
                           const connected = {
                             id: `a-${Date.now()}-yt-ok`,
                             role: "assistant",
                             type: "widget-youtube-connected",
-                            channelId: channel?.id || null,
-                            channelTitle: channel?.title || null,
-                            grantedScopes: granted_scopes || [],
+                            channelId: chId,
+                            channelTitle: chTitle,
+                            grantedScopes: scopes,
                             expiresAt,
                           };
                           setMessages((prev) => [...prev, connected]);

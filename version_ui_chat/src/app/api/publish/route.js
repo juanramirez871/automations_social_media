@@ -77,6 +77,72 @@ async function getFacebookTokenServer(supabase, userId) {
   }
 }
 
+// NUEVO: Funciones YouTube (versión servidor)
+async function getYouTubeTokenServer(supabase, userId) {
+  try {
+    console.log('🔍 Buscando token de YouTube para userId:', userId);
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('youtube_access_token, youtube_refresh_token, youtube_expires_at, youtube_channel_id, youtube_channel_title, youtube_granted_scopes')
+      .eq('id', userId)
+      .maybeSingle();
+    if (error) throw error;
+    const token = data?.youtube_access_token || null;
+    const refreshToken = data?.youtube_refresh_token || null;
+    const expiresAt = data?.youtube_expires_at || null;
+    const channelId = data?.youtube_channel_id || null;
+    const channelTitle = data?.youtube_channel_title || null;
+    const grantedScopes = data?.youtube_granted_scopes || null;
+    console.log('🔑 Token YouTube extraído:', { hasToken: !!token, hasRefresh: !!refreshToken, channelId, expiresAt });
+    return { token, refreshToken, expiresAt, channelId, channelTitle, grantedScopes };
+  } catch (e) {
+    console.error('❌ Error obteniendo token de YouTube:', e?.message || e);
+    return { token: null, refreshToken: null, expiresAt: null, channelId: null, channelTitle: null, grantedScopes: null };
+  }
+}
+
+async function refreshYouTubeAccessToken(supabase, userId, refreshToken) {
+  try {
+    const clientId = process.env.GOOGLE_CLIENT_ID;
+    const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+    if (!clientId || !clientSecret) {
+      throw new Error('Faltan GOOGLE_CLIENT_ID o GOOGLE_CLIENT_SECRET');
+    }
+    console.log('♻️ Refrescando token de YouTube...');
+    const res = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        client_id: clientId,
+        client_secret: clientSecret,
+        refresh_token: refreshToken,
+        grant_type: 'refresh_token',
+      }).toString(),
+    });
+    const json = await res.json();
+    if (!res.ok) {
+      console.error('❌ Error refrescando token de YouTube:', json);
+      throw new Error(json.error_description || json.error || 'No se pudo refrescar token');
+    }
+    const newAccess = json.access_token;
+    const expiresIn = json.expires_in || null;
+    const newExpiresAt = expiresIn ? new Date(Date.now() + Number(expiresIn) * 1000).toISOString() : null;
+
+    // Persistir en DB
+    const { error: upError } = await supabase
+      .from('profiles')
+      .update({ youtube_access_token: newAccess, youtube_expires_at: newExpiresAt, updated_at: new Date().toISOString() })
+      .eq('id', userId);
+    if (upError) {
+      console.warn('⚠️ No se pudo actualizar el token de YouTube en DB:', upError.message || upError);
+    }
+    return { token: newAccess, expiresAt: newExpiresAt };
+  } catch (e) {
+    console.error('❌ Falló refresh de YouTube:', e?.message || e);
+    return { token: null, expiresAt: null };
+  }
+}
+
 export async function POST(request) {
   try {
     const { caption, imageUrl, videoUrl, platforms = ['instagram'], userId } = await request.json();
@@ -325,7 +391,113 @@ export async function POST(request) {
         });
       }
     }
-    
+
+    // NUEVO: Publicar en YouTube si está en las plataformas seleccionadas
+    if (platforms.includes('youtube')) {
+      try {
+        if (!videoUrl) {
+          throw new Error('YouTube requiere un video');
+        }
+        // Obtener token de YouTube
+        const { token: ytToken, refreshToken: ytRefresh, expiresAt: ytExpiresAt } = await getYouTubeTokenServer(supabase, userId);
+        if (!ytToken && !ytRefresh) {
+          throw new Error('No hay token de YouTube configurado');
+        }
+
+        // Verificar expiración y refrescar si aplica
+        let accessToken = ytToken || null;
+        if (ytExpiresAt && new Date(ytExpiresAt) < new Date() && ytRefresh) {
+          const refreshed = await refreshYouTubeAccessToken(supabase, userId, ytRefresh);
+          if (!refreshed.token) throw new Error('Token de YouTube expirado y no se pudo refrescar');
+          accessToken = refreshed.token;
+        }
+        if (!accessToken) {
+          accessToken = ytToken; // puede ser válido aún
+        }
+
+        // Preparar metadatos
+        const titleBase = (caption || 'Shorts').trim();
+        const title = titleBase.substring(0, 95); // limitar un poco
+        const description = caption || '';
+        const contentType = videoUrl.toLowerCase().endsWith('.mp4') ? 'video/mp4' : (videoUrl.toLowerCase().endsWith('.mov') ? 'video/quicktime' : 'video/*');
+
+        // Iniciar subida por sesión "resumable"
+        const initRes = await fetch('https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            'Content-Type': 'application/json; charset=UTF-8',
+            'X-Upload-Content-Type': contentType,
+          },
+          body: JSON.stringify({
+            snippet: { title, description },
+            status: { privacyStatus: 'public', selfDeclaredMadeForKids: false },
+          }),
+        });
+
+        if (!initRes.ok) {
+          const initErr = await initRes.json().catch(() => ({}));
+          throw new Error(initErr.error?.message || 'No se pudo iniciar la subida a YouTube');
+        }
+
+        const uploadUrl = initRes.headers.get('location');
+        if (!uploadUrl) {
+          throw new Error('YouTube no devolvió URL de subida');
+        }
+
+        // Descargar el video desde videoUrl y retransmitirlo
+        const videoResp = await fetch(videoUrl);
+        if (!videoResp.ok) {
+          throw new Error('No se pudo descargar el video de origen');
+        }
+        const totalLenHeader = videoResp.headers.get('content-length');
+        const totalLen = totalLenHeader ? parseInt(totalLenHeader, 10) : null;
+
+        const uploadHeaders = {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': contentType,
+        };
+        if (totalLen && Number.isFinite(totalLen)) {
+          uploadHeaders['Content-Length'] = String(totalLen);
+          uploadHeaders['Content-Range'] = `bytes 0-${totalLen - 1}/${totalLen}`;
+        }
+
+        const uploadRes = await fetch(uploadUrl, {
+          method: 'PUT',
+          headers: uploadHeaders,
+          body: videoResp.body,
+          // necesario para streams en Node (undici)
+          duplex: 'half',
+        });
+
+        const uploadJson = await uploadRes.json().catch(() => ({}));
+        if (!uploadRes.ok) {
+          console.error('❌ Error subiendo a YouTube:', uploadJson);
+          const msg = uploadJson.error?.message || 'Falló la subida de video a YouTube';
+          throw new Error(msg);
+        }
+
+        const ytId = uploadJson?.id || null;
+        if (!ytId) {
+          throw new Error('Subida a YouTube completó sin ID de video');
+        }
+
+        results.push({
+          platform: 'youtube',
+          success: true,
+          id: ytId,
+          url: `https://www.youtube.com/watch?v=${ytId}`,
+        });
+      } catch (error) {
+        console.error('Error publicando en YouTube:', error);
+        results.push({
+          platform: 'youtube',
+          success: false,
+          error: error.message,
+        });
+      }
+    }
+
     // Determinar el estado general
     const hasSuccess = results.some(r => r.success);
     const hasErrors = results.some(r => !r.success);
