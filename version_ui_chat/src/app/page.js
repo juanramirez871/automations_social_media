@@ -1100,16 +1100,42 @@ export default function Home() {
                           if (result.publishResult) {
                             // Publicación inmediata exitosa
                             const publishResult = result.publishResult;
-                            const instagramResult = publishResult.results?.find(r => r.platform === 'instagram');
-                            
+                            // Soportar múltiples plataformas en la respuesta
+                            const results = Array.isArray(publishResult?.results) ? publishResult.results : [];
+                            const platformNames = { instagram: 'Instagram', facebook: 'Facebook', youtube: 'YouTube', tiktok: 'TikTok' };
+                            const successResults = results.filter(r => r && r.success);
+                            const errorResults = results.filter(r => r && !r.success);
+
                             let confirmMessage = '';
-                            if (instagramResult?.success) {
-                              confirmMessage = `¡Perfecto! Tu contenido se publicó exitosamente en Instagram.`;
-                              if (instagramResult.url) {
-                                confirmMessage += ` Puedes verlo aquí: ${instagramResult.url}`;
+                            if (results.length === 0) {
+                              confirmMessage = 'No recibí resultados de publicación del servidor.';
+                            } else if (errorResults.length === 0) {
+                              const platformsStr = successResults
+                                .map(r => platformNames[r.platform] || r.platform)
+                                .join(', ')
+                                .replace(/,([^,]*)$/, ' y$1');
+                              confirmMessage = `¡Perfecto! Tu contenido se publicó exitosamente en ${platformsStr}.`;
+                              const links = successResults.filter(r => r.url).map(r => `${platformNames[r.platform] || r.platform}: ${r.url}`);
+                              if (links.length) {
+                                confirmMessage += ` Puedes verlo aquí: ${links.join(' | ')}`;
                               }
+                            } else if (successResults.length > 0) {
+                              const okStr = successResults
+                                .map(r => platformNames[r.platform] || r.platform)
+                                .join(', ')
+                                .replace(/,([^,]*)$/, ' y$1');
+                              const errStr = errorResults
+                                .map(r => `${platformNames[r.platform] || r.platform} (${r?.error || 'Error desconocido'})`)
+                                .join('; ');
+                              const links = successResults.filter(r => r.url).map(r => `${platformNames[r.platform] || r.platform}: ${r.url}`);
+                              confirmMessage = `Se publicó parcialmente. Éxitos: ${okStr}.`;
+                              if (links.length) confirmMessage += ` Links: ${links.join(' | ')}.`;
+                              confirmMessage += ` Errores: ${errStr}.`;
                             } else {
-                              confirmMessage = `Hubo un problema al publicar: ${instagramResult?.error || 'Error desconocido'}`;
+                              const errStr = errorResults
+                                .map(r => `${platformNames[r.platform] || r.platform} (${r?.error || 'Error desconocido'})`)
+                                .join('; ');
+                              confirmMessage = `Hubo un problema al publicar: ${errStr || 'Error desconocido'}`;
                             }
                             
                             const confirm = { 
@@ -1131,7 +1157,7 @@ export default function Home() {
                                 meta: { 
                                   scheduledDate: result.scheduledDate,
                                   publishResult: publishResult,
-                                  platform: 'instagram'
+                                  platforms: results.map(r => ({ platform: r.platform, success: !!r.success, id: r.id || null, url: r.url || null, error: r.error || null }))
                                 } 
                               });
                               await saveMessageToDB({ 
