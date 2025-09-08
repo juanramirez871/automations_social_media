@@ -638,6 +638,17 @@ export default function Home() {
                               const { error } = await supabase.auth.signInWithPassword({ email, password: pass });
                               if (error) throw error;
                             }
+                            // Refrescar caché de sesión para evitar sesiones nulas cacheadas
+                            __sessionCache = null;
+                            __sessionInflight = null;
+                            if (typeof window !== 'undefined' && window.__session_cache_once) {
+                              try { delete window.__session_cache_once; } catch {}
+                            }
+                            const { data: freshSession } = await getSessionOnce();
+                            setIsLoggedIn(Boolean(freshSession?.session));
+                            // Limpiar widgets de auth de la UI
+                            setMessages((prev) => prev.filter((mm) => mm.type !== "widget-auth-gate" && mm.type !== "widget-auth-form"));
+
                             await loadHistoryAndNormalize();
                             setMessages((prev) => [
                               ...prev,
