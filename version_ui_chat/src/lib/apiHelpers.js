@@ -15,7 +15,6 @@ export const getInstagramCreds = async (userId) => {
     const password = data?.instagram_password || data?.passwordinstagram || null;
     return { username, password };
   } catch (e) {
-    console.warn("No se pudieron obtener credenciales IG:", e?.message || e);
     return { username: null, password: null };
   }
 };

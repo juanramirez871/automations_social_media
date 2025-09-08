@@ -281,7 +281,6 @@ export default function Home() {
       setWidgetTargetDrafts(draftsByWidget);
       setIsLoggedIn(true);
     } catch (e) {
-      console.warn("No se pudo cargar el historial:", e?.message || e);
     } finally {
       setHistoryLoading(false);
     }
@@ -744,38 +743,18 @@ export default function Home() {
                       widgetId={m.id}
                       onConnected={async (payload) => {
                         try {
-                          console.log('🎉 Facebook conectado - payload recibido:', payload);
-                          
                           const access_token = payload?.access_token;
                           const expires_in = payload?.expires_in;
                           const profile = payload?.fb_user || {};
                           const permissions = payload?.granted_scopes || [];
-                          // El widget ahora reenvía pageId/pageName directamente
                           const pageId = payload?.pageId ?? payload?.data?.pageId ?? null;
                           const pageName = payload?.pageName ?? payload?.data?.pageName ?? null;
                           
-                          console.log('🔍 Payload completo recibido:', JSON.stringify(payload, null, 2));
-                          console.log('🔍 Debug extracción Facebook:');
-                          console.log('  - payload.pageId:', payload?.pageId);
-                          console.log('  - payload.data.pageId:', payload?.data?.pageId);
-                          console.log('  - pageId final:', pageId);
-                          console.log('  - pageName final:', pageName);
                           const expiresAt = expires_in ? new Date(Date.now() + (Number(expires_in) * 1000)).toISOString() : null;
-                          
-                          console.log('📋 Datos extraídos Facebook:', {
-                            access_token: access_token ? `${access_token.substring(0, 20)}...` : null,
-                            expires_in,
-                            profile,
-                            pageId,
-                            pageName,
-                            permissions
-                          });
                           
                           const { data: sessionData } = await getSessionOnce();
                           const userId = sessionData?.session?.user?.id;
                           if (!userId) throw new Error("Sesión inválida");
-                          
-                          console.log('💾 Guardando token Facebook en base de datos...');
                           
                           const ok = await upsertFacebookToken({
                             userId,
@@ -788,7 +767,7 @@ export default function Home() {
                             pageName: pageName,
                           });
                           
-                          console.log('💾 Resultado de guardado Facebook:', ok ? 'ÉXITO' : 'ERROR');
+
                           if (!ok) throw new Error("No fue posible guardar el token en el perfil");
                           const connected = {
                             id: `a-${Date.now()}-fb-ok`,
@@ -1004,10 +983,6 @@ export default function Home() {
                 
                 // Recopilar datos de publicación del flujo actual
                 const publishData = (() => {
-                  console.log('🔍 Recopilando datos de publicación...');
-                  console.log('📝 Total de mensajes:', messages.length);
-                  
-                  // Buscar el último mensaje con media del usuario
                   const userMediaMessages = messages.filter(msg => 
                     msg.role === 'user' && 
                     msg.type === 'text+media' && 
@@ -1015,18 +990,13 @@ export default function Home() {
                     msg.attachments.length > 0
                   );
                   
-                  console.log('📷 Mensajes con media encontrados:', userMediaMessages.length);
-                  
                   if (userMediaMessages.length === 0) {
-                    console.log('❌ No hay mensajes con media');
                     return null;
                   }
                   
                   const lastMediaMessage = userMediaMessages[userMediaMessages.length - 1];
                   const attachments = lastMediaMessage.attachments || [];
-                  console.log('📎 Attachments del último mensaje:', attachments);
                   
-                  // Buscar la última descripción aceptada o generada
                   let caption = '';
                   const captionMessages = messages.filter(msg => 
                     msg.role === 'assistant' && 
@@ -1035,27 +1005,17 @@ export default function Home() {
                     (msg.content.includes('Descripción final:') || msg.content.includes('Redes:'))
                   );
                   
-                  console.log('💬 Mensajes de caption encontrados:', captionMessages.length);
-                  console.log('💬 Contenidos de caption:', captionMessages.map(m => m.content.substring(0, 100)));
-                  
                   if (captionMessages.length > 0) {
                     const lastCaptionMsg = captionMessages[captionMessages.length - 1];
                     const match = lastCaptionMsg.content.match(/Descripción final:\s*(.+)$/s);
                     if (match) {
                       caption = match[1].trim();
-                      console.log('✅ Caption extraído:', caption);
-                    } else {
-                      console.log('⚠️ No se pudo extraer caption del mensaje:', lastCaptionMsg.content);
                     }
                   }
                   
-                  // Extraer URLs de media
                   const imageUrl = attachments.find(a => a.kind === 'image')?.url || null;
                   const videoUrl = attachments.find(a => a.kind === 'video')?.url || null;
                   
-                  console.log('🖼️ URLs extraídas:', { imageUrl: !!imageUrl, videoUrl: !!videoUrl });
-                  
-                  // Usar targets del flujo actual (plataformas seleccionadas)
                   const platforms = publishTargets && publishTargets.length > 0 ? publishTargets : ['instagram'];
                   
                   const result = {
@@ -1065,7 +1025,6 @@ export default function Home() {
                     platforms
                   };
                   
-                  console.log('📦 PublishData final:', result);
                   return result;
                 })();
                 
@@ -1080,9 +1039,8 @@ export default function Home() {
                           const userId = sessionData?.session?.user?.id;
                           
                           if (result.publishResult) {
-                            // Publicación inmediata exitosa
+                            
                             const publishResult = result.publishResult;
-                            // Soportar múltiples plataformas en la respuesta
                             const results = Array.isArray(publishResult?.results) ? publishResult.results : [];
                             const platformNames = { instagram: 'Instagram', facebook: 'Facebook', youtube: 'YouTube', tiktok: 'TikTok' };
                             const successResults = results.filter(r => r && r.success);
@@ -1091,7 +1049,8 @@ export default function Home() {
                             let confirmMessage = '';
                             if (results.length === 0) {
                               confirmMessage = 'No recibí resultados de publicación del servidor.';
-                            } else if (errorResults.length === 0) {
+                            }
+                            else if (errorResults.length === 0) {
                               const platformsStr = successResults
                                 .map(r => platformNames[r.platform] || r.platform)
                                 .join(', ')
@@ -1101,19 +1060,23 @@ export default function Home() {
                               if (links.length) {
                                 confirmMessage += ` Puedes verlo aquí: ${links.join(' | ')}`;
                               }
-                            } else if (successResults.length > 0) {
+                            }
+                            else if (successResults.length > 0) {
                               const okStr = successResults
                                 .map(r => platformNames[r.platform] || r.platform)
                                 .join(', ')
                                 .replace(/,([^,]*)$/, ' y$1');
+
                               const errStr = errorResults
                                 .map(r => `${platformNames[r.platform] || r.platform} (${r?.error || 'Error desconocido'})`)
                                 .join('; ');
+
                               const links = successResults.filter(r => r.url).map(r => `${platformNames[r.platform] || r.platform}: ${r.url}`);
                               confirmMessage = `Se publicó parcialmente. Éxitos: ${okStr}.`;
                               if (links.length) confirmMessage += ` Links: ${links.join(' | ')}.`;
                               confirmMessage += ` Errores: ${errStr}.`;
-                            } else {
+                            }
+                            else {
                               const errStr = errorResults
                                 .map(r => `${platformNames[r.platform] || r.platform} (${r?.error || 'Error desconocido'})`)
                                 .join('; ');
@@ -1186,7 +1149,6 @@ export default function Home() {
                           setPublishTargets([]);
                           setCustomCaptionMode(false);
                         } catch (error) {
-                          console.error('Error en onConfirm:', error);
                           const errorMsg = { 
                             id: newId('schedule-error'), 
                             role: 'assistant', 
