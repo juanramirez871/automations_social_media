@@ -528,6 +528,9 @@ export default function Home() {
       } finally {
         setLoading(false);
       }
+    } else {
+      // Si no hay texto (p. ej. solo adjuntos) y no llamamos al chat, apagamos el indicador.
+      setLoading(false);
     }
   };
 
