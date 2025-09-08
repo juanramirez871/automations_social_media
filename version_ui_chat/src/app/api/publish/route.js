@@ -101,6 +101,202 @@ async function getYouTubeTokenServer(supabase, userId) {
   }
 }
 
+// NUEVO: Funciones TikTok (versión servidor)
+async function getTikTokTokenServer(supabase, userId) {
+  try {
+    console.log('🔍 Buscando token de TikTok para userId:', userId);
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('tiktok_access_token, tiktok_expires_at, tiktok_open_id, tiktok_granted_scopes')
+      .eq('id', userId)
+      .maybeSingle();
+    if (error) throw error;
+    const token = data?.tiktok_access_token || null;
+    const expiresAt = data?.tiktok_expires_at || null;
+    const openId = data?.tiktok_open_id || null;
+    const grantedScopes = data?.tiktok_granted_scopes || null;
+    console.log('🔑 Token TikTok extraído:', { hasToken: !!token, openId, expiresAt, scopesCount: Array.isArray(grantedScopes) ? grantedScopes.length : null });
+    return { token, expiresAt, openId, grantedScopes };
+  } catch (e) {
+    console.error('❌ Error obteniendo token de TikTok:', e?.message || e);
+    return { token: null, expiresAt: null, openId: null, grantedScopes: null };
+  }
+}
+
+// NUEVO: Utilidad para usar el dominio verificado en PULL_FROM_URL
+function normalizeVerifiedTikTokUrl(inputUrl) {
+  try {
+    const u = new URL(inputUrl);
+    if (u.hostname === 'res.cloudinary.com') {
+      // Proxiar vía Next.js rewrite: /tiktok/cdn/:path* -> res.cloudinary.com/:path*
+      return `https://media.kaioficial.com/tiktok/cdn${u.pathname}${u.search}`;
+    }
+    return inputUrl;
+  } catch (e) {
+    return inputUrl;
+  }
+}
+
+// NUEVO: Función auxiliar para obtener metadatos del archivo remoto
+async function getRemoteFileMeta(videoUrl) {
+  let contentLength = null;
+  let contentType = 'application/octet-stream';
+  try {
+    const head = await fetch(videoUrl, { method: 'HEAD' });
+    if (head.ok) {
+      const len = head.headers.get('content-length');
+      const ctype = head.headers.get('content-type');
+      if (len && !isNaN(Number(len))) contentLength = Number(len);
+      if (ctype) contentType = ctype;
+    }
+  } catch (e) {
+    console.warn('⚠️ HEAD video falló, continuará con GET directo');
+  }
+  return { contentLength, contentType };
+}
+
+// NUEVO: Helpers para FILE_UPLOAD cuando PULL_FROM_URL no es posible
+async function tiktokInitFileUpload({ token, mode, title, privacyLevel, videoUrl }) {
+  const isDirect = mode === 'direct';
+  const url = isDirect
+    ? 'https://open.tiktokapis.com/v2/post/publish/video/init/'
+    : 'https://open.tiktokapis.com/v2/post/publish/inbox/video/init/';
+  const effectivePrivacy = privacyLevel || 'SELF_ONLY';
+
+  // Obtener metadata del video para chunking
+  const { contentLength, contentType } = await getRemoteFileMeta(videoUrl);
+  
+  // Aplicar reglas estrictas de chunking de TikTok
+  const MIN_CHUNK_SIZE = 5 * 1024 * 1024; // 5MB
+  const MAX_CHUNK_SIZE = 64 * 1024 * 1024; // 64MB
+  
+  let chunkSize, totalChunks;
+  
+  if (!contentLength || contentLength < MIN_CHUNK_SIZE) {
+    // Videos <5MB: DEBEN subirse completos
+    chunkSize = contentLength || MIN_CHUNK_SIZE;
+    totalChunks = 1;
+  } else {
+    // Para videos >=5MB, usar estrategia conservadora:
+    // Si el video es pequeño (<20MB), subirlo completo para evitar chunks muy pequeños
+    if (contentLength < 20 * 1024 * 1024) {
+      chunkSize = contentLength;
+      totalChunks = 1;
+    } else {
+      // Videos grandes: usar chunks de 10MB
+      chunkSize = 10 * 1024 * 1024;
+      totalChunks = Math.floor(contentLength / chunkSize);
+      if (contentLength % chunkSize > 0) {
+        totalChunks += 1;
+      }
+    }
+  }
+  
+  console.log(`📊 TikTok chunking: video_size=${contentLength}, chunk_size=${chunkSize}, total_chunk_count=${totalChunks}`);
+
+  const body = isDirect
+    ? {
+        post_info: {
+          title: (title || '').slice(0, 2200),
+          privacy_level: effectivePrivacy,
+        },
+        source_info: {
+          source: 'FILE_UPLOAD',
+          video_size: contentLength || 0,
+          chunk_size: chunkSize,
+          total_chunk_count: totalChunks,
+        },
+      }
+    : {
+        source_info: {
+          source: 'FILE_UPLOAD',
+          video_size: contentLength || 0,
+          chunk_size: chunkSize,
+          total_chunk_count: totalChunks,
+        },
+      };
+
+  const initRes = await fetch(url, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json; charset=UTF-8',
+    },
+    body: JSON.stringify(body),
+  });
+  const initJson = await initRes.json().catch(() => ({}));
+  if (!initRes.ok) {
+    console.error('❌ Error init FILE_UPLOAD TikTok:', initJson);
+    const msg = initJson?.error?.message || 'Error inicializando FILE_UPLOAD en TikTok';
+    throw new Error(msg);
+  }
+  const publishId = initJson?.data?.publish_id || null;
+  const uploadUrl = initJson?.data?.upload_url || null;
+  if (!publishId || !uploadUrl) {
+    throw new Error('Respuesta init de TikTok no contiene publish_id o upload_url');
+  }
+  return { publishId, uploadUrl, videoSize: contentLength, chunkSize, totalChunks, contentType };
+}
+
+async function tiktokUploadFromUrl({ uploadUrl, videoUrl, videoSize, chunkSize, totalChunks, contentType }) {
+  const videoResp = await fetch(videoUrl);
+  if (!videoResp.ok || !videoResp.body) {
+    throw new Error('No se pudo descargar el video de origen');
+  }
+
+  if (totalChunks === 1 || !videoSize) {
+    // Subida simple en una sola petición
+    const headers = { 'Content-Type': contentType || 'application/octet-stream' };
+    if (videoSize) {
+      headers['Content-Length'] = String(videoSize);
+      headers['Content-Range'] = `bytes 0-${videoSize - 1}/${videoSize}`;
+    }
+
+    const putRes = await fetch(uploadUrl, {
+      method: 'PUT',
+      headers,
+      body: videoResp.body,
+      duplex: 'half',
+    });
+
+    let putJson = {};
+    try { putJson = await putRes.json(); } catch {}
+    if (!putRes.ok) {
+      console.error('❌ Error subiendo binario a TikTok:', putJson);
+      const msg = putJson?.error?.message || 'Falló la subida de video a TikTok';
+      throw new Error(msg);
+    }
+  } else {
+    // Subida por chunks
+    const videoBuffer = await videoResp.arrayBuffer();
+    for (let i = 0; i < totalChunks; i++) {
+      const start = i * chunkSize;
+      const end = Math.min(start + chunkSize, videoSize);
+      const chunk = videoBuffer.slice(start, end);
+      
+      const headers = {
+        'Content-Type': contentType || 'application/octet-stream',
+        'Content-Length': String(chunk.byteLength),
+        'Content-Range': `bytes ${start}-${end - 1}/${videoSize}`,
+      };
+
+      const putRes = await fetch(uploadUrl, {
+        method: 'PUT',
+        headers,
+        body: chunk,
+      });
+
+      let putJson = {};
+      try { putJson = await putRes.json(); } catch {}
+      if (!putRes.ok) {
+        console.error(`❌ Error subiendo chunk ${i + 1}/${totalChunks}:`, putJson);
+        const msg = putJson?.error?.message || `Falló la subida del chunk ${i + 1}`;
+        throw new Error(msg);
+      }
+    }
+  }
+}
+
 async function refreshYouTubeAccessToken(supabase, userId, refreshToken) {
   try {
     const clientId = process.env.GOOGLE_CLIENT_ID;
@@ -145,7 +341,7 @@ async function refreshYouTubeAccessToken(supabase, userId, refreshToken) {
 
 export async function POST(request) {
   try {
-    const { caption, imageUrl, videoUrl, platforms = ['instagram'], userId } = await request.json();
+    const { caption, imageUrl, videoUrl, platforms = ['instagram'], userId, privacyLevel } = await request.json();
     
     // Validar que se proporcione userId
     if (!userId) {
@@ -492,6 +688,186 @@ export async function POST(request) {
         console.error('Error publicando en YouTube:', error);
         results.push({
           platform: 'youtube',
+          success: false,
+          error: error.message,
+        });
+      }
+    }
+
+    // NUEVO: Publicar en TikTok si está en las plataformas seleccionadas
+    if (platforms.includes('tiktok')) {
+      try {
+        if (!videoUrl) {
+          throw new Error('TikTok requiere un video');
+        }
+        // Obtener token de TikTok
+        const { token: ttToken, expiresAt: ttExpiresAt, openId, grantedScopes } = await getTikTokTokenServer(supabase, userId);
+        if (!ttToken) {
+          throw new Error('No hay token de TikTok configurado');
+        }
+        // Verificar expiración
+        if (ttExpiresAt && new Date(ttExpiresAt) < new Date()) {
+          throw new Error('Token de TikTok expirado');
+        }
+
+        // Normalizar scopes
+        const scopes = Array.isArray(grantedScopes)
+          ? grantedScopes
+          : (typeof grantedScopes === 'string' ? grantedScopes.split(/[\s,]+/).filter(Boolean) : []);
+        const hasDirectPost = scopes.includes('video.publish');
+        const hasUpload = scopes.includes('video.upload');
+
+        let publishId = null;
+        let status = null;
+
+        // Usar dominio verificado cuando sea Cloudinary
+        const pullUrl = normalizeVerifiedTikTokUrl(videoUrl);
+        console.log('🔗 URL normalizada para TikTok (PULL_FROM_URL):', pullUrl);
+
+        if (hasDirectPost) {
+          console.log('📤 Publicando en TikTok (Direct Post)...');
+          // Obtener creator_info para validar privacidad y capacidad de posteo
+          let creatorInfo = null;
+          try {
+            const ciRes = await fetch('https://open.tiktokapis.com/v2/post/publish/creator_info/query/', {
+              method: 'POST',
+              headers: {
+                Authorization: `Bearer ${ttToken}`,
+                'Content-Type': 'application/json; charset=UTF-8',
+              },
+            });
+            creatorInfo = await ciRes.json().catch(() => ({}));
+          } catch (e) {
+            console.warn('⚠️ creator_info/query falló o no está disponible, se continúa de todas formas');
+          }
+
+          // Derivar privacy: por defecto SELF_ONLY (requisito para clientes no auditados)
+          const options = creatorInfo?.data?.privacy_level_options;
+          let effectivePrivacy = 'SELF_ONLY';
+          if (privacyLevel && Array.isArray(options) && options.includes(privacyLevel)) {
+            effectivePrivacy = privacyLevel;
+          }
+          console.log('👤 TikTok creator_info privacy options:', options, '-> usando:', effectivePrivacy);
+
+          const title = (caption || '').slice(0, 2200);
+          const initBody = {
+            post_info: {
+              title,
+              privacy_level: effectivePrivacy,
+            },
+            source_info: {
+              source: 'PULL_FROM_URL',
+              video_url: pullUrl,
+            },
+          };
+
+          const initRes = await fetch('https://open.tiktokapis.com/v2/post/publish/video/init/', {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${ttToken}`,
+              'Content-Type': 'application/json; charset=UTF-8',
+            },
+            body: JSON.stringify(initBody),
+          });
+          const initJson = await initRes.json().catch(() => ({}));
+
+          if (!initRes.ok) {
+            const errMsg = initJson?.error?.message || '';
+            console.warn('⚠️ PULL_FROM_URL falló, evaluando fallback FILE_UPLOAD...', errMsg);
+            if (/URL ownership|ownership verification|pull_from_url|guidelines/i.test(errMsg)) {
+              try {
+                const { publishId: upId, uploadUrl, videoSize, chunkSize, totalChunks, contentType } = await tiktokInitFileUpload({ token: ttToken, mode: 'direct', title, privacyLevel: effectivePrivacy, videoUrl });
+                await tiktokUploadFromUrl({ uploadUrl, videoUrl, videoSize, chunkSize, totalChunks, contentType });
+                publishId = upId;
+              } catch (e) {
+                if (hasUpload) {
+                  console.warn('⚠️ Direct FILE_UPLOAD falló, intentando Inbox FILE_UPLOAD...', e?.message || e);
+                  const { publishId: upId, uploadUrl, videoSize, chunkSize, totalChunks, contentType } = await tiktokInitFileUpload({ token: ttToken, mode: 'inbox', videoUrl });
+                  await tiktokUploadFromUrl({ uploadUrl, videoUrl, videoSize, chunkSize, totalChunks, contentType });
+                  publishId = upId;
+                } else {
+                  throw e;
+                }
+              }
+            } else {
+              if (hasUpload) {
+                console.warn('⚠️ Intentando Inbox FILE_UPLOAD como último recurso...');
+                const { publishId: upId, uploadUrl, videoSize, chunkSize, totalChunks, contentType } = await tiktokInitFileUpload({ token: ttToken, mode: 'inbox', videoUrl });
+                await tiktokUploadFromUrl({ uploadUrl, videoUrl, videoSize, chunkSize, totalChunks, contentType });
+                publishId = upId;
+              } else {
+                throw new Error(errMsg || 'Error inicializando publicación en TikTok (Direct Post)');
+              }
+            }
+          } else {
+            publishId = initJson?.data?.publish_id || null;
+          }
+        } else if (hasUpload) {
+          console.log('📤 Enviando a TikTok Inbox (Upload)...');
+          const initBody = {
+            source_info: {
+              source: 'PULL_FROM_URL',
+              video_url: pullUrl,
+            },
+          };
+          const initRes = await fetch('https://open.tiktokapis.com/v2/post/publish/inbox/video/init/', {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${ttToken}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(initBody),
+          });
+          const initJson = await initRes.json().catch(() => ({}));
+          if (!initRes.ok) {
+            const errMsg = initJson?.error?.message || '';
+            console.error('❌ Error init TikTok (Inbox):', initJson);
+            console.warn('⚠️ PULL_FROM_URL (Inbox) falló, intentando FILE_UPLOAD...', errMsg);
+            if (/URL ownership|ownership verification|pull_from_url|guidelines/i.test(errMsg)) {
+              // Fallback a FILE_UPLOAD
+            const { publishId: upId, uploadUrl, videoSize, chunkSize, totalChunks, contentType } = await tiktokInitFileUpload({ token: ttToken, mode: 'inbox', videoUrl });
+            await tiktokUploadFromUrl({ uploadUrl, videoUrl, videoSize, chunkSize, totalChunks, contentType });
+            publishId = upId;
+            } else {
+              throw new Error(errMsg || 'Error subiendo video a TikTok (Inbox)');
+            }
+          } else {
+            publishId = initJson?.data?.publish_id || null;
+          }
+        } else {
+          throw new Error('Permisos de TikTok insuficientes (requiere video.publish o video.upload)');
+        }
+
+        // Consultar estado inicial (opcional)
+        if (publishId) {
+          try {
+            const statusRes = await fetch('https://open.tiktokapis.com/v2/post/publish/status/fetch/', {
+              method: 'POST',
+              headers: {
+                Authorization: `Bearer ${ttToken}`,
+                'Content-Type': 'application/json; charset=UTF-8',
+              },
+              body: JSON.stringify({ publish_id: publishId }),
+            });
+            const statusJson = await statusRes.json().catch(() => ({}));
+            if (statusRes.ok) {
+              status = statusJson?.data?.status || null;
+            }
+          } catch (e) {
+            console.warn('⚠️ No se pudo obtener estado inicial de TikTok:', e?.message || e);
+          }
+        }
+
+        results.push({
+          platform: 'tiktok',
+          success: true,
+          id: publishId,
+          status,
+        });
+      } catch (error) {
+        console.error('Error publicando en TikTok:', error);
+        results.push({
+          platform: 'tiktok',
           success: false,
           error: error.message,
         });
