@@ -39,6 +39,8 @@ export default function Home() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const authGateShownRef = useRef(false);
   const bottomRef = useRef(null);
+  const initialScrollDoneRef = useRef(false);
+  const disableSmoothUntilRef = useRef(Date.now() + 1500);
   const [lightbox, setLightbox] = useState(null);
   // Estado del flujo de publicación lineal
   const [publishStage, setPublishStage] = useState('idle'); // 'idle' | 'await-media' | 'await-description'
@@ -534,8 +536,14 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, loading]);
+    if (!bottomRef.current) return;
+    const firstNotDone = !initialScrollDoneRef.current;
+    const shouldForceAuto = firstNotDone || historyLoading || Date.now() < disableSmoothUntilRef.current;
+    bottomRef.current.scrollIntoView({ behavior: shouldForceAuto ? "auto" : "smooth" });
+    if (firstNotDone && !historyLoading && messages.length > 0) {
+      initialScrollDoneRef.current = true;
+    }
+  }, [messages, loading, historyLoading]);
 
   useEffect(() => {
     const checkSession = async () => {
