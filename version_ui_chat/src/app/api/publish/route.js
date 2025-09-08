@@ -716,6 +716,9 @@ export async function POST(request) {
           : (typeof grantedScopes === 'string' ? grantedScopes.split(/[\s,]+/).filter(Boolean) : []);
         const hasDirectPost = scopes.includes('video.publish');
         const hasUpload = scopes.includes('video.upload');
+        
+        console.log('🔑 TikTok scopes disponibles:', scopes);
+        console.log('📋 Permisos: video.publish =', hasDirectPost, ', video.upload =', hasUpload);
 
         let publishId = null;
         let status = null;
