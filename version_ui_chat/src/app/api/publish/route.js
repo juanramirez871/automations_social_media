@@ -36,9 +36,6 @@ export async function POST(request) {
     });
     
   } catch (error) {
-    console.error('Error en /api/publish:', error);
-    
-    // Manejar errores de validación
     if (error.message === 'Usuario no especificado' || error.message === 'Variables de Supabase no configuradas') {
       return NextResponse.json(
         { error: error.message },

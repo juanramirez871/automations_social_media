@@ -1,11 +1,7 @@
-// Publishers Index - Exporta todos los publishers
-
 export { publishToInstagram } from './instagram.js';
 export { publishToFacebook } from './facebook.js';
 export { publishToYouTube } from './youtube.js';
 export { publishToTikTok } from './tiktok.js';
-
-// Mapa de publishers para fácil acceso
 export const PUBLISHERS = {
   instagram: async (params) => {
     const { publishToInstagram } = await import('./instagram.js');
@@ -25,9 +21,6 @@ export const PUBLISHERS = {
   },
 };
 
-/**
- * Publica contenido en múltiples plataformas
- */
 export async function publishToMultiplePlatforms({ 
   caption, 
   imageUrl, 
@@ -39,7 +32,6 @@ export async function publishToMultiplePlatforms({
 }) {
   const results = [];
   
-  // Publicar en cada plataforma de forma paralela
   const publishPromises = platforms.map(async (platform) => {
     if (!PUBLISHERS[platform]) {
       return {
@@ -69,7 +61,6 @@ export async function publishToMultiplePlatforms({
   
   const publishResults = await Promise.allSettled(publishPromises);
   
-  // Procesar resultados
   publishResults.forEach((result, index) => {
     if (result.status === 'fulfilled') {
       results.push(result.value);
