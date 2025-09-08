@@ -69,7 +69,6 @@ export default function Home() {
       const data = await res.json();
       return { secureUrl: data.secureUrl, publicId: data.publicId, resourceType: data.resourceType };
     } catch (e) {
-      console.warn('Cloudinary upload error:', e?.message || e);
       return null;
     }
   };
@@ -661,8 +660,6 @@ export default function Home() {
                     <InstagramAuthWidgetExt
                       widgetId={m.id}
                       onConnected={async (payload) => {
-                        console.log('🎉 Instagram conectado - payload recibido:', payload);
-                        
                         if (igConnectPersistingRef.current) return;
                         igConnectPersistingRef.current = true;
                          try {
@@ -670,18 +667,10 @@ export default function Home() {
                            const expires_in = payload?.expires_in;
                            const user = payload?.user || {};
                            
-                           console.log('📋 Datos extraídos:', {
-                             access_token: access_token ? `${access_token.substring(0, 20)}...` : null,
-                             expires_in,
-                             user,
-                             pageId: payload?.pageId,
-                             pageName: payload?.pageName
-                           });
                            const expiresAt = expires_in ? new Date(Date.now() + Number(expires_in) * 1000).toISOString() : null;
                            const { data: sessionData } = await getSessionOnce();
                            const userId = sessionData?.session?.user?.id;
                            if (!userId) throw new Error("Sesión inválida");
-                           console.log('💾 Guardando token en base de datos...');
                            
                            const ok = await upsertInstagramToken({
                              userId,
@@ -692,8 +681,6 @@ export default function Home() {
                              grantedScopes: null,
                            });
                            
-                           console.log('💾 Resultado de guardado:', ok ? 'ÉXITO' : 'ERROR');
-                           
                            if (!ok) throw new Error("No fue posible guardar el token de Instagram");
                            const connected = {
                              id: `a-${Date.now()}-ig-ok`,
@@ -703,16 +690,11 @@ export default function Home() {
                              igId: user?.id || null,
                              expiresAt,
                            };
-                           console.log('🎨 Creando widget conectado:', connected);
                            
-                           // Reemplazar cualquier widget conectado previo por el nuevo
                            setMessages((prev) => {
                              const filtered = prev.filter((mm) => mm.type !== "widget-instagram-connected");
-                             console.log('🔄 Actualizando mensajes - antes:', prev.length, 'después:', filtered.length + 1);
                              return [...filtered, connected];
                            });
-                           
-                           console.log('🗄️ Guardando widget en base de datos...');
                            
                            // NUEVO: asegurar unicidad en DB (dejar solo uno por usuario)
                            try {
@@ -728,7 +710,7 @@ export default function Home() {
                              meta: { username: connected.username, igId: connected.igId, expiresAt: connected.expiresAt } 
                            });
                            
-                           console.log('🗄️ Resultado guardado DB:', dbResult ? 'ÉXITO' : 'ERROR');
+
                          } catch (err) {
                            setMessages((prev) => [
                              ...prev,

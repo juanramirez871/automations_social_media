@@ -17,7 +17,7 @@ export async function POST(req) {
 
     return Response.json({ ok: true });
   } catch (error) {
-    console.error('Error en API clear:', error?.message || error);
+
     return new Response(
       JSON.stringify({ error: 'Error interno del servidor' }),
       { status: 500, headers: { 'Content-Type': 'application/json' } }

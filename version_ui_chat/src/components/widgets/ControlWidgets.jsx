@@ -444,13 +444,9 @@ export const ScheduleWidget = ({ defaultValue = null, onConfirm, publishData = n
       setPublishError(null);
       
       // Si hay datos de publicación, publicar inmediatamente
-      if (publishData) {
-        console.log('🚀 Iniciando publicación con datos:', publishData);
-        
-        // Obtener userId de la sesión actual
-        console.log('📋 Obteniendo sesión de usuario...');
-        const { data: { session } } = await supabase.auth.getSession();
-        console.log('👤 Sesión obtenida:', session?.user?.id ? 'Usuario válido' : 'Sin usuario');
+        if (publishData) {
+          // Obtener userId de la sesión actual
+          const { data: { session } } = await supabase.auth.getSession();
         
         if (!session?.user?.id) {
           throw new Error('No hay sesión de usuario válida');
@@ -464,7 +460,7 @@ export const ScheduleWidget = ({ defaultValue = null, onConfirm, publishData = n
           userId: session.user.id,
         };
         
-        console.log('📤 Enviando petición a /api/publish con:', requestBody);
+
         
         const response = await fetch('/api/publish', {
           method: 'POST',
@@ -474,18 +470,11 @@ export const ScheduleWidget = ({ defaultValue = null, onConfirm, publishData = n
           body: JSON.stringify(requestBody),
         });
         
-        console.log('📥 Respuesta recibida. Status:', response.status, 'OK:', response.ok);
-        
         const result = await response.json();
-        console.log('📋 Resultado parseado:', result);
         
         if (!response.ok || !result.success) {
-          console.error('❌ Error en publicación:', result);
-          console.log('📄 Response completa:', response);
-          throw new Error(result.error || result.message || 'Error en la publicación');
+          throw new Error(result.error || 'Error en la publicación');
         }
-        
-        console.log('✅ Publicación exitosa!');
         
         setPublishStatus('success');
         // Llamar onConfirm con el resultado de la publicación
@@ -495,7 +484,6 @@ export const ScheduleWidget = ({ defaultValue = null, onConfirm, publishData = n
         await onConfirm(value);
       }
     } catch (error) {
-      console.error('Error en publicación:', error);
       setPublishStatus('error');
       setPublishError(error.message);
     } finally {

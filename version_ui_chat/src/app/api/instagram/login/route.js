@@ -30,7 +30,7 @@ export async function GET(request) {
     authUrl.searchParams.set("response_type", "code");
     authUrl.searchParams.set("state", state);
     
-    console.log('🔗 Redirigiendo a Instagram Business OAuth:', authUrl.toString());
+  
 
     const res = NextResponse.redirect(authUrl.toString(), { status: 302 });
 
