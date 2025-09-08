@@ -844,9 +844,11 @@ export default function Home() {
                           if (typeof window !== 'undefined' && window.__session_cache_once) {
                             try { delete window.__session_cache_once; } catch {}
                           }
-                          setMessages((prev) => [
-                            ...prev,
-                            { id: `a-${Date.now()}-logout`, role: "assistant", type: "text", content: "Has cerrado sesión correctamente." },
+                          setIsLoggedIn(false);
+                          // Mostrar inmediatamente el gate de autenticación y limpiar el chat SOLO en UI
+                          authGateShownRef.current = true;
+                          setMessages([
+                            { id: `a-${Date.now()}-auth-gate`, role: "assistant", type: "widget-auth-gate" },
                           ]);
                         } catch (err) {
                           setMessages((prev) => [
