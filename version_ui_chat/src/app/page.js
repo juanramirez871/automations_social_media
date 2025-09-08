@@ -511,6 +511,8 @@ export default function Home() {
           }
         }
 
+        // Asegurar que nunca se vea el indicador de "escribiendo" junto con la respuesta
+        setLoading(false);
         setMessages((prev) => [...prev, ...additions]);
 
         // Guardar respuesta del asistente y widgets en DB
@@ -521,6 +523,8 @@ export default function Home() {
           await saveMessageToDB({ userId, role: "assistant", content: "", attachments: null, type: wm.type, meta: { widgetKey: wm.widgetKey } });
         }
       } catch (e) {
+        // Apagar el indicador antes de mostrar el mensaje de error
+        setLoading(false);
         setMessages((prev) => [
           ...prev,
           { id: `a-${Date.now()}`, role: "assistant", type: "text", content: "Hubo un error obteniendo la respuesta." },
