@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import ReactMarkdown from "react-markdown";
 import IntroHeader from "@/components/IntroHeader";
 import AssistantMessage from "@/components/AssistantMessage";
 import UserMessage from "@/components/UserMessage";
@@ -55,8 +56,8 @@ export default function Home() {
       if (typeof crypto !== "undefined" && crypto?.randomUUID) {
         return `a-${suffix}-${crypto.randomUUID()}`;
       }
-    } catch {}
-    return `a-${suffix}-${Date.now()}-${Math.random().toString(36).slice(2,7)}`;
+    } catch { }
+    return `a-${suffix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
   };
 
   // Subir archivo a Cloudinary vía API interna
@@ -124,7 +125,7 @@ export default function Home() {
                 draftsByWidget[key] = t;
               }
               if (t) restoreTargets = t; // Mantener la última selección
-            } catch (_) {}
+            } catch (_) { }
             return null; // No renderizar en UI
           }
           if (rType === "internal-schedule") {
@@ -144,11 +145,11 @@ export default function Home() {
           if (rType === "widget-instagram-auth") {
             return { id: r.id, role: "assistant", type: "widget-instagram-auth" };
           }
-           if (rType === "widget-instagram-configured") {
-             const name = r?.meta?.name || null;
-             const id = r?.meta?.id || null;
-             return { id: r.id, role: "assistant", type: "widget-instagram-configured", name, igId: id };
-           }
+          if (rType === "widget-instagram-configured") {
+            const name = r?.meta?.name || null;
+            const id = r?.meta?.id || null;
+            return { id: r.id, role: "assistant", type: "widget-instagram-configured", name, igId: id };
+          }
           if (rType === "widget-instagram-connected") {
             const username = r?.meta?.username || r?.meta?.name || null;
             const igId = r?.meta?.igId || r?.meta?.id || null;
@@ -438,7 +439,12 @@ export default function Home() {
           const res = await fetch('/api/chat', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ mode: 'caption', prompt: `${trimmed}\nPlataformas destino: ${targets || 'generales'}` }),
+            body: JSON.stringify({
+              messages: [{
+                role: "user",
+                content: `${trimmed}\n\nIMPORTANTE: Si tu respuesta es de tipo texto, devuélvela bonita y clara usando Markdown (usa títulos, listas, negritas, tablas, bloques de código, etc. si aplica).`
+              }]
+            }),
           });
           const data = await res.json();
           const suggestion = (data?.text || '').trim();
@@ -642,7 +648,7 @@ export default function Home() {
                             __sessionCache = null;
                             __sessionInflight = null;
                             if (typeof window !== 'undefined' && window.__session_cache_once) {
-                              try { delete window.__session_cache_once; } catch {}
+                              try { delete window.__session_cache_once; } catch { }
                             }
                             const { data: freshSession } = await getSessionOnce();
                             setIsLoggedIn(Boolean(freshSession?.session));
@@ -687,64 +693,64 @@ export default function Home() {
                       onConnected={async (payload) => {
                         if (igConnectPersistingRef.current) return;
                         igConnectPersistingRef.current = true;
-                         try {
-                           const access_token = payload?.access_token;
-                           const expires_in = payload?.expires_in;
-                           const user = payload?.user || {};
-                           
-                           const expiresAt = expires_in ? new Date(Date.now() + Number(expires_in) * 1000).toISOString() : null;
-                           const { data: sessionData } = await getSessionOnce();
-                           const userId = sessionData?.session?.user?.id;
-                           if (!userId) throw new Error("Sesión inválida");
-                           
-                           const ok = await upsertInstagramToken({
-                             userId,
-                             token: access_token,
-                             expiresAt,
-                             igUserId: user?.id || null,
-                             igUsername: user?.username || null,
-                             grantedScopes: null,
-                           });
-                           
-                           if (!ok) throw new Error("No fue posible guardar el token de Instagram");
-                           const connected = {
-                             id: `a-${Date.now()}-ig-ok`,
-                             role: "assistant",
-                             type: "widget-instagram-connected",
-                             username: user?.username || null,
-                             igId: user?.id || null,
-                             expiresAt,
-                           };
-                           
-                           setMessages((prev) => {
-                             const filtered = prev.filter((mm) => mm.type !== "widget-instagram-connected");
-                             return [...filtered, connected];
-                           });
-                           
-                           // NUEVO: asegurar unicidad en DB (dejar solo uno por usuario)
-                           try {
-                             await supabase.from('messages').delete().eq('user_id', userId).eq('type', 'widget-instagram-connected');
-                           } catch (_) {}
-                           
-                           const dbResult = await saveMessageToDB({ 
-                             userId, 
-                             role: "assistant", 
-                             content: "", 
-                             attachments: null, 
-                             type: "widget-instagram-connected", 
-                             meta: { username: connected.username, igId: connected.igId, expiresAt: connected.expiresAt } 
-                           });
-                           
+                        try {
+                          const access_token = payload?.access_token;
+                          const expires_in = payload?.expires_in;
+                          const user = payload?.user || {};
 
-                         } catch (err) {
-                           setMessages((prev) => [
-                             ...prev,
-                             { id: `a-${Date.now()}-ig-error`, role: "assistant", type: "text", content: `Instagram OAuth error: ${err?.message || err}` },
-                           ]);
-                         } finally {
-                           igConnectPersistingRef.current = false;
-                         }
-                       }}
+                          const expiresAt = expires_in ? new Date(Date.now() + Number(expires_in) * 1000).toISOString() : null;
+                          const { data: sessionData } = await getSessionOnce();
+                          const userId = sessionData?.session?.user?.id;
+                          if (!userId) throw new Error("Sesión inválida");
+
+                          const ok = await upsertInstagramToken({
+                            userId,
+                            token: access_token,
+                            expiresAt,
+                            igUserId: user?.id || null,
+                            igUsername: user?.username || null,
+                            grantedScopes: null,
+                          });
+
+                          if (!ok) throw new Error("No fue posible guardar el token de Instagram");
+                          const connected = {
+                            id: `a-${Date.now()}-ig-ok`,
+                            role: "assistant",
+                            type: "widget-instagram-connected",
+                            username: user?.username || null,
+                            igId: user?.id || null,
+                            expiresAt,
+                          };
+
+                          setMessages((prev) => {
+                            const filtered = prev.filter((mm) => mm.type !== "widget-instagram-connected");
+                            return [...filtered, connected];
+                          });
+
+                          // NUEVO: asegurar unicidad en DB (dejar solo uno por usuario)
+                          try {
+                            await supabase.from('messages').delete().eq('user_id', userId).eq('type', 'widget-instagram-connected');
+                          } catch (_) { }
+
+                          const dbResult = await saveMessageToDB({
+                            userId,
+                            role: "assistant",
+                            content: "",
+                            attachments: null,
+                            type: "widget-instagram-connected",
+                            meta: { username: connected.username, igId: connected.igId, expiresAt: connected.expiresAt }
+                          });
+
+
+                        } catch (err) {
+                          setMessages((prev) => [
+                            ...prev,
+                            { id: `a-${Date.now()}-ig-error`, role: "assistant", type: "text", content: `Instagram OAuth error: ${err?.message || err}` },
+                          ]);
+                        } finally {
+                          igConnectPersistingRef.current = false;
+                        }
+                      }}
                       onError={(reason) => {
                         setMessages((prev) => [
                           ...prev,
@@ -775,13 +781,13 @@ export default function Home() {
                           const permissions = payload?.granted_scopes || [];
                           const pageId = payload?.pageId ?? payload?.data?.pageId ?? null;
                           const pageName = payload?.pageName ?? payload?.data?.pageName ?? null;
-                          
+
                           const expiresAt = expires_in ? new Date(Date.now() + (Number(expires_in) * 1000)).toISOString() : null;
-                          
+
                           const { data: sessionData } = await getSessionOnce();
                           const userId = sessionData?.session?.user?.id;
                           if (!userId) throw new Error("Sesión inválida");
-                          
+
                           const ok = await upsertFacebookToken({
                             userId,
                             token: access_token,
@@ -792,7 +798,7 @@ export default function Home() {
                             pageId: pageId,
                             pageName: pageName,
                           });
-                          
+
 
                           if (!ok) throw new Error("No fue posible guardar el token en el perfil");
                           const connected = {
@@ -842,7 +848,7 @@ export default function Home() {
                           __sessionCache = null;
                           __sessionInflight = null;
                           if (typeof window !== 'undefined' && window.__session_cache_once) {
-                            try { delete window.__session_cache_once; } catch {}
+                            try { delete window.__session_cache_once; } catch { }
                           }
                           setIsLoggedIn(false);
                           // Mostrar inmediatamente el gate de autenticación y limpiar el chat SOLO en UI
@@ -921,7 +927,7 @@ export default function Home() {
                         const key = m.widgetKey || m.id;
                         setWidgetTargetDrafts((prev) => ({ ...prev, [key]: arr }));
                         await saveMessageToDB({ userId, role: 'assistant', content: JSON.stringify({ widgetKey: key, widgetId: m.id, targets: arr, draft: true }), attachments: null, type: 'internal-targets' });
-                      } catch (_) {}
+                      } catch (_) { }
                     }} />
                   </AssistantMessage>
                 );
@@ -970,7 +976,7 @@ export default function Home() {
                           }
                           setPublishStage('idle');
                           setCustomCaptionMode(false);
-                        } catch (_) {}
+                        } catch (_) { }
                       }}
                       onRegenerate={async () => {
                         try {
@@ -993,7 +999,7 @@ export default function Home() {
                             await saveMessageToDB({ userId, role: 'assistant', content: pre.content, attachments: null, type: 'text' });
                             await saveMessageToDB({ userId, role: 'assistant', content: '', attachments: null, type: 'widget-caption-suggest', meta: capMeta });
                           }
-                        } catch (_) {}
+                        } catch (_) { }
                       }}
                       onCustom={() => {
                         setCustomCaptionMode(true);
@@ -1008,31 +1014,31 @@ export default function Home() {
               }
               if (m.type === "widget-schedule") {
                 const def = m?.meta?.defaultValue || null;
-                
+
                 // Recopilar datos de publicación del flujo actual
                 const publishData = (() => {
-                  const userMediaMessages = messages.filter(msg => 
-                    msg.role === 'user' && 
-                    msg.type === 'text+media' && 
-                    Array.isArray(msg.attachments) && 
+                  const userMediaMessages = messages.filter(msg =>
+                    msg.role === 'user' &&
+                    msg.type === 'text+media' &&
+                    Array.isArray(msg.attachments) &&
                     msg.attachments.length > 0
                   );
-                  
+
                   if (userMediaMessages.length === 0) {
                     return null;
                   }
-                  
+
                   const lastMediaMessage = userMediaMessages[userMediaMessages.length - 1];
                   const attachments = lastMediaMessage.attachments || [];
-                  
+
                   let caption = '';
-                  const captionMessages = messages.filter(msg => 
-                    msg.role === 'assistant' && 
-                    msg.type === 'text' && 
-                    msg.content && 
+                  const captionMessages = messages.filter(msg =>
+                    msg.role === 'assistant' &&
+                    msg.type === 'text' &&
+                    msg.content &&
                     (msg.content.includes('Descripción final:') || msg.content.includes('Redes:'))
                   );
-                  
+
                   if (captionMessages.length > 0) {
                     const lastCaptionMsg = captionMessages[captionMessages.length - 1];
                     const match = lastCaptionMsg.content.match(/Descripción final:\s*(.+)$/s);
@@ -1040,22 +1046,22 @@ export default function Home() {
                       caption = match[1].trim();
                     }
                   }
-                  
+
                   const imageUrl = attachments.find(a => a.kind === 'image')?.url || null;
                   const videoUrl = attachments.find(a => a.kind === 'video')?.url || null;
-                  
+
                   const platforms = publishTargets && publishTargets.length > 0 ? publishTargets : ['instagram'];
-                  
+
                   const result = {
                     caption,
                     imageUrl,
                     videoUrl,
                     platforms
                   };
-                  
+
                   return result;
                 })();
-                
+
                 return (
                   <AssistantMessage key={m.id} borderClass="border-violet-200">
                     <ScheduleWidgetExt
@@ -1065,9 +1071,9 @@ export default function Home() {
                         try {
                           const { data: sessionData } = await getSessionOnce();
                           const userId = sessionData?.session?.user?.id;
-                          
+
                           if (result.publishResult) {
-                            
+
                             const publishResult = result.publishResult;
                             const results = Array.isArray(publishResult?.results) ? publishResult.results : [];
                             const platformNames = { instagram: 'Instagram', facebook: 'Facebook', youtube: 'YouTube', tiktok: 'TikTok' };
@@ -1110,78 +1116,78 @@ export default function Home() {
                                 .join('; ');
                               confirmMessage = `Hubo un problema al publicar: ${errStr || 'Error desconocido'}`;
                             }
-                            
-                            const confirm = { 
-                              id: newId('publish-confirm'), 
-                              role: 'assistant', 
-                              type: 'text', 
-                              content: confirmMessage 
+
+                            const confirm = {
+                              id: newId('publish-confirm'),
+                              role: 'assistant',
+                              type: 'text',
+                              content: confirmMessage
                             };
-                            
+
                             setMessages((prev) => [...prev, confirm]);
-                            
+
                             if (userId) {
-                              await saveMessageToDB({ 
-                                userId, 
-                                role: 'assistant', 
-                                content: '', 
-                                attachments: null, 
-                                type: 'internal-publish-result', 
-                                meta: { 
+                              await saveMessageToDB({
+                                userId,
+                                role: 'assistant',
+                                content: '',
+                                attachments: null,
+                                type: 'internal-publish-result',
+                                meta: {
                                   scheduledDate: result.scheduledDate,
                                   publishResult: publishResult,
                                   platforms: results.map(r => ({ platform: r.platform, success: !!r.success, id: r.id || null, url: r.url || null, error: r.error || null }))
-                                } 
+                                }
                               });
-                              await saveMessageToDB({ 
-                                userId, 
-                                role: 'assistant', 
-                                content: confirm.content, 
-                                attachments: null, 
-                                type: 'text' 
+                              await saveMessageToDB({
+                                userId,
+                                role: 'assistant',
+                                content: confirm.content,
+                                attachments: null,
+                                type: 'text'
                               });
                             }
                           } else {
                             // Solo programación (comportamiento anterior)
                             const when = new Date(result);
                             const pretty = isNaN(when.getTime()) ? result : when.toLocaleString();
-                            const confirm = { 
-                              id: newId('schedule-confirm'), 
-                              role: 'assistant', 
-                              type: 'text', 
-                              content: `Perfecto. Programé la subida para ${pretty}.` 
+                            const confirm = {
+                              id: newId('schedule-confirm'),
+                              role: 'assistant',
+                              type: 'text',
+                              content: `Perfecto. Programé la subida para ${pretty}.`
                             };
-                            
+
                             setMessages((prev) => [...prev, confirm]);
-                            
+
                             if (userId) {
-                              await saveMessageToDB({ 
-                                userId, 
-                                role: 'assistant', 
-                                content: '', 
-                                attachments: null, 
-                                type: 'internal-schedule', 
-                                meta: { value: result } 
+                              await saveMessageToDB({
+                                userId,
+                                role: 'assistant',
+                                content: '',
+                                attachments: null,
+                                type: 'internal-schedule',
+                                meta: { value: result }
                               });
-                              await saveMessageToDB({ 
-                                userId, 
-                                role: 'assistant', 
-                                content: confirm.content, 
-                                attachments: null, 
-                                type: 'text' 
+                              await saveMessageToDB({
+                                userId,
+                                role: 'assistant',
+                                content: confirm.content,
+                                attachments: null,
+                                type: 'text'
                               });
                             }
                           }
-                          
+
                           setPublishStage('idle');
                           setPublishTargets([]);
                           setCustomCaptionMode(false);
                         } catch (error) {
-                          const errorMsg = { 
-                            id: newId('schedule-error'), 
-                            role: 'assistant', 
-                            type: 'text', 
-                            content: `Error: ${error.message}` 
+                          const errorMsg = {
+                            id: newId('schedule-error'),
+                            role: 'assistant',
+                            type: 'text',
+                            content: `Error: ${error.message}`
                           };
                           setMessages((prev) => [...prev, errorMsg]);
                         }
@@ -1325,7 +1331,19 @@ export default function Home() {
 
               return (
                 <AssistantMessage key={m.id} borderClass="border-gray-200">
-                  {m.content}
+                  {/* Renderizar Markdown si el contenido tiene formato Markdown */}
+                  <ReactMarkdown
+                    components={{
+                      a: (props) => <a {...props} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline" />,
+                      code: (props) => <code {...props} className="bg-gray-100 px-1 rounded text-sm font-mono" />,
+                      pre: (props) => <pre {...props} className="bg-gray-100 p-2 rounded overflow-x-auto" />,
+                      ul: (props) => <ul {...props} className="list-disc ml-6" />,
+                      ol: (props) => <ol {...props} className="list-decimal ml-6" />,
+                      blockquote: (props) => <blockquote {...props} className="border-l-4 border-blue-200 pl-4 italic text-gray-500" />,
+                    }}
+                  >
+                    {m.content}
+                  </ReactMarkdown>
                 </AssistantMessage>
               );
             }

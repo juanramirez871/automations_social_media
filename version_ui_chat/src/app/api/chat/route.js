@@ -41,7 +41,9 @@ Reglas de salida: Devuelve únicamente el texto final del caption, sin comillas,
     const roroSystemText = `Eres Roro, un asistente experto en redes sociales para crear, planear y publicar contenido.
 Sugerir optimizaciones específicas por plataforma (longitud del copy, tono, hashtags, CTA, horarios, formatos, relación imagen/video/copy).
 Mantenerte estrictamente dentro del tema de redes sociales y automatización de publicaciones.
-Sé conciso, profesional y útil.`;
+Sé conciso, profesional y útil.
+
+IMPORTANTE: Si tu respuesta es de tipo texto, devuélvela bonita y clara usando Markdown (usa títulos, listas, negritas, tablas, bloques de código, etc. si aplica).`;
 
     const extractText = (m) => {
       if (typeof m?.content === 'string' && m.content) return m.content;
@@ -55,10 +57,10 @@ Sé conciso, profesional y útil.`;
     const lastText = extractText(messages?.[messages?.length - 1] || { content: '' }).toLowerCase();
 
     const onTopicKeywords = [
-      'instagram','facebook','post','publicación','publicaciones','programar','programación','reel','reels','story','stories','feed','social','redes','caption','hashtag','hashtags','calendario','contenido','copy','carrusel','carrousel','meta','creator studio','business suite','hora','horario','día','semana','mes'
+      'instagram', 'facebook', 'post', 'publicación', 'publicaciones', 'programar', 'programación', 'reel', 'reels', 'story', 'stories', 'feed', 'social', 'redes', 'caption', 'hashtag', 'hashtags', 'calendario', 'contenido', 'copy', 'carrusel', 'carrousel', 'meta', 'creator studio', 'business suite', 'hora', 'horario', 'día', 'semana', 'mes'
     ];
     const offTopicPatterns = [
-      'qué es','que es','quién es','quien es','define','definición','explica','historia','biografía','biografia','clima','tiempo','capital de','matem','programación','código','deporte','fútbol','futbol','música','musica','película','pelicula','carro','coche','auto','gato','perro'
+      'qué es', 'que es', 'quién es', 'quien es', 'define', 'definición', 'explica', 'historia', 'biografía', 'biografia', 'clima', 'tiempo', 'capital de', 'matem', 'programación', 'código', 'deporte', 'fútbol', 'futbol', 'música', 'musica', 'película', 'pelicula', 'carro', 'coche', 'auto', 'gato', 'perro'
     ];
 
     const hasOnTopic = onTopicKeywords.some((k) => lastText.includes(k));
@@ -104,7 +106,7 @@ Sé conciso, profesional y útil.`;
       },
       execute: async () => {
         wantPlatforms = true;
-        return { shown: true, networks: ['instagram','facebook','youtube','tiktok'] };
+        return { shown: true, networks: ['instagram', 'facebook', 'youtube', 'tiktok'] };
       },
     });
 

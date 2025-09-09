@@ -13,13 +13,14 @@
     "@google/generative-ai": "^0.24.1",
     "@supabase/supabase-js": "^2.57.0",
     "ai": "^5.0.29",
+    "cloudinary": "^2.7.0",
     "flowbite": "^3.1.2",
     "flowbite-react": "^0.12.8",
     "next": "15.5.2",
     "preline": "^3.2.3",
     "react": "19.1.0",
     "react-dom": "19.1.0",
-    "cloudinary": "^2.7.0"
+    "react-markdown": "^10.1.0"
   },
   "devDependencies": {
     "@tailwindcss/forms": "^0.5.10",
