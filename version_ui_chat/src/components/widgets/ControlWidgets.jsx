@@ -424,6 +424,7 @@ export const ScheduleWidget = ({ defaultValue = null, onConfirm, publishData = n
     const local = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
     return local;
   });
+  const [scheduleMode, setScheduleMode] = useState(false); // false: publicar ahora, true: programar
 
   const minValue = (() => {
     const now = new Date();
@@ -505,10 +506,7 @@ export const ScheduleWidget = ({ defaultValue = null, onConfirm, publishData = n
         <div className="flex items-center gap-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
           <span className="size-4 rounded-full border-2 border-blue-500/60 border-t-transparent animate-spin" aria-hidden="true"></span>
           <span className="text-sm text-blue-700">
-            Publicando en {publishData?.platforms?.length > 1 
-              ? publishData.platforms.join(', ').replace(/,([^,]*)$/, ' y$1')
-              : publishData?.platforms?.[0] || 'redes sociales'
-            }...
+            Publicando...
           </span>
         </div>
       )}
@@ -519,10 +517,7 @@ export const ScheduleWidget = ({ defaultValue = null, onConfirm, publishData = n
             <path fill="currentColor" d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
           </svg>
           <span className="text-sm text-green-700">
-            ¡Publicado exitosamente en {publishData?.platforms?.length > 1 
-              ? publishData.platforms.join(', ').replace(/,([^,]*)$/, ' y$1')
-              : publishData?.platforms?.[0] || 'redes sociales'
-            }!
+            ¡Publicado exitosamente
           </span>
         </div>
       )}
@@ -535,33 +530,63 @@ export const ScheduleWidget = ({ defaultValue = null, onConfirm, publishData = n
           <span className="text-sm text-red-700">Error: {publishError}</span>
         </div>
       )}
+
+      {/* UI Unificada: check Programar -> input y botón Programar deshabilitado; siempre mostrar Publicar ahora */}
       <div className="flex items-center gap-3">
-        <input
-          type="datetime-local"
-          value={value || ''}
-          onChange={(e) => setValue(e.target.value)}
-          min={minValue}
-          className="block w-full max-w-[280px] rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-violet-400 focus:border-violet-300"
-        />
-        <button
-          type="button"
-          onClick={handleConfirm}
-          disabled={busy || !value}
-          aria-busy={busy}
-          className="inline-flex items-center gap-2 rounded-lg bg-violet-600 px-3 py-2 text-xs text-white transition-all duration-200 ease-out hover:bg-violet-700 hover:-translate-y-0.5 hover:shadow-sm active:scale-95 disabled:opacity-50 disabled:pointer-events-none"
-        >
-          {busy ? (
-            <span className="size-3.5 rounded-full border-2 border-white/60 border-t-transparent animate-spin" aria-hidden="true"></span>
-          ) : publishData ? (
-            <svg viewBox="0 0 24 24" className="size-4" aria-hidden="true">
-              <path fill="currentColor" d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
-            </svg>
-          ) : (
-            <svg viewBox="0 0 24 24" className="size-4" aria-hidden="true"><path fill="currentColor" d="M7 10h5v5H7z"/><path fill="currentColor" d="M19 3h-1V1h-2v2H8V1H6v2H5a2 2 0 00-2 2v13a2 2 0 002 2h14a2 2 0 002-2V5a2 2 0 00-2-2zm0 15H5V8h14v10z"/></svg>
-          )}
-          {publishData ? 'Publicar ahora' : 'Programar'}
-        </button>
+        <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+          <input
+            type="checkbox"
+            className="rounded border-gray-300 text-violet-600 focus:ring-violet-500"
+            checked={scheduleMode}
+            onChange={(e) => setScheduleMode(e.target.checked)}
+          />
+          Programar
+        </label>
       </div>
+
+      {scheduleMode && (
+        <div className="flex items-center gap-3">
+          <input
+            type="datetime-local"
+            value={value || ''}
+            onChange={(e) => setValue(e.target.value)}
+            min={minValue}
+            className="block w-full max-w-[280px] rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-violet-400 focus:border-violet-300"
+          />
+        </div>
+      )}
+
+      {scheduleMode ? (
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            disabled
+            className="inline-flex items-center gap-2 rounded-lg bg-gray-100 px-3 py-2 text-xs text-gray-500 cursor-not-allowed"
+            title="Próximamente"
+          >
+            Programar
+          </button>
+        </div>
+      ) : (
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={handleConfirm}
+            disabled={busy}
+            aria-busy={busy}
+            className="inline-flex items-center gap-2 rounded-lg bg-violet-600 px-3 py-2 text-xs text-white transition-all duration-200 ease-out hover:bg-violet-700 hover:-translate-y-0.5 hover:shadow-sm active:scale-95 disabled:opacity-50 disabled:pointer-events-none"
+          >
+            {busy ? (
+              <span className="size-3.5 rounded-full border-2 border-white/60 border-t-transparent animate-spin" aria-hidden="true"></span>
+            ) : (
+              <svg viewBox="0 0 24 24" className="size-4" aria-hidden="true">
+                <path fill="currentColor" d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+              </svg>
+            )}
+            Publicar ahora
+          </button>
+        </div>
+      )}
     </div>
   );
 };
