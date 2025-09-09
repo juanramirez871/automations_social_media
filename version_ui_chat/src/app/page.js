@@ -88,6 +88,7 @@ export default function Home() {
 
       let restoreTargets = null;
       let sawAwaitMedia = false;
+      let hasPublishResult = false;
       const draftsByWidget = {};
 
       const normalized = (rows || []).map((r) => {
@@ -130,6 +131,11 @@ export default function Home() {
           }
           if (rType === "internal-schedule") {
             // Mensaje interno para almacenar el horario de publicación. No debe mostrarse en el chat.
+            return null; // No renderizar en UI
+          }
+          if (rType === "internal-publish-result") {
+            // Mensaje interno que indica que ya se completó una publicación exitosamente
+            hasPublishResult = true;
             return null; // No renderizar en UI
           }
           if (rType === "widget-auth-gate") {
@@ -270,16 +276,21 @@ export default function Home() {
         draftsByWidget[lastPostPublish.widgetKey || lastPostPublish.id] = restoreTargets;
       }
 
-      // Restaurar estado del flujo
-      if (lastAskDescIndex >= 0 && !finalSummaryAfter) {
+      // Restaurar estado del flujo SOLO si no hay resultado de publicación exitosa
+      if (hasPublishResult) {
+        // Si ya se publicó exitosamente, mantener el flujo en idle (completado)
+        setPublishStage('idle');
+      } else if (lastAskDescIndex >= 0 && !finalSummaryAfter) {
         setPublishStage('await-description');
       } else if (sawAwaitMedia && lastAskDescIndex < 0) {
         setPublishStage('await-media');
       } else {
         setPublishStage('idle');
       }
-      if (restoreTargets && Array.isArray(restoreTargets)) {
+      if (restoreTargets && Array.isArray(restoreTargets) && !hasPublishResult) {
         setPublishTargets(restoreTargets);
+      } else {
+        setPublishTargets([]); // Limpiar targets si ya se completó el flujo
       }
       setWidgetTargetDrafts(draftsByWidget);
       setIsLoggedIn(true);
