@@ -150,6 +150,7 @@ export async function POST(request) {
       }
     }
 
+    const finalPostsToExecute = postsWithProfiles;
     const results = [];
 
     // Procesar cada publicación
