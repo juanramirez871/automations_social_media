@@ -7,6 +7,9 @@ export default function CalendarModal({ isOpen, onClose }) {
   const [selectedDay, setSelectedDay] = useState(null);
   const [editingPost, setEditingPost] = useState(null);
   const [improvingText, setImprovingText] = useState(false);
+  const [creatingPost, setCreatingPost] = useState(false);
+  const [newPost, setNewPost] = useState(null);
+  const [improvingNewText, setImprovingNewText] = useState(false);
   
   // Datos mock iniciales de publicaciones programadas
   const [scheduledPosts, setScheduledPosts] = useState(() => {
@@ -159,6 +162,97 @@ export default function CalendarModal({ isOpen, onClose }) {
     }
   };
   
+  const startCreatePost = (day = null) => {
+    const targetDay = day || selectedDay || today.getDate();
+    const targetDate = new Date(year, month, targetDay);
+    const dateString = targetDate.toISOString().split('T')[0]; // YYYY-MM-DD format
+    
+    setNewPost({
+      date: dateString,
+      time: '12:00',
+      platforms: ['Instagram'],
+      content: ''
+    });
+    setCreatingPost(true);
+  };
+  
+  const saveNewPost = () => {
+    if (!newPost || !newPost.content.trim() || newPost.platforms.length === 0) return;
+    
+    const selectedDate = new Date(newPost.date);
+    const selectedYear = selectedDate.getFullYear();
+    const selectedMonth = selectedDate.getMonth();
+    const selectedDay = selectedDate.getDate();
+    
+    const key = `${selectedYear}-${selectedMonth}-${selectedDay}`;
+    setScheduledPosts(prev => {
+      const newPosts = { ...prev };
+      if (!newPosts[key]) {
+        newPosts[key] = [];
+      }
+      newPosts[key].push({
+        time: newPost.time,
+        platforms: newPost.platforms,
+        content: newPost.content
+      });
+      
+      // Ordenar por hora
+      newPosts[key].sort((a, b) => a.time.localeCompare(b.time));
+      
+      return newPosts;
+    });
+    
+    setCreatingPost(false);
+    setNewPost(null);
+    
+    // Si la fecha seleccionada es del mes actual, seleccionar el día
+    if (selectedYear === year && selectedMonth === month) {
+      setSelectedDay(selectedDay);
+    }
+  };
+  
+  const cancelCreatePost = () => {
+    setCreatingPost(false);
+    setNewPost(null);
+  };
+  
+  const toggleNewPostPlatform = (platform) => {
+    if (!newPost) return;
+    setNewPost(prev => ({
+      ...prev,
+      platforms: prev.platforms.includes(platform)
+        ? prev.platforms.filter(p => p !== platform)
+        : [...prev.platforms, platform]
+    }));
+  };
+  
+  const improveNewTextWithAI = async () => {
+    if (!newPost?.content?.trim() || improvingNewText) return;
+    
+    setImprovingNewText(true);
+    try {
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: [{ role: 'user', content: newPost.content }],
+          mode: 'caption'
+        })
+      });
+      
+      if (!response.ok) throw new Error('Error al mejorar el texto');
+      
+      const data = await response.json();
+      if (data.text) {
+        setNewPost(prev => ({ ...prev, content: data.text }));
+      }
+    } catch (error) {
+      console.error('Error mejorando texto:', error);
+    } finally {
+      setImprovingNewText(false);
+    }
+  };
+  
   const firstDayOfMonth = new Date(year, month, 1);
   const lastDayOfMonth = new Date(year, month + 1, 0);
   const firstDayWeekday = firstDayOfMonth.getDay();
@@ -232,16 +326,29 @@ export default function CalendarModal({ isOpen, onClose }) {
       <div className="bg-white rounded-2xl p-4 w-4/5 h-4/5 max-w-5xl max-h-screen overflow-y-auto shadow-2xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-xl font-bold text-gray-900">📅 Calendario</h3>
-          <button
-            type="button"
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 hover:bg-gray-100 p-2 rounded-full transition-all cursor-pointer"
-            aria-label="Cerrar"
-          >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => startCreatePost()}
+              className="flex items-center gap-2 px-3 py-2 text-sm text-green-600 bg-green-50 hover:bg-green-100 rounded-lg cursor-pointer transition-colors"
+              title="Nueva Publicación"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              + Nueva
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="text-gray-400 hover:text-gray-600 hover:bg-gray-100 p-2 rounded-full transition-all cursor-pointer"
+              aria-label="Cerrar"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
         </div>
 
         {/* Header del calendario */}
@@ -379,21 +486,21 @@ export default function CalendarModal({ isOpen, onClose }) {
       </div>
       
       {/* Modal de edición */}
-        {editingPost && (
-          <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-60" onClick={cancelEdit}>
-            <div className="bg-white rounded-2xl p-8 max-w-lg w-full mx-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-gray-900">Editar Publicación</h3>
-              <button
-                type="button"
-                onClick={cancelEdit}
-                className="text-gray-400 hover:text-gray-600 cursor-pointer"
-              >
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
+         {editingPost && (
+           <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-60" onClick={cancelEdit}>
+             <div className="bg-white rounded-2xl p-8 max-w-lg w-full mx-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+               <div className="flex items-center justify-between mb-4">
+                 <h3 className="text-lg font-semibold text-gray-900">Editar Publicación</h3>
+                 <button
+                   type="button"
+                   onClick={cancelEdit}
+                   className="text-gray-400 hover:text-gray-600 cursor-pointer"
+                 >
+                   <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                   </svg>
+                 </button>
+               </div>
             
             <div className="space-y-4">
               {/* Día */}
@@ -495,7 +602,124 @@ export default function CalendarModal({ isOpen, onClose }) {
             </div>
           </div>
         </div>
-      )}
-    </div>
-  );
-}
+         )}
+         
+         {/* Modal de nueva publicación */}
+         {creatingPost && newPost && (
+           <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-60" onClick={cancelCreatePost}>
+             <div className="bg-white rounded-2xl p-8 max-w-lg w-full mx-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+               <div className="flex items-center justify-between mb-4">
+                 <h3 className="text-lg font-semibold text-gray-900">Nueva Publicación</h3>
+                 <button
+                   type="button"
+                   onClick={cancelCreatePost}
+                   className="text-gray-400 hover:text-gray-600 cursor-pointer"
+                 >
+                   <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                   </svg>
+                 </button>
+               </div>
+               
+               <div className="space-y-4">
+                  {/* Fecha */}
+                   <div>
+                     <label className="block text-sm font-medium text-gray-700 mb-1">Fecha</label>
+                     <input
+                        type="date"
+                        value={newPost?.date || ''}
+                        onChange={(e) => setNewPost(prev => ({ ...prev, date: e.target.value }))}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        min={new Date().toISOString().split('T')[0]}
+                      />
+                   </div>
+                 
+                 {/* Hora */}
+                 <div>
+                   <label className="block text-sm font-medium text-gray-700 mb-1">Hora</label>
+                   <input
+                     type="time"
+                     value={newPost.time}
+                     onChange={(e) => setNewPost(prev => ({ ...prev, time: e.target.value }))}
+                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                   />
+                 </div>
+                 
+                 {/* Plataformas */}
+                 <div>
+                   <label className="block text-sm font-medium text-gray-700 mb-2">Plataformas</label>
+                   <div className="grid grid-cols-2 gap-2">
+                     {['Instagram', 'Facebook', 'YouTube', 'TikTok'].map(platform => (
+                       <button
+                         key={platform}
+                         type="button"
+                         onClick={() => toggleNewPostPlatform(platform)}
+                         className={`px-3 py-2 text-sm rounded-lg border transition-colors cursor-pointer ${
+                           newPost.platforms.includes(platform)
+                             ? `${getPlatformColor(platform)} text-white border-transparent`
+                             : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                         }`}
+                       >
+                         {platform}
+                       </button>
+                     ))}
+                   </div>
+                 </div>
+                 
+                 {/* Contenido */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Contenido</label>
+                    <textarea
+                      value={newPost.content}
+                      onChange={(e) => setNewPost(prev => ({ ...prev, content: e.target.value }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      rows={3}
+                      placeholder="Descripción del post..."
+                    />
+                    <button
+                      type="button"
+                      onClick={improveNewTextWithAI}
+                      disabled={!newPost?.content?.trim() || improvingNewText}
+                      className="mt-2 flex items-center gap-2 px-3 py-2 text-sm text-purple-600 bg-purple-50 hover:bg-purple-100 rounded-lg cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="Mejorar texto con IA"
+                    >
+                      {improvingNewText ? (
+                        <>
+                          <div className="w-4 h-4 border-2 border-purple-600 border-t-transparent rounded-full animate-spin"></div>
+                          Mejorando...
+                        </>
+                      ) : (
+                        <>
+                          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+                          </svg>
+                          ✨ Mejorar con IA
+                        </>
+                      )}
+                    </button>
+                  </div>
+               </div>
+               
+               <div className="flex gap-3 mt-6">
+                 <button
+                   type="button"
+                   onClick={cancelCreatePost}
+                   className="flex-1 px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors cursor-pointer"
+                 >
+                   Cancelar
+                 </button>
+                 <button
+                   type="button"
+                   onClick={saveNewPost}
+                   disabled={newPost.platforms.length === 0 || !newPost.content.trim()}
+                   className="flex-1 px-4 py-2 text-white bg-green-600 rounded-lg hover:bg-green-700 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                 >
+                   Crear Publicación
+                 </button>
+               </div>
+             </div>
+           </div>
+         )}
+      </div>
+    );
+  }
