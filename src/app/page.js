@@ -392,7 +392,8 @@ export default function Home() {
     await saveMessageToDB({ userId, role: "user", content: trimmed, attachments: attachmentsForDB, type: uploadedAttachments.length ? "text+media" : "text" });
 
     // Detectar si el usuario quiere iniciar un nuevo flujo de publicación explícitamente
-    const wantsNewPublish = /\b(publicar|postear|subir|programar)\b/i.test(trimmed) && /(post|publicaci\u00F3n|video|reel|contenido)/i.test(trimmed);
+    const wantsNewPublish = (/\b(publicar|postear|subir|programar)\b/i.test(trimmed) && /(post|publicaci\u00F3n|video|reel|contenido)/i.test(trimmed)) ||
+                           /\b(sí|si|yes|ok|vale|dale|empezar|nuevo|otra|otro)\b/i.test(trimmed);
     if (wantsNewPublish && publishStage !== 'idle') {
       // Reiniciar el gating para permitir que aparezca el selector nuevamente
       setPublishStage('idle');
@@ -967,11 +968,9 @@ export default function Home() {
                         // Insertar instrucción clara del paso 2 y el widget de espera
                         setMessages((prev) => [
                           ...prev,
-                          { id: `a-${Date.now()}-ask-media`, role: 'assistant', type: 'text', content: 'Paso 2: Por favor sube las imágenes o videos para el post.' },
                           { id: `a-${Date.now()}-await-media`, role: 'assistant', type: 'widget-await-media', meta: { targets: selected || [] } },
                         ]);
-                        // Persistir ambos mensajes para que no desaparezcan tras recargar
-                        await saveMessageToDB({ userId, role: 'assistant', content: 'Paso 2: Por favor sube las imágenes o videos para el post.', attachments: null, type: 'text' });
+                        // Persistir mensaje del widget
                         await saveMessageToDB({ userId, role: 'assistant', content: '', attachments: null, type: 'widget-await-media', meta: { targets: selected || [] } });
                         // Persistencia redundante de redes seleccionadas (por si no existe la columna meta)
                         const key = m.widgetKey || m.id;
@@ -1243,8 +1242,9 @@ export default function Home() {
                             }
                           } else {
                             // Solo programación (comportamiento anterior)
-                            const when = new Date(result);
-                            const pretty = isNaN(when.getTime()) ? result : when.toLocaleString();
+                            const dateValue = result.scheduledDate || result;
+                            const when = new Date(dateValue);
+                            const pretty = isNaN(when.getTime()) ? dateValue : when.toLocaleString();
                             const confirm = {
                               id: newId('schedule-confirm'),
                               role: 'assistant',

@@ -444,8 +444,47 @@ export const ScheduleWidget = ({ defaultValue = null, onConfirm, publishData = n
       setPublishStatus('publishing');
       setPublishError(null);
       
-      // Si hay datos de publicación, publicar inmediatamente
-        if (publishData) {
+      // Si está en modo programar, usar la API de scheduled posts
+      if (scheduleMode) {
+        // Programar publicación usando la API de scheduled posts
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        if (!session?.user?.id) {
+          throw new Error('No hay sesión de usuario válida');
+        }
+        
+        // Convertir datetime-local a fecha y hora separadas
+        const selectedDateTime = new Date(value);
+        const scheduledDate = selectedDateTime.toISOString().split('T')[0]; // YYYY-MM-DD
+        const scheduledTime = selectedDateTime.toTimeString().split(' ')[0].substring(0, 5); // HH:MM
+        
+        const requestBody = {
+          userId: session.user.id,
+          content: publishData?.caption || 'Publicación programada',
+          platforms: publishData?.platforms || ['Instagram'],
+          scheduledDate: scheduledDate,
+          scheduledTime: scheduledTime,
+          mediaUrls: publishData?.imageUrl || publishData?.videoUrl ? [publishData.imageUrl || publishData.videoUrl] : []
+        };
+        
+        const response = await fetch('/api/scheduled-posts', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(requestBody),
+        });
+        
+        const result = await response.json();
+        
+        if (!response.ok) {
+          throw new Error(result.error || 'Error al programar la publicación');
+        }
+        
+        setPublishStatus('success');
+        await onConfirm({ scheduledDate: value, scheduleResult: result });
+      } else if (publishData) {
+        // Si hay datos de publicación, publicar inmediatamente
           // Obtener userId de la sesión actual
           const { data: { session } } = await supabase.auth.getSession();
         
@@ -481,7 +520,7 @@ export const ScheduleWidget = ({ defaultValue = null, onConfirm, publishData = n
         // Llamar onConfirm con el resultado de la publicación
         await onConfirm({ scheduledDate: value, publishResult: result });
       } else {
-        // Solo programar sin publicar
+        // Solo confirmar sin publicar ni programar
         await onConfirm(value);
       }
     } catch (error) {
@@ -517,7 +556,7 @@ export const ScheduleWidget = ({ defaultValue = null, onConfirm, publishData = n
             <path fill="currentColor" d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
           </svg>
           <span className="text-sm text-green-700">
-            ¡Publicado exitosamente
+            {scheduleMode ? '¡Publicación programada exitosamente!' : '¡Publicado exitosamente!'}
           </span>
         </div>
       )}
@@ -560,10 +599,17 @@ export const ScheduleWidget = ({ defaultValue = null, onConfirm, publishData = n
         <div className="flex items-center gap-3">
           <button
             type="button"
-            disabled
-            className="inline-flex items-center gap-2 rounded-lg bg-gray-100 px-3 py-2 text-xs text-gray-500 cursor-not-allowed"
-            title="Próximamente"
+            onClick={handleConfirm}
+            disabled={busy || !value}
+            className="inline-flex items-center gap-2 rounded-lg bg-violet-600 px-3 py-2 text-xs text-white transition-all duration-200 ease-out hover:bg-violet-700 hover:-translate-y-0.5 hover:shadow-sm active:scale-95 disabled:opacity-50 disabled:pointer-events-none cursor-pointer"
           >
+            {busy ? (
+              <span className="size-3.5 rounded-full border-2 border-white/60 border-t-transparent animate-spin" aria-hidden="true"></span>
+            ) : (
+              <svg viewBox="0 0 24 24" className="size-4" aria-hidden="true">
+                <path fill="currentColor" d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM7 10h5v5H7z"/>
+              </svg>
+            )}
             Programar
           </button>
         </div>
