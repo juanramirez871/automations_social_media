@@ -1,90 +1,239 @@
-# Chat IA con Efecto Vidrio
+# 🚀 Social Media Automation Platform
 
-Un chat moderno con integración de Google Gemini AI y efectos visuales de vidrio cuando se arrastra contenido.
+> **Plataforma inteligente de automatización para redes sociales con IA integrada**
 
-## Características
+Una aplicación web moderna que permite crear, programar y publicar contenido automáticamente en múltiples plataformas de redes sociales utilizando inteligencia artificial para generar contenido optimizado.
 
-✨ **Efecto Vidrio**: Cuando arrastras archivos sobre el chat, toda la interfaz se transforma con un hermoso efecto de vidrio (`backdrop-blur-xl`)
+## ✨ Características Principales
 
-🤖 **IA Integrada**: Powered by Google Gemini usando AI SDK Vercel 5
+### 🤖 **Asistente IA Integrado**
+- **Chat inteligente** para crear contenido
+- **Generación automática** de descripciones y hashtags
+- **Sugerencias personalizadas** basadas en tu audiencia
+- **Optimización de contenido** para cada plataforma
 
-📎 **Drag & Drop**: Arrastra imágenes y videos directamente al chat
+### 📅 **Programación Avanzada**
+- **Calendario visual** para gestionar publicaciones
+- **Programación automática** con GitHub Actions
+- **Ejecución cada 5 minutos** para máxima precisión
+- **Gestión completa** (crear, editar, eliminar posts)
 
-🎨 **Diseño Moderno**: Interfaz limpia con Tailwind CSS y efectos de transición suaves
+### 🌐 **Múltiples Plataformas**
+- **Instagram** - Posts, Stories, Reels
+- **Facebook** - Posts y Pages
+- **YouTube** - Videos y Shorts
+- **TikTok** - Videos virales
+- **Más plataformas** próximamente
 
-## Configuración
+### 🎨 **Interfaz Moderna**
+- **Diseño responsive** para todos los dispositivos
+- **Chat interactivo** con widgets especializados
+- **Calendario intuitivo** para visualizar posts
+- **Gestión de archivos** con Cloudinary
 
-### 1. Instalar dependencias
+## 🛠️ Tecnologías Utilizadas
+
+### **Frontend**
+- **Next.js 14** - Framework React moderno
+- **Tailwind CSS** - Estilos utilitarios
+- **React Hooks** - Gestión de estado
+- **Responsive Design** - Adaptable a todos los dispositivos
+
+### **Backend**
+- **Next.js API Routes** - Endpoints RESTful
+- **Supabase** - Base de datos PostgreSQL
+- **GitHub Actions** - Automatización de tareas
+- **Vercel** - Hosting y deployment
+
+### **Integraciones**
+- **Google Gemini AI** - Generación de contenido
+- **Cloudinary** - Gestión de imágenes y videos
+- **OAuth 2.0** - Autenticación segura
+- **Social Media APIs** - Publicación automática
+
+## 🚀 Instalación y Configuración
+
+### **1. Clonar el repositorio**
+```bash
+git clone https://github.com/tu-usuario/automations_social_media.git
+cd automations_social_media
+```
+
+### **2. Instalar dependencias**
 ```bash
 npm install
 ```
 
-### 2. Configurar API Key de Google Gemini
-
-1. Ve a [Google AI Studio](https://aistudio.google.com/app/apikey)
-2. Crea una nueva API key
-3. Copia la API key
-4. Edita el archivo `.env.local` y reemplaza `your_google_api_key_here` con tu API key:
-
-```env
-GOOGLE_GENERATIVE_AI_API_KEY=tu_api_key_aqui
+### **3. Configurar variables de entorno**
+```bash
+cp .env.example .env.local
 ```
 
-### 3. Ejecutar el proyecto
+Edita `.env.local` con tus credenciales:
+
+```env
+# Supabase
+NEXT_PUBLIC_SUPABASE_URL=tu_supabase_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=tu_supabase_anon_key
+SUPABASE_SERVICE_ROLE_KEY=tu_service_role_key
+
+# Cron Job Security
+CRON_SECRET=tu_clave_secreta_aleatoria
+
+# Google AI
+GOOGLE_GENERATIVE_AI_API_KEY=tu_gemini_api_key
+
+# Cloudinary
+CLOUDINARY_CLOUD_NAME=tu_cloud_name
+CLOUDINARY_API_KEY=tu_api_key
+CLOUDINARY_API_SECRET=tu_api_secret
+```
+
+### **4. Configurar base de datos**
+```bash
+# Ejecutar en Supabase SQL Editor
+psql -f database_setup.sql
+```
+
+### **5. Ejecutar en desarrollo**
 ```bash
 npm run dev
 ```
 
-El chat estará disponible en `http://localhost:3000` (o el puerto que Next.js asigne automáticamente).
+## 📖 Guía de Uso
 
-## Uso
+### **🎯 Crear tu primera publicación**
 
-### Efecto Vidrio
-- Arrastra cualquier archivo sobre la ventana del chat
-- Observa cómo toda la interfaz se transforma con efectos de vidrio
-- Los elementos se vuelven semi-transparentes con `backdrop-blur-xl`
-- Las transiciones son suaves gracias a `transition-all duration-300`
+1. **Inicia sesión** con tu cuenta
+2. **Conecta tus redes sociales** desde el chat
+3. **Describe tu contenido** al asistente IA
+4. **Sube imágenes/videos** si es necesario
+5. **Selecciona plataformas** donde publicar
+6. **Programa fecha y hora** o publica inmediatamente
 
-### Chat con IA
-- Escribe mensajes y recibe respuestas de Google Gemini
-- Adjunta imágenes y videos (hasta 6 archivos, máx 25MB cada uno)
-- La IA puede analizar el contenido que adjuntes
+### **📅 Gestionar publicaciones programadas**
 
-## Tecnologías
+- **Abrir calendario** desde el menú
+- **Ver posts programados** por fecha
+- **Editar contenido** haciendo click en cualquier post
+- **Eliminar posts** con el botón correspondiente
+- **Monitorear ejecuciones** en GitHub Actions
 
-- **Next.js 15** - Framework React
-- **AI SDK Vercel 5** - Integración con modelos de IA
-- **Google Gemini** - Modelo de IA conversacional
-- **Tailwind CSS 4** - Estilos y efectos visuales
-- **React 19** - Biblioteca de interfaz de usuario
+### **🤖 Usar el asistente IA**
 
-## Estructura del Proyecto
+```
+💬 "Crea un post sobre café para Instagram"
+🤖 El asistente generará contenido optimizado
+
+💬 "Programa este post para mañana a las 9 AM"
+🤖 Configurará automáticamente la programación
+
+💬 "Conectar mi cuenta de Instagram"
+🤖 Te guiará por el proceso de OAuth
+```
+
+## 🏗️ Arquitectura del Sistema
+
+### **📊 Diagrama de Flujo**
+
+```
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│   Frontend      │    │   Backend API   │    │   Supabase DB   │
+│   (Next.js)     │◄──►│   (Next.js)     │◄──►│   (PostgreSQL)  │
+└─────────────────┘    └─────────────────┘    └─────────────────┘
+         │                       │                       │
+         ▼                       ▼                       ▼
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│   GitHub        │    │   Social Media  │    │   Cloudinary    │
+│   Actions       │    │   APIs          │    │   (Media)       │
+│   (Cron Jobs)   │    │   (Publishing)  │    │   (Storage)     │
+└─────────────────┘    └─────────────────┘    └─────────────────┘
+```
+
+### **🔄 Flujo de Publicación Automática**
+
+1. **Usuario programa post** → Guardado en Supabase
+2. **GitHub Actions** ejecuta cada 5 minutos
+3. **API verifica** posts pendientes
+4. **Publica automáticamente** en redes sociales
+5. **Actualiza estado** a completado
+
+## 📁 Estructura del Proyecto
 
 ```
 src/
 ├── app/
-│   ├── api/chat/route.js    # API endpoint para Gemini
-│   ├── page.js              # Componente principal del chat
-│   ├── layout.js            # Layout de la aplicación
-│   └── globals.css          # Estilos globales
-└── ...
+│   ├── api/                    # Endpoints de la API
+│   │   ├── scheduled-posts/    # CRUD de posts programados
+│   │   ├── execute-scheduled-posts/  # Ejecución automática
+│   │   └── upload/             # Subida de archivos
+│   ├── globals.css             # Estilos globales
+│   ├── layout.js               # Layout principal
+│   └── page.js                 # Página principal
+├── components/
+│   ├── CalendarModal.jsx       # Calendario de posts
+│   ├── Composer.jsx            # Editor de mensajes
+│   └── widgets/                # Widgets especializados
+├── hooks/
+│   └── useChatState.js         # Estado del chat
+└── lib/
+    ├── supabaseClient.js       # Cliente de Supabase
+    ├── publishFlowUtils.js     # Utilidades de publicación
+    └── messageTransformers.js  # Transformadores de mensajes
 ```
 
-## Efectos Visuales
+## 🔧 Configuración Avanzada
 
-Cuando `dragActive` es `true`:
+### **⚙️ GitHub Actions (Automatización)**
 
-- **Fondo**: `from-sky-50/80 to-white/80 backdrop-blur-md`
-- **Chat Container**: `bg-white/60 backdrop-blur-xl border-2 border-sky-300 shadow-2xl`
-- **Mensajes**: `bg-sky-100/80 backdrop-blur` y `bg-gray-100/80 backdrop-blur`
-- **Overlay de Drop**: `bg-white/60 backdrop-blur-xl shadow-2xl`
+1. **Configurar secretos** en GitHub:
+   - `VERCEL_URL`: URL de tu aplicación
+   - `CRON_SECRET`: Clave de seguridad
 
-Todas las transiciones usan `transition-all duration-300` para efectos suaves.
+2. **El workflow** se ejecuta automáticamente cada 5 minutos
 
-## Personalización
+3. **Monitorear logs** en la pestaña Actions
 
-Puedes personalizar los efectos modificando las clases de Tailwind en `page.js`:
+### **Variables de producción**
+```env
+# Todas las variables de .env.local
+# Más configuraciones específicas de producción
+NODE_ENV=production
+NEXTAUTH_URL=https://tu-dominio.vercel.app
+```
 
-- Cambiar la intensidad del blur: `backdrop-blur-sm`, `backdrop-blur-md`, `backdrop-blur-lg`, `backdrop-blur-xl`
-- Ajustar la transparencia: `bg-white/40`, `bg-white/60`, `bg-white/80`
-- Modificar las transiciones: `duration-150`, `duration-300`, `duration-500`
+## 📊 Características Técnicas
+
+### **🔒 Seguridad**
+- **Autenticación OAuth 2.0**
+- **Row Level Security** en Supabase
+- **API Keys** protegidas
+- **CORS** configurado correctamente
+
+### **⚡ Performance**
+- **Server-side rendering** con Next.js
+- **Optimización de imágenes** automática
+- **Caching** inteligente
+- **Bundle splitting** automático
+
+### **📱 Responsive Design**
+- **Mobile-first** approach
+- **Breakpoints** optimizados
+- **Touch-friendly** interfaces
+- **PWA ready** (Progressive Web App)
+
+## 🤝 Contribuir
+
+### **✨ Nuevas características**
+1. **Fork** del repositorio
+2. **Crear branch** para tu feature
+3. **Commit** con mensajes descriptivos
+4. **Pull request** con descripción detallada
+
+---
+
+<div align="center">
+
+**¿Te gusta el proyecto? ¡Dale una ⭐ en GitHub!**
+
+</div>
