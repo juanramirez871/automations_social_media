@@ -11,6 +11,8 @@ export default function CalendarModal({ isOpen, onClose }) {
   const [creatingPost, setCreatingPost] = useState(false);
   const [newPost, setNewPost] = useState(null);
   const [improvingNewText, setImprovingNewText] = useState(false);
+  const [uploadingMedia, setUploadingMedia] = useState(false);
+  const [selectedFiles, setSelectedFiles] = useState([]);
   
   // Hook para manejar publicaciones programadas con Supabase
   const { 
@@ -150,8 +152,10 @@ export default function CalendarModal({ isOpen, onClose }) {
       date: dateString,
       time: '12:00',
       platforms: ['Instagram'],
-      content: ''
+      content: '',
+      mediaUrls: []
     });
+    setSelectedFiles([]);
     setCreatingPost(true);
   };
   
@@ -159,25 +163,27 @@ export default function CalendarModal({ isOpen, onClose }) {
     if (!newPost || !newPost.content.trim() || newPost.platforms.length === 0) return;
     
     try {
-      await createScheduledPost({
-        content: newPost.content,
-        platforms: newPost.platforms,
-        scheduledDate: newPost.date,
-        scheduledTime: newPost.time
-      });
+       await createScheduledPost({
+         content: newPost.content,
+         platforms: newPost.platforms,
+         scheduledDate: newPost.date,
+         scheduledTime: newPost.time,
+         mediaUrls: newPost.mediaUrls || []
+       });
       
       setCreatingPost(false);
-      setNewPost(null);
-      
-      // Si la fecha seleccionada es del mes actual, seleccionar el día
-      const selectedDate = new Date(newPost.date);
-      const selectedYear = selectedDate.getFullYear();
-      const selectedMonth = selectedDate.getMonth();
-      const selectedDay = selectedDate.getDate();
-      
-      if (selectedYear === year && selectedMonth === month) {
-        setSelectedDay(selectedDay);
-      }
+       setNewPost(null);
+       setSelectedFiles([]);
+       
+       // Si la fecha seleccionada es del mes actual, seleccionar el día
+       const selectedDate = new Date(newPost.date);
+       const selectedYear = selectedDate.getFullYear();
+       const selectedMonth = selectedDate.getMonth();
+       const selectedDay = selectedDate.getDate();
+       
+       if (selectedYear === year && selectedMonth === month) {
+         setSelectedDay(selectedDay);
+       }
     } catch (error) {
       console.error('Error creating post:', error);
       // Aquí podrías mostrar un toast de error
@@ -187,6 +193,7 @@ export default function CalendarModal({ isOpen, onClose }) {
   const cancelCreatePost = () => {
     setCreatingPost(false);
     setNewPost(null);
+    setSelectedFiles([]);
   };
   
   const toggleNewPostPlatform = (platform) => {
@@ -224,6 +231,84 @@ export default function CalendarModal({ isOpen, onClose }) {
     } finally {
       setImprovingNewText(false);
     }
+  };
+  
+  // Función para obtener tipos de archivo aceptados según plataformas
+  const getAcceptedFileTypes = (platforms) => {
+    if (!platforms || platforms.length === 0) return 'image/*,video/*';
+    
+    const hasInstagram = platforms.includes('Instagram');
+    const hasFacebook = platforms.includes('Facebook');
+    const hasYouTube = platforms.includes('YouTube');
+    const hasTikTok = platforms.includes('TikTok');
+    
+    let acceptedTypes = [];
+    
+    // Instagram: imágenes y videos cortos
+    if (hasInstagram) {
+      acceptedTypes.push('image/jpeg', 'image/png', 'video/mp4');
+    }
+    
+    // Facebook: imágenes y videos
+    if (hasFacebook) {
+      acceptedTypes.push('image/jpeg', 'image/png', 'image/gif', 'video/mp4', 'video/mov');
+    }
+    
+    // YouTube: principalmente videos
+    if (hasYouTube) {
+      acceptedTypes.push('video/mp4', 'video/mov', 'video/avi', 'video/wmv');
+    }
+    
+    // TikTok: videos cortos
+    if (hasTikTok) {
+      acceptedTypes.push('video/mp4', 'video/mov');
+    }
+    
+    // Si no hay plataformas específicas, permitir todo
+    if (acceptedTypes.length === 0) {
+      return 'image/*,video/*';
+    }
+    
+    // Eliminar duplicados y retornar
+    return [...new Set(acceptedTypes)].join(',');
+  };
+  
+  // Función para manejar selección de archivos
+  const handleFileSelect = (event) => {
+    const files = Array.from(event.target.files);
+    setSelectedFiles(files);
+    
+    // Actualizar newPost con las URLs de los archivos (simuladas por ahora)
+    const fileUrls = files.map(file => URL.createObjectURL(file));
+    setNewPost(prev => ({ ...prev, mediaUrls: fileUrls }));
+  };
+  
+  // Función para remover archivo
+  const removeFile = (index) => {
+    const newFiles = selectedFiles.filter((_, i) => i !== index);
+    setSelectedFiles(newFiles);
+    
+    const newUrls = newFiles.map(file => URL.createObjectURL(file));
+    setNewPost(prev => ({ ...prev, mediaUrls: newUrls }));
+  };
+  
+  // Función para obtener el texto de ayuda según plataformas
+  const getMediaHelpText = (platforms) => {
+    if (!platforms || platforms.length === 0) return 'Selecciona plataformas para ver formatos recomendados';
+    
+    const hasInstagram = platforms.includes('Instagram');
+    const hasFacebook = platforms.includes('Facebook');
+    const hasYouTube = platforms.includes('YouTube');
+    const hasTikTok = platforms.includes('TikTok');
+    
+    let recommendations = [];
+    
+    if (hasInstagram) recommendations.push('📸 Instagram: Fotos (1:1) o videos (máx. 60s)');
+    if (hasFacebook) recommendations.push('📘 Facebook: Fotos, GIFs o videos');
+    if (hasYouTube) recommendations.push('🎥 YouTube: Videos (recomendado HD)');
+    if (hasTikTok) recommendations.push('🎵 TikTok: Videos verticales (9:16)');
+    
+    return recommendations.join(' • ');
   };
   
   const firstDayOfMonth = new Date(year, month, 1);
@@ -461,7 +546,7 @@ export default function CalendarModal({ isOpen, onClose }) {
       {/* Modal de edición */}
          {editingPost && (
            <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-60" onClick={cancelEdit}>
-             <div className="bg-white rounded-2xl p-8 max-w-lg w-full mx-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+             <div className="bg-white rounded-2xl p-8 max-w-lg w-full mx-4 shadow-2xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
                <div className="flex items-center justify-between mb-4">
                  <h3 className="text-lg font-semibold text-gray-900">Editar Publicación</h3>
                  <button
@@ -580,7 +665,7 @@ export default function CalendarModal({ isOpen, onClose }) {
          {/* Modal de nueva publicación */}
          {creatingPost && newPost && (
            <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-60" onClick={cancelCreatePost}>
-             <div className="bg-white rounded-2xl p-8 max-w-lg w-full mx-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+             <div className="bg-white rounded-2xl p-8 max-w-lg w-full mx-4 shadow-2xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
                <div className="flex items-center justify-between mb-4">
                  <h3 className="text-lg font-semibold text-gray-900">Nueva Publicación</h3>
                  <button
@@ -619,25 +704,94 @@ export default function CalendarModal({ isOpen, onClose }) {
                  </div>
                  
                  {/* Plataformas */}
-                 <div>
-                   <label className="block text-sm font-medium text-gray-700 mb-2">Plataformas</label>
-                   <div className="grid grid-cols-2 gap-2">
-                     {['Instagram', 'Facebook', 'YouTube', 'TikTok'].map(platform => (
-                       <button
-                         key={platform}
-                         type="button"
-                         onClick={() => toggleNewPostPlatform(platform)}
-                         className={`px-3 py-2 text-sm rounded-lg border transition-colors cursor-pointer ${
-                           newPost.platforms.includes(platform)
-                             ? `${getPlatformColor(platform)} text-white border-transparent`
-                             : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
-                         }`}
-                       >
-                         {platform}
-                       </button>
-                     ))}
-                   </div>
-                 </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Plataformas</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {['Instagram', 'Facebook', 'YouTube', 'TikTok'].map(platform => (
+                        <button
+                          key={platform}
+                          type="button"
+                          onClick={() => toggleNewPostPlatform(platform)}
+                          className={`px-3 py-2 text-sm rounded-lg border transition-colors cursor-pointer ${
+                            newPost.platforms.includes(platform)
+                              ? `${getPlatformColor(platform)} text-white border-transparent`
+                              : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                          }`}
+                        >
+                          {platform}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  
+                  {/* Media (Imágenes/Videos) */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Imágenes o Videos</label>
+                    
+                    {/* Área de subida de archivos */}
+                    <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-gray-400 transition-colors">
+                      <input
+                        type="file"
+                        multiple
+                        accept={getAcceptedFileTypes(newPost?.platforms)}
+                        onChange={handleFileSelect}
+                        className="hidden"
+                        id="media-upload"
+                      />
+                      <label htmlFor="media-upload" className="cursor-pointer">
+                        <div className="flex flex-col items-center">
+                          <svg className="w-8 h-8 text-gray-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                          </svg>
+                          <span className="text-sm text-gray-600 mb-1">Click para subir archivos</span>
+                          <span className="text-xs text-gray-500">o arrastra y suelta aquí</span>
+                        </div>
+                      </label>
+                    </div>
+                    
+                    {/* Texto de ayuda según plataformas */}
+                    {newPost?.platforms && newPost.platforms.length > 0 && (
+                      <p className="text-xs text-gray-500 mt-2">
+                        {getMediaHelpText(newPost.platforms)}
+                      </p>
+                    )}
+                    
+                    {/* Preview de archivos seleccionados */}
+                    {selectedFiles.length > 0 && (
+                      <div className="mt-3 space-y-2">
+                        <p className="text-sm font-medium text-gray-700">Archivos seleccionados:</p>
+                        <div className="grid grid-cols-2 gap-2">
+                          {selectedFiles.map((file, index) => (
+                            <div key={index} className="relative bg-gray-50 rounded-lg p-2 border">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center space-x-2 flex-1 min-w-0">
+                                  {file.type.startsWith('image/') ? (
+                                    <svg className="w-4 h-4 text-blue-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                                      <path fillRule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clipRule="evenodd" />
+                                    </svg>
+                                  ) : (
+                                    <svg className="w-4 h-4 text-purple-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                                      <path fillRule="evenodd" d="M2 6a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14.553 7.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z" clipRule="evenodd" />
+                                    </svg>
+                                  )}
+                                  <span className="text-xs text-gray-600 truncate">{file.name}</span>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => removeFile(index)}
+                                  className="text-red-500 hover:text-red-700 ml-2 flex-shrink-0"
+                                >
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                  </svg>
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                  
                  {/* Contenido */}
                   <div>
