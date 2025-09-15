@@ -9,8 +9,11 @@
  */
 export function detectNewPublishIntent(text) {
   const trimmed = text.trim();
-  return (/\b(publicar|postear|subir|programar)\b/i.test(trimmed) && /(post|publicaci\u00F3n|video|reel|contenido)/i.test(trimmed)) ||
-         /\b(sí|si|yes|ok|vale|dale|empezar|nuevo|otra|otro)\b/i.test(trimmed);
+  return (
+    (/\b(publicar|postear|subir|programar)\b/i.test(trimmed) &&
+      /(post|publicaci\u00F3n|video|reel|contenido)/i.test(trimmed)) ||
+    /\b(sí|si|yes|ok|vale|dale|empezar|nuevo|otra|otro)\b/i.test(trimmed)
+  );
 }
 
 /**
@@ -21,14 +24,26 @@ export function detectNewPublishIntent(text) {
 export function detectCancelIntent(text) {
   const lower = text.toLowerCase();
   const cancelPhrases = [
-    'cancelar', 'cancela', 'cancel',
-    'olvídalo', 'olvidalo', 'olvidalo',
-    'ya no', 'no quiero', 'mejor no',
-    'detente', 'detener', 'parar',
-    'abort', 'aborta', 'anular',
-    'no continuar', 'no sigas', 'stop'
+    'cancelar',
+    'cancela',
+    'cancel',
+    'olvídalo',
+    'olvidalo',
+    'olvidalo',
+    'ya no',
+    'no quiero',
+    'mejor no',
+    'detente',
+    'detener',
+    'parar',
+    'abort',
+    'aborta',
+    'anular',
+    'no continuar',
+    'no sigas',
+    'stop',
   ];
-  return cancelPhrases.some((p) => lower.includes(p));
+  return cancelPhrases.some(p => lower.includes(p));
 }
 
 /**
@@ -49,7 +64,8 @@ export function createCancelMessage() {
     id: newId('cancel-publish'),
     role: 'assistant',
     type: 'text',
-    content: 'Entendido, cancelé el flujo de publicación. Cuando quieras, podemos volver a empezar.'
+    content:
+      'Entendido, cancelé el flujo de publicación. Cuando quieras, podemos volver a empezar.',
   };
 }
 
@@ -62,7 +78,8 @@ export function createNeedMediaMessage() {
     id: newId('need-media'),
     role: 'assistant',
     type: 'text',
-    content: 'Necesito que adjuntes al menos una imagen o video para continuar.'
+    content:
+      'Necesito que adjuntes al menos una imagen o video para continuar.',
   };
 }
 
@@ -75,6 +92,7 @@ export function createNeedDescriptionMessage() {
     id: newId('need-description'),
     role: 'assistant',
     type: 'text',
-    content: 'Perfecto. Ahora necesito que escribas una descripción para el post.'
+    content:
+      'Perfecto. Ahora necesito que escribas una descripción para el post.',
   };
 }

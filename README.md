@@ -7,18 +7,21 @@ Una aplicación web moderna que permite crear, programar y publicar contenido au
 ## ✨ Características Principales
 
 ### 🤖 **Asistente IA Integrado**
+
 - **Chat inteligente** para crear contenido
 - **Generación automática** de descripciones y hashtags
 - **Sugerencias personalizadas** basadas en tu audiencia
 - **Optimización de contenido** para cada plataforma
 
 ### 📅 **Programación Avanzada**
+
 - **Calendario visual** para gestionar publicaciones
 - **Programación automática** con GitHub Actions
 - **Ejecución cada 5 minutos** para máxima precisión
 - **Gestión completa** (crear, editar, eliminar posts)
 
 ### 🌐 **Múltiples Plataformas**
+
 - **Instagram** - Posts, Stories, Reels
 - **Facebook** - Posts y Pages
 - **YouTube** - Videos y Shorts
@@ -26,6 +29,7 @@ Una aplicación web moderna que permite crear, programar y publicar contenido au
 - **Más plataformas** próximamente
 
 ### 🎨 **Interfaz Moderna**
+
 - **Diseño responsive** para todos los dispositivos
 - **Chat interactivo** con widgets especializados
 - **Calendario intuitivo** para visualizar posts
@@ -34,18 +38,21 @@ Una aplicación web moderna que permite crear, programar y publicar contenido au
 ## 🛠️ Tecnologías Utilizadas
 
 ### **Frontend**
+
 - **Next.js 14** - Framework React moderno
 - **Tailwind CSS** - Estilos utilitarios
 - **React Hooks** - Gestión de estado
 - **Responsive Design** - Adaptable a todos los dispositivos
 
 ### **Backend**
+
 - **Next.js API Routes** - Endpoints RESTful
 - **Supabase** - Base de datos PostgreSQL
 - **GitHub Actions** - Automatización de tareas
 - **Vercel** - Hosting y deployment
 
 ### **Integraciones**
+
 - **Google Gemini AI** - Generación de contenido
 - **Cloudinary** - Gestión de imágenes y videos
 - **OAuth 2.0** - Autenticación segura
@@ -54,17 +61,20 @@ Una aplicación web moderna que permite crear, programar y publicar contenido au
 ## 🚀 Instalación y Configuración
 
 ### **1. Clonar el repositorio**
+
 ```bash
 git clone https://github.com/tu-usuario/automations_social_media.git
 cd automations_social_media
 ```
 
 ### **2. Instalar dependencias**
+
 ```bash
 npm install
 ```
 
 ### **3. Configurar variables de entorno**
+
 ```bash
 cp .env.example .env.local
 ```
@@ -90,12 +100,14 @@ CLOUDINARY_API_SECRET=tu_api_secret
 ```
 
 ### **4. Configurar base de datos**
+
 ```bash
 # Ejecutar en Supabase SQL Editor
 psql -f database_setup.sql
 ```
 
 ### **5. Ejecutar en desarrollo**
+
 ```bash
 npm run dev
 ```
@@ -195,6 +207,7 @@ src/
 3. **Monitorear logs** en la pestaña Actions
 
 ### **Variables de producción**
+
 ```env
 # Todas las variables de .env.local
 # Más configuraciones específicas de producción
@@ -205,18 +218,21 @@ NEXTAUTH_URL=https://tu-dominio.vercel.app
 ## 📊 Características Técnicas
 
 ### **🔒 Seguridad**
+
 - **Autenticación OAuth 2.0**
 - **Row Level Security** en Supabase
 - **API Keys** protegidas
 - **CORS** configurado correctamente
 
 ### **⚡ Performance**
+
 - **Server-side rendering** con Next.js
 - **Optimización de imágenes** automática
 - **Caching** inteligente
 - **Bundle splitting** automático
 
 ### **📱 Responsive Design**
+
 - **Mobile-first** approach
 - **Breakpoints** optimizados
 - **Touch-friendly** interfaces
@@ -225,6 +241,7 @@ NEXTAUTH_URL=https://tu-dominio.vercel.app
 ## 🤝 Contribuir
 
 ### **✨ Nuevas características**
+
 1. **Fork** del repositorio
 2. **Crear branch** para tu feature
 3. **Commit** con mensajes descriptivos

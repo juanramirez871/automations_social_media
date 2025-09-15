@@ -11,17 +11,20 @@ async function publishToInstagram(content, accessToken, userId) {
   try {
     // Implementar lógica de publicación en Instagram
     // Esta es una implementación básica, necesitarás ajustarla según tu configuración
-    const response = await fetch(`https://graph.instagram.com/v18.0/${userId}/media`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        caption: content,
-        access_token: accessToken
-      })
-    });
-    
+    const response = await fetch(
+      `https://graph.instagram.com/v18.0/${userId}/media`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          caption: content,
+          access_token: accessToken,
+        }),
+      }
+    );
+
     const data = await response.json();
     return { success: response.ok, data, error: data.error };
   } catch (error) {
@@ -32,17 +35,20 @@ async function publishToInstagram(content, accessToken, userId) {
 // Función para publicar en Facebook
 async function publishToFacebook(content, accessToken, pageId) {
   try {
-    const response = await fetch(`https://graph.facebook.com/v18.0/${pageId}/feed`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        message: content,
-        access_token: accessToken
-      })
-    });
-    
+    const response = await fetch(
+      `https://graph.facebook.com/v18.0/${pageId}/feed`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          message: content,
+          access_token: accessToken,
+        }),
+      }
+    );
+
     const data = await response.json();
     return { success: response.ok, data, error: data.error };
   } catch (error) {
@@ -56,7 +62,10 @@ async function publishToYouTube(content, accessToken) {
     // Para YouTube necesitarías subir un video o crear una publicación en la comunidad
     // Esta es una implementación simplificada
     console.log('YouTube publication not fully implemented:', content);
-    return { success: true, data: { message: 'YouTube publication simulated' } };
+    return {
+      success: true,
+      data: { message: 'YouTube publication simulated' },
+    };
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -78,30 +87,24 @@ async function publishToPlatform(platform, content, userProfile) {
   switch (platform.toLowerCase()) {
     case 'instagram':
       return await publishToInstagram(
-        content, 
-        userProfile.instagram_access_token, 
+        content,
+        userProfile.instagram_access_token,
         userProfile.instagram_user_id
       );
-    
+
     case 'facebook':
       return await publishToFacebook(
-        content, 
-        userProfile.facebook_access_token, 
+        content,
+        userProfile.facebook_access_token,
         userProfile.facebook_page_id
       );
-    
+
     case 'youtube':
-      return await publishToYouTube(
-        content, 
-        userProfile.youtube_access_token
-      );
-    
+      return await publishToYouTube(content, userProfile.youtube_access_token);
+
     case 'tiktok':
-      return await publishToTikTok(
-        content, 
-        userProfile.tiktok_access_token
-      );
-    
+      return await publishToTikTok(content, userProfile.tiktok_access_token);
+
     default:
       return { success: false, error: `Platform ${platform} not supported` };
   }
@@ -126,7 +129,10 @@ export async function POST(request) {
 
     if (fetchError) {
       console.error('Error fetching posts to execute:', fetchError);
-      return NextResponse.json({ error: 'Failed to fetch posts' }, { status: 500 });
+      return NextResponse.json(
+        { error: 'Failed to fetch posts' },
+        { status: 500 }
+      );
     }
 
     // Obtener perfiles de usuario para cada post
@@ -134,14 +140,16 @@ export async function POST(request) {
     for (const post of postsToExecute || []) {
       const { data: profile, error: profileError } = await supabase
         .from('profiles')
-        .select(`
+        .select(
+          `
           instagram_access_token,
           instagram_user_id,
           facebook_access_token,
           facebook_page_id,
           youtube_access_token,
           tiktok_access_token
-        `)
+        `
+        )
         .eq('id', post.user_id)
         .single();
 
@@ -167,9 +175,13 @@ export async function POST(request) {
 
         // Publicar en cada plataforma
         for (const platform of post.platforms) {
-          const result = await publishToPlatform(platform, post.content, post.profiles);
+          const result = await publishToPlatform(
+            platform,
+            post.content,
+            post.profiles
+          );
           platformResults[platform] = result;
-          
+
           if (!result.success) {
             hasErrors = true;
           }
@@ -180,13 +192,13 @@ export async function POST(request) {
         const updateData = {
           status: finalStatus,
           executed_at: new Date().toISOString(),
-          platform_results: platformResults
+          platform_results: platformResults,
         };
 
         if (hasErrors) {
           updateData.retry_count = (post.retry_count || 0) + 1;
           updateData.error_message = 'Some platforms failed to publish';
-          
+
           // Si no ha excedido el máximo de reintentos, programar para reintento
           if (updateData.retry_count < post.max_retries) {
             updateData.status = 'pending';
@@ -204,12 +216,11 @@ export async function POST(request) {
         results.push({
           postId: post.id,
           status: finalStatus,
-          platforms: platformResults
+          platforms: platformResults,
         });
-
       } catch (error) {
         console.error(`Error processing post ${post.id}:`, error);
-        
+
         // Marcar como fallido
         await supabase
           .from('scheduled_posts')
@@ -217,26 +228,29 @@ export async function POST(request) {
             status: 'failed',
             executed_at: new Date().toISOString(),
             error_message: error.message,
-            retry_count: (post.retry_count || 0) + 1
+            retry_count: (post.retry_count || 0) + 1,
           })
           .eq('id', post.id);
 
         results.push({
           postId: post.id,
           status: 'failed',
-          error: error.message
+          error: error.message,
         });
       }
     }
 
-return NextResponse.json({
+    return NextResponse.json({
       success: true,
       message: `Processed ${finalPostsToExecute.length} scheduled posts`,
-      results
+      results,
     });
   } catch (error) {
     console.error('Error in POST /api/execute-scheduled-posts:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    );
   }
 }
 
@@ -245,9 +259,12 @@ export async function GET(request) {
   try {
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get('userId');
-    
+
     if (!userId) {
-      return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
+      return NextResponse.json(
+        { error: 'User ID is required' },
+        { status: 400 }
+      );
     }
 
     // Obtener estadísticas
@@ -258,7 +275,10 @@ export async function GET(request) {
 
     if (error) {
       console.error('Error fetching stats:', error);
-      return NextResponse.json({ error: 'Failed to fetch stats' }, { status: 500 });
+      return NextResponse.json(
+        { error: 'Failed to fetch stats' },
+        { status: 500 }
+      );
     }
 
     const statusCounts = stats.reduce((acc, post) => {
@@ -269,6 +289,9 @@ export async function GET(request) {
     return NextResponse.json({ stats: statusCounts });
   } catch (error) {
     console.error('Error in GET /api/execute-scheduled-posts:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    );
   }
 }

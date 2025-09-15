@@ -1,10 +1,10 @@
-import { NextResponse } from "next/server";
+import { NextResponse } from 'next/server';
 
 export async function GET(request) {
   try {
     const { searchParams, origin } = new URL(request.url);
-    const code = searchParams.get("code");
-    const error = searchParams.get("error");
+    const code = searchParams.get('code');
+    const error = searchParams.get('error');
 
     if (error) {
       const html = `<!DOCTYPE html><html><body>
@@ -19,7 +19,7 @@ export async function GET(request) {
         </script>
       </body></html>`;
       return new NextResponse(html, {
-        headers: { "Content-Type": "text/html; charset=utf-8" },
+        headers: { 'Content-Type': 'text/html; charset=utf-8' },
       });
     }
 
@@ -39,7 +39,7 @@ export async function GET(request) {
         </script>
       </body></html>`;
       return new NextResponse(html, {
-        headers: { "Content-Type": "text/html; charset=utf-8" },
+        headers: { 'Content-Type': 'text/html; charset=utf-8' },
       });
     }
 
@@ -54,20 +54,20 @@ export async function GET(request) {
         </script>
       </body></html>`;
       return new NextResponse(html, {
-        headers: { "Content-Type": "text/html; charset=utf-8" },
+        headers: { 'Content-Type': 'text/html; charset=utf-8' },
       });
     }
 
     // Intercambiar code por access_token
     const tokenUrl = new URL(
-      "https://graph.facebook.com/v19.0/oauth/access_token"
+      'https://graph.facebook.com/v19.0/oauth/access_token'
     );
-    tokenUrl.searchParams.set("client_id", clientId);
-    tokenUrl.searchParams.set("client_secret", clientSecret);
-    tokenUrl.searchParams.set("redirect_uri", redirectUri);
-    tokenUrl.searchParams.set("code", code);
+    tokenUrl.searchParams.set('client_id', clientId);
+    tokenUrl.searchParams.set('client_secret', clientSecret);
+    tokenUrl.searchParams.set('redirect_uri', redirectUri);
+    tokenUrl.searchParams.set('code', code);
 
-    const tokenRes = await fetch(tokenUrl.toString(), { method: "GET" });
+    const tokenRes = await fetch(tokenUrl.toString(), { method: 'GET' });
     const tokenJson = await tokenRes.json();
 
     if (!tokenRes.ok || tokenJson.error) {
@@ -86,7 +86,7 @@ export async function GET(request) {
         </script>
       </body></html>`;
       return new NextResponse(html, {
-        headers: { "Content-Type": "text/html; charset=utf-8" },
+        headers: { 'Content-Type': 'text/html; charset=utf-8' },
       });
     }
 
@@ -94,8 +94,12 @@ export async function GET(request) {
     const token_type = tokenJson.token_type;
     const expires_in = tokenJson.expires_in;
 
-    console.log('✅ Token de Facebook obtenido, expira en:', expires_in, 'segundos');
-    
+    console.log(
+      '✅ Token de Facebook obtenido, expira en:',
+      expires_in,
+      'segundos'
+    );
+
     // Obtener perfil básico y permisos concedidos
     const meRes = await fetch(
       `https://graph.facebook.com/me?fields=id,name,picture&access_token=${encodeURIComponent(
@@ -103,8 +107,13 @@ export async function GET(request) {
       )}`
     );
     const meJson = await meRes.json();
-    
-    console.log('👤 Perfil de Facebook obtenido:', meJson.name, 'ID:', meJson.id);
+
+    console.log(
+      '👤 Perfil de Facebook obtenido:',
+      meJson.name,
+      'ID:',
+      meJson.id
+    );
 
     const permsRes = await fetch(
       `https://graph.facebook.com/me/permissions?access_token=${encodeURIComponent(
@@ -115,53 +124,57 @@ export async function GET(request) {
     let granted_scopes = null;
     if (Array.isArray(permsJson?.data)) {
       granted_scopes = permsJson.data
-        .filter((p) => p.status === "granted")
-        .map((p) => p.permission);
+        .filter(p => p.status === 'granted')
+        .map(p => p.permission);
     }
-    
+
     console.log('🔑 Permisos concedidos:', granted_scopes);
-    
+
     // Obtener páginas de Facebook administradas
     console.log('📄 Obteniendo páginas de Facebook...');
     const pagesRes = await fetch(
       `https://graph.facebook.com/v18.0/me/accounts?access_token=${encodeURIComponent(access_token)}`
     );
     const pagesJson = await pagesRes.json();
-    
+
     console.log('📄 Respuesta de páginas:', JSON.stringify(pagesJson, null, 2));
-    
+
     let pageId = null;
     let pageName = null;
     let pageAccessToken = access_token; // Por defecto usar el token del usuario
-    
+
     if (pagesRes.ok && pagesJson.data && pagesJson.data.length > 0) {
       // Usar la primera página encontrada
       const page = pagesJson.data[0];
       pageId = page.id;
       pageName = page.name;
       pageAccessToken = page.access_token || access_token; // Usar PAGE_ACCESS_TOKEN si está disponible
-      
+
       console.log('📄 Usando página:', pageName, 'ID:', pageId);
     } else {
-      console.log('⚠️ No se encontraron páginas administradas, usando perfil personal');
+      console.log(
+        '⚠️ No se encontraron páginas administradas, usando perfil personal'
+      );
       // Si no hay páginas, usar el perfil personal
       pageId = meJson.id;
       pageName = meJson.name;
     }
-    
-    console.log('📤 Enviando datos al frontend para guardado (igual que Instagram)...');
+
+    console.log(
+      '📤 Enviando datos al frontend para guardado (igual que Instagram)...'
+    );
     console.log('📋 Datos a enviar:', {
       pageId,
       pageName,
       hasToken: !!pageAccessToken,
       tokenLength: pageAccessToken?.length,
       fbUserId: meJson.id,
-      fbUserName: meJson.name
+      fbUserName: meJson.name,
     });
 
     // Responder a la ventana padre para que guarde en DB desde el cliente
     const payload = {
-      source: "fb-oauth",
+      source: 'fb-oauth',
       ok: true,
       data: {
         access_token: pageAccessToken, // Usar PAGE_ACCESS_TOKEN o user token
@@ -174,7 +187,7 @@ export async function GET(request) {
         userToken: access_token, // Guardar también el token del usuario
       },
     };
-    
+
     console.log('📤 Payload final a enviar:', JSON.stringify(payload, null, 2));
     console.log('🔍 Verificación de datos críticos:');
     console.log('  - pageId en payload:', payload.data.pageId);
@@ -208,7 +221,7 @@ export async function GET(request) {
       </script>
     </body></html>`;
     return new NextResponse(html, {
-      headers: { "Content-Type": "text/html; charset=utf-8" },
+      headers: { 'Content-Type': 'text/html; charset=utf-8' },
     });
   } catch (e) {
     const html = `<!DOCTYPE html><html><body>
@@ -223,7 +236,7 @@ export async function GET(request) {
       </script>
     </body></html>`;
     return new NextResponse(html, {
-      headers: { "Content-Type": "text/html; charset=utf-8" },
+      headers: { 'Content-Type': 'text/html; charset=utf-8' },
     });
   }
 }

@@ -1,9 +1,11 @@
 export async function getInstagramToken(supabase, userId) {
   try {
     const { data, error } = await supabase
-      .from("profiles")
-      .select("instagram_access_token, instagram_expires_at, instagram_user_id, instagram_username, instagram_granted_scopes")
-      .eq("id", userId)
+      .from('profiles')
+      .select(
+        'instagram_access_token, instagram_expires_at, instagram_user_id, instagram_username, instagram_granted_scopes'
+      )
+      .eq('id', userId)
       .maybeSingle();
 
     if (error) {
@@ -18,21 +20,44 @@ export async function getInstagramToken(supabase, userId) {
 
     return { token, expiresAt, igUserId, igUsername, grantedScopes };
   } catch (e) {
-    return { token: null, expiresAt: null, igUserId: null, igUsername: null, grantedScopes: null };
+    return {
+      token: null,
+      expiresAt: null,
+      igUserId: null,
+      igUsername: null,
+      grantedScopes: null,
+    };
   }
 }
 
-export async function publishToInstagram({ caption, imageUrl, videoUrl, userId, supabase }) {
+export async function publishToInstagram({
+  caption,
+  imageUrl,
+  videoUrl,
+  userId,
+  supabase,
+}) {
   try {
-    const { token, expiresAt, igUserId } = await getInstagramToken(supabase, userId);
+    const { token, expiresAt, igUserId } = await getInstagramToken(
+      supabase,
+      userId
+    );
 
     if (!token) {
       console.error('[IG DEBUG] No hay token de Instagram configurado');
       throw new Error('No hay token de Instagram configurado');
     }
 
-    const cleanToken = token.trim().replace(/\s+/g, '').replace(/[\r\n\t]/g, '');
-    console.log('[IG DEBUG] cleanToken:', cleanToken.slice(0, 10) + '...', 'length:', cleanToken.length);
+    const cleanToken = token
+      .trim()
+      .replace(/\s+/g, '')
+      .replace(/[\r\n\t]/g, '');
+    console.log(
+      '[IG DEBUG] cleanToken:',
+      cleanToken.slice(0, 10) + '...',
+      'length:',
+      cleanToken.length
+    );
 
     if (expiresAt && new Date(expiresAt) < new Date()) {
       console.error('[IG DEBUG] Token de Instagram expirado');
@@ -52,7 +77,7 @@ export async function publishToInstagram({ caption, imageUrl, videoUrl, userId, 
       video_url: mediaType === 'VIDEO' ? mediaUrl : undefined,
       media_type: mediaType,
       caption: caption || '',
-      access_token: cleanToken
+      access_token: cleanToken,
     });
 
     for (const [key, value] of [...containerParams.entries()]) {
@@ -61,21 +86,32 @@ export async function publishToInstagram({ caption, imageUrl, videoUrl, userId, 
       }
     }
 
-    console.log('[IG DEBUG] containerParams:', Object.fromEntries(containerParams.entries()));
+    console.log(
+      '[IG DEBUG] containerParams:',
+      Object.fromEntries(containerParams.entries())
+    );
 
-    const containerResponse = await fetch(`https://graph.facebook.com/v19.0/${igUserId}/media`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: containerParams.toString()
-    });
+    const containerResponse = await fetch(
+      `https://graph.facebook.com/v19.0/${igUserId}/media`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: containerParams.toString(),
+      }
+    );
 
     const containerData = await containerResponse.json();
-    console.log('[IG DEBUG] containerResponse:', containerResponse.status, containerData);
+    console.log(
+      '[IG DEBUG] containerResponse:',
+      containerResponse.status,
+      containerData
+    );
 
     if (!containerResponse.ok) {
-      const errorMsg = containerData?.error?.message || 'Error creando container de Instagram';
+      const errorMsg =
+        containerData?.error?.message || 'Error creando container de Instagram';
       console.error('[IG DEBUG] Error en containerResponse:', errorMsg);
       throw new Error(errorMsg);
     }
@@ -84,22 +120,29 @@ export async function publishToInstagram({ caption, imageUrl, videoUrl, userId, 
 
     const publishParams = new URLSearchParams({
       creation_id: containerId,
-      access_token: cleanToken
+      access_token: cleanToken,
     });
-    console.log('[IG DEBUG] publishParams:', Object.fromEntries(publishParams.entries()));
+    console.log(
+      '[IG DEBUG] publishParams:',
+      Object.fromEntries(publishParams.entries())
+    );
 
-    const publishResponse = await fetch(`https://graph.facebook.com/v19.0/${igUserId}/media_publish`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: publishParams.toString()
-    });
+    const publishResponse = await fetch(
+      `https://graph.facebook.com/v19.0/${igUserId}/media_publish`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: publishParams.toString(),
+      }
+    );
 
     const publishData = await publishResponse.json();
 
     if (!publishResponse.ok) {
-      const errorMsg = publishData?.error?.message || 'Error publicando en Instagram';
+      const errorMsg =
+        publishData?.error?.message || 'Error publicando en Instagram';
       throw new Error(errorMsg);
     }
 
@@ -109,14 +152,13 @@ export async function publishToInstagram({ caption, imageUrl, videoUrl, userId, 
       platform: 'instagram',
       success: true,
       id: mediaId,
-      url: `https://www.instagram.com/p/${mediaId}/`
+      url: `https://www.instagram.com/p/${mediaId}/`,
     };
-
   } catch (error) {
     return {
       platform: 'instagram',
       success: false,
-      error: error.message
+      error: error.message,
     };
   }
 }

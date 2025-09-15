@@ -1,4 +1,4 @@
-import { supabase } from "@/lib/supabaseClient";
+import { supabase } from '@/lib/supabaseClient';
 
 // Session cache (module-scope) to avoid duplicate supabase.auth.getSession() calls
 let __sessionCache = null;

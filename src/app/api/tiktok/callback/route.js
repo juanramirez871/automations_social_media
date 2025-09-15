@@ -1,11 +1,11 @@
-import { NextResponse } from "next/server";
+import { NextResponse } from 'next/server';
 
 export async function GET(request) {
   try {
     const { searchParams, origin } = new URL(request.url);
-    const code = searchParams.get("code");
-    const error = searchParams.get("error");
-    const state = searchParams.get("state");
+    const code = searchParams.get('code');
+    const error = searchParams.get('error');
+    const state = searchParams.get('state');
 
     if (error) {
       const html = `<!DOCTYPE html><html><body>
@@ -17,7 +17,9 @@ export async function GET(request) {
           }
         </script>
       </body></html>`;
-      return new NextResponse(html, { headers: { "Content-Type": "text/html; charset=utf-8" } });
+      return new NextResponse(html, {
+        headers: { 'Content-Type': 'text/html; charset=utf-8' },
+      });
     }
 
     const clientKey = process.env.TIKTOK_CLIENT_KEY;
@@ -35,7 +37,9 @@ export async function GET(request) {
           }
         </script>
       </body></html>`;
-      return new NextResponse(html, { headers: { "Content-Type": "text/html; charset=utf-8" } });
+      return new NextResponse(html, {
+        headers: { 'Content-Type': 'text/html; charset=utf-8' },
+      });
     }
 
     if (!code) {
@@ -48,12 +52,14 @@ export async function GET(request) {
           }
         </script>
       </body></html>`;
-      return new NextResponse(html, { headers: { "Content-Type": "text/html; charset=utf-8" } });
+      return new NextResponse(html, {
+        headers: { 'Content-Type': 'text/html; charset=utf-8' },
+      });
     }
 
     // Validar state (si existe cookie)
     const cookies = request.cookies;
-    const expected = cookies.get?.("tt_oauth_state")?.value || null;
+    const expected = cookies.get?.('tt_oauth_state')?.value || null;
     if (expected && state && expected !== state) {
       const html = `<!DOCTYPE html><html><body>
         <p style=\"font-family: ui-sans-serif, system-ui; color:#111\">State inválido.</p>
@@ -64,25 +70,33 @@ export async function GET(request) {
           }
         </script>
       </body></html>`;
-      return new NextResponse(html, { headers: { "Content-Type": "text/html; charset=utf-8" } });
+      return new NextResponse(html, {
+        headers: { 'Content-Type': 'text/html; charset=utf-8' },
+      });
     }
 
     // Intercambiar code por tokens
-    const tokenRes = await fetch("https://open.tiktokapis.com/v2/oauth/token/", {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({
-        client_key: clientKey,
-        client_secret: clientSecret,
-        code,
-        grant_type: "authorization_code",
-        redirect_uri: redirectUri,
-      }).toString(),
-    });
+    const tokenRes = await fetch(
+      'https://open.tiktokapis.com/v2/oauth/token/',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          client_key: clientKey,
+          client_secret: clientSecret,
+          code,
+          grant_type: 'authorization_code',
+          redirect_uri: redirectUri,
+        }).toString(),
+      }
+    );
     const tokenJson = await tokenRes.json();
 
     if (!tokenRes.ok || tokenJson.error) {
-      const msg = tokenJson?.error_description || tokenJson?.message || `Token exchange failed (${tokenRes.status})`;
+      const msg =
+        tokenJson?.error_description ||
+        tokenJson?.message ||
+        `Token exchange failed (${tokenRes.status})`;
       const html = `<!DOCTYPE html><html><body>
         <p style=\"font-family: ui-sans-serif, system-ui; color:#111\">Error obteniendo tokens de TikTok: ${msg}</p>
         <script>
@@ -92,7 +106,9 @@ export async function GET(request) {
           }
         </script>
       </body></html>`;
-      return new NextResponse(html, { headers: { "Content-Type": "text/html; charset=utf-8" } });
+      return new NextResponse(html, {
+        headers: { 'Content-Type': 'text/html; charset=utf-8' },
+      });
     }
 
     const access_token = tokenJson.access_token;
@@ -110,7 +126,11 @@ export async function GET(request) {
         refresh_token,
         expires_in,
         open_id,
-        granted_scopes: scope ? String(scope).split(/[\s,]+/).filter(Boolean) : [],
+        granted_scopes: scope
+          ? String(scope)
+              .split(/[\s,]+/)
+              .filter(Boolean)
+          : [],
       },
     };
 
@@ -123,9 +143,13 @@ export async function GET(request) {
         }
       </script>
     </body></html>`;
-    const res = new NextResponse(html, { headers: { "Content-Type": "text/html; charset=utf-8" } });
+    const res = new NextResponse(html, {
+      headers: { 'Content-Type': 'text/html; charset=utf-8' },
+    });
     // limpiar cookie state
-    try { res.cookies.set("tt_oauth_state", "", { maxAge: 0, path: "/" }); } catch {}
+    try {
+      res.cookies.set('tt_oauth_state', '', { maxAge: 0, path: '/' });
+    } catch {}
     return res;
   } catch (e) {
     const html = `<!DOCTYPE html><html><body>
@@ -137,6 +161,8 @@ export async function GET(request) {
         }
       </script>
     </body></html>`;
-    return new NextResponse(html, { headers: { "Content-Type": "text/html; charset=utf-8" } });
+    return new NextResponse(html, {
+      headers: { 'Content-Type': 'text/html; charset=utf-8' },
+    });
   }
 }

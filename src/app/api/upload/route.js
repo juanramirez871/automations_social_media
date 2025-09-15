@@ -8,7 +8,10 @@ export async function POST(req) {
     const formData = await req.formData();
     const file = formData.get('file');
     if (!file) {
-      return new Response(JSON.stringify({ error: 'file is required' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+      return new Response(JSON.stringify({ error: 'file is required' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      });
     }
 
     const folder = formData.get('folder') || 'ui-chat-uploads';

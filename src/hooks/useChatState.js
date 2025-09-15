@@ -10,34 +10,34 @@ export function useChatState() {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [lightbox, setLightbox] = useState(null);
-  
+
   // Estados del flujo de publicación
   const [publishStage, setPublishStage] = useState('idle'); // 'idle' | 'await-media' | 'await-description'
   const [publishTargets, setPublishTargets] = useState([]);
   const [widgetTargetDrafts, setWidgetTargetDrafts] = useState({});
   const [customCaptionMode, setCustomCaptionMode] = useState(false);
-  
+
   // Referencias
   const authGateShownRef = useRef(false);
   const bottomRef = useRef(null);
   const initialScrollDoneRef = useRef(false);
   const disableSmoothUntilRef = useRef(Date.now() + 1500);
-  
+
   // Funciones de utilidad
   const resetPublishFlow = () => {
     setPublishStage('idle');
     setPublishTargets([]);
     setCustomCaptionMode(false);
   };
-  
-  const onAttachmentClick = (attachment) => {
+
+  const onAttachmentClick = attachment => {
     setLightbox(attachment);
   };
-  
+
   const closeLightbox = () => {
     setLightbox(null);
   };
-  
+
   return {
     // Estados
     messages,
@@ -58,16 +58,16 @@ export function useChatState() {
     setWidgetTargetDrafts,
     customCaptionMode,
     setCustomCaptionMode,
-    
+
     // Referencias
     authGateShownRef,
     bottomRef,
     initialScrollDoneRef,
     disableSmoothUntilRef,
-    
+
     // Funciones
     resetPublishFlow,
     onAttachmentClick,
-    closeLightbox
+    closeLightbox,
   };
 }

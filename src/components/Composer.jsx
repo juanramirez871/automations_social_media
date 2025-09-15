@@ -1,45 +1,55 @@
-"use client";
+'use client';
 
-import { useEffect, useRef, useState } from "react";
-import CalendarModal from "./CalendarModal";
+import { useEffect, useRef, useState } from 'react';
+import CalendarModal from './CalendarModal';
 
 export default function Composer({ onSend, loading = false }) {
-  const [message, setMessage] = useState("");
+  const [message, setMessage] = useState('');
   const [previews, setPreviews] = useState([]); // [{id, url, kind, name, file}]
   const [errors, setErrors] = useState([]);
   const [dragActive, setDragActive] = useState(false);
   const [showCalendar, setShowCalendar] = useState(false);
   const inputRef = useRef(null);
 
-  const accept = "image/*,video/*";
+  const accept = 'image/*,video/*';
 
-  const handleFiles = (fileList) => {
+  const handleFiles = fileList => {
     // Evitar agregar archivos mientras estamos enviando
     if (loading) return;
     const files = Array.from(fileList || []);
     const newErrors = [];
     const newItems = [];
 
-    files.forEach((f) => {
-      const isImage = f.type?.startsWith("image/") || /\.(png|jpe?g|gif|webp|svg)$/i.test(f.name);
-      const isVideo = f.type?.startsWith("video/") || /\.(mp4|mov|webm|ogg|mkv|m4v)$/i.test(f.name);
+    files.forEach(f => {
+      const isImage =
+        f.type?.startsWith('image/') ||
+        /\.(png|jpe?g|gif|webp|svg)$/i.test(f.name);
+      const isVideo =
+        f.type?.startsWith('video/') ||
+        /\.(mp4|mov|webm|ogg|mkv|m4v)$/i.test(f.name);
       if (!isImage && !isVideo) {
         newErrors.push(`${f.name}: formato no permitido`);
         return;
       }
-      const kind = isVideo ? "video" : "image";
+      const kind = isVideo ? 'video' : 'image';
       const url = URL.createObjectURL(f);
-      newItems.push({ id: `${Date.now()}-${f.name}-${Math.random().toString(36).slice(2, 8)}`, file: f, url, kind, name: f.name });
+      newItems.push({
+        id: `${Date.now()}-${f.name}-${Math.random().toString(36).slice(2, 8)}`,
+        file: f,
+        url,
+        kind,
+        name: f.name,
+      });
     });
 
     if (newItems.length) {
-      setPreviews((prev) => [...prev, ...newItems]);
-      setMessage(""); // Limpiar el texto cuando se suben archivos
+      setPreviews(prev => [...prev, ...newItems]);
+      setMessage(''); // Limpiar el texto cuando se suben archivos
     }
-    if (newErrors.length) setErrors((prev) => [...prev, ...newErrors]);
+    if (newErrors.length) setErrors(prev => [...prev, ...newErrors]);
   };
 
-  const onDrop = (e) => {
+  const onDrop = e => {
     e.preventDefault();
     e.stopPropagation();
     setDragActive(false);
@@ -51,7 +61,7 @@ export default function Composer({ onSend, loading = false }) {
     if (dt?.items?.length) {
       const asFiles = [];
       for (const item of dt.items) {
-        if (item.kind === "file") {
+        if (item.kind === 'file') {
           const f = item.getAsFile();
           if (f) asFiles.push(f);
         }
@@ -60,22 +70,22 @@ export default function Composer({ onSend, loading = false }) {
     }
   };
 
-  const onDragOver = (e) => {
+  const onDragOver = e => {
     e.preventDefault();
     e.stopPropagation();
     setDragActive(true);
   };
-  const onDragLeave = (e) => {
+  const onDragLeave = e => {
     e.preventDefault();
     e.stopPropagation();
     setDragActive(false);
   };
 
-  const removePreview = (id) => {
-    setPreviews((prev) => {
-      const removed = prev.find((p) => p.id === id);
+  const removePreview = id => {
+    setPreviews(prev => {
+      const removed = prev.find(p => p.id === id);
       if (removed) URL.revokeObjectURL(removed.url);
-      const newPreviews = prev.filter((p) => p.id !== id);
+      const newPreviews = prev.filter(p => p.id !== id);
       // Si no quedan archivos, limpiar cualquier mensaje de error
       if (newPreviews.length === 0) {
         setErrors([]);
@@ -88,11 +98,11 @@ export default function Composer({ onSend, loading = false }) {
 
   // Global drag & drop: habilita soltar archivos en cualquier zona de la app
   useEffect(() => {
-    const handleWindowDragOver = (e) => {
+    const handleWindowDragOver = e => {
       e.preventDefault();
       setDragActive(true);
     };
-    const handleWindowDrop = (e) => {
+    const handleWindowDrop = e => {
       e.preventDefault();
       setDragActive(false);
       const dt = e.dataTransfer;
@@ -103,7 +113,7 @@ export default function Composer({ onSend, loading = false }) {
       if (dt?.items?.length) {
         const asFiles = [];
         for (const item of dt.items) {
-          if (item.kind === "file") {
+          if (item.kind === 'file') {
             const f = item.getAsFile();
             if (f) asFiles.push(f);
           }
@@ -111,18 +121,18 @@ export default function Composer({ onSend, loading = false }) {
         if (asFiles.length) handleFiles(asFiles);
       }
     };
-    const handleWindowDragLeave = (e) => {
+    const handleWindowDragLeave = e => {
       e.preventDefault();
       setDragActive(false);
     };
 
-    window.addEventListener("dragover", handleWindowDragOver);
-    window.addEventListener("drop", handleWindowDrop);
-    window.addEventListener("dragleave", handleWindowDragLeave);
+    window.addEventListener('dragover', handleWindowDragOver);
+    window.addEventListener('drop', handleWindowDrop);
+    window.addEventListener('dragleave', handleWindowDragLeave);
     return () => {
-      window.removeEventListener("dragover", handleWindowDragOver);
-      window.removeEventListener("drop", handleWindowDrop);
-      window.removeEventListener("dragleave", handleWindowDragLeave);
+      window.removeEventListener('dragover', handleWindowDragOver);
+      window.removeEventListener('drop', handleWindowDrop);
+      window.removeEventListener('dragleave', handleWindowDragLeave);
     };
   }, []);
 
@@ -130,40 +140,43 @@ export default function Composer({ onSend, loading = false }) {
     const text = message.trim();
     // Solo permitir envío si hay texto (sin archivos) o archivos (sin texto)
     if (!text && previews.length === 0) return;
-    
-    const files = previews.map((p) => p.file);
-    onSend?.({ text: previews.length > 0 ? "" : text, files });
-    setMessage("");
+
+    const files = previews.map(p => p.file);
+    onSend?.({ text: previews.length > 0 ? '' : text, files });
+    setMessage('');
     setPreviews([]);
     setErrors([]);
   };
 
   // Enviar con Enter; usar Shift+Enter para salto de línea
-  const handleKeyDown = (e) => {
-    if (e.key === "Enter" && !e.shiftKey && !loading) {
+  const handleKeyDown = e => {
+    if (e.key === 'Enter' && !e.shiftKey && !loading) {
       e.preventDefault();
       handleSend();
     }
   };
 
-  const textareaPadding = previews.length ? "pb-32 sm:pb-32" : "pb-12 sm:pb-12";
+  const textareaPadding = previews.length ? 'pb-32 sm:pb-32' : 'pb-12 sm:pb-12';
 
   return (
-    <div className="max-w-4xl mx-auto sticky bottom-0 z-10 pt-5 pb-4 sm:pt-4 sm:pb-6 px-4 sm:px-6 lg:px-0" aria-busy={loading}>
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-0">
+    <div
+      className='max-w-4xl mx-auto sticky bottom-0 z-10 pt-5 pb-4 sm:pt-4 sm:pb-6 px-4 sm:px-6 lg:px-0'
+      aria-busy={loading}
+    >
+      <div className='max-w-4xl mx-auto px-4 sm:px-6 lg:px-0'>
         <div
-          className={`relative ${dragActive ? "ring-2 ring-blue-300 rounded-lg" : ""}`}
+          className={`relative ${dragActive ? 'ring-2 ring-blue-300 rounded-lg' : ''}`}
           onDragEnter={onDragOver}
           onDragOver={onDragOver}
           onDragLeave={onDragLeave}
           onDrop={onDrop}
-          aria-dropeffect="copy"
+          aria-dropeffect='copy'
         >
           <textarea
             className={`p-3 sm:p-4 ${textareaPadding} block w-full border-gray-200 rounded-lg sm:text-sm focus:border-blue-300 focus:ring-blue-300 disabled:opacity-50 disabled:pointer-events-none`}
-            placeholder={previews.length > 0 ? "" : "Escribe tu mensaje..."}
+            placeholder={previews.length > 0 ? '' : 'Escribe tu mensaje...'}
             value={message}
-            onChange={(e) => setMessage(e.target.value)}
+            onChange={e => setMessage(e.target.value)}
             onDrop={onDrop}
             onDragEnter={onDragOver}
             onDragOver={onDragOver}
@@ -172,22 +185,33 @@ export default function Composer({ onSend, loading = false }) {
             disabled={loading || previews.length > 0}
           ></textarea>
 
-          <div className="absolute bottom-px inset-x-px p-2 rounded-b-lg bg-white/80 backdrop-blur supports-[backdrop-filter]:bg-white/70">
+          <div className='absolute bottom-px inset-x-px p-2 rounded-b-lg bg-white/80 backdrop-blur supports-[backdrop-filter]:bg-white/70'>
             {/* Previews */}
             {previews.length > 0 && (
-              <div className="mb-2 overflow-x-auto">
-                <div className="flex gap-2">
-                  {previews.map((p) => (
-                    <div key={p.id} className="relative border border-gray-200 rounded-lg p-1 bg-white overflow-visible">
-                      {p.kind === "image" ? (
-                        <img src={p.url} alt={p.name} className="h-16 w-16 rounded object-cover" />
+              <div className='mb-2 overflow-x-auto'>
+                <div className='flex gap-2'>
+                  {previews.map(p => (
+                    <div
+                      key={p.id}
+                      className='relative border border-gray-200 rounded-lg p-1 bg-white overflow-visible'
+                    >
+                      {p.kind === 'image' ? (
+                        <img
+                          src={p.url}
+                          alt={p.name}
+                          className='h-16 w-16 rounded object-cover'
+                        />
                       ) : (
-                        <video src={p.url} className="h-16 w-16 rounded object-cover" muted />
+                        <video
+                          src={p.url}
+                          className='h-16 w-16 rounded object-cover'
+                          muted
+                        />
                       )}
                       <button
-                        type="button"
+                        type='button'
                         onClick={() => removePreview(p.id)}
-                        className="absolute top-1 right-1 z-10 bg-pink-500 text-white rounded-full size-5 flex items-center justify-center text-xs shadow ring-2 ring-white disabled:opacity-50 disabled:pointer-events-none cursor-pointer"
+                        className='absolute top-1 right-1 z-10 bg-pink-500 text-white rounded-full size-5 flex items-center justify-center text-xs shadow ring-2 ring-white disabled:opacity-50 disabled:pointer-events-none cursor-pointer'
                         aria-label={`Eliminar ${p.name}`}
                         disabled={loading}
                       >
@@ -201,90 +225,97 @@ export default function Composer({ onSend, loading = false }) {
 
             {/* Errors */}
             {errors.length > 0 && (
-              <div className="mb-2 text-xs text-pink-500">
+              <div className='mb-2 text-xs text-pink-500'>
                 {errors.map((e, i) => (
                   <div key={i}>{e}</div>
                 ))}
               </div>
             )}
 
-            <div className="flex flex-wrap justify-between items-center gap-2">
-              <div className="flex items-center gap-x-1">
+            <div className='flex flex-wrap justify-between items-center gap-2'>
+              <div className='flex items-center gap-x-1'>
                 <input
                   ref={inputRef}
-                  type="file"
+                  type='file'
                   accept={accept}
                   multiple
-                  className="hidden"
-                  onChange={(e) => handleFiles(e.target.files)}
+                  className='hidden'
+                  onChange={e => handleFiles(e.target.files)}
                   disabled={loading}
                 />
                 <button
-                  type="button"
+                  type='button'
                   onClick={() => inputRef.current?.click()}
-                  className="inline-flex shrink-0 justify-center items-center size-8 rounded-lg text-blue-500 hover:bg-blue-50 focus:z-10 focus:outline-hidden focus:bg-blue-50 disabled:opacity-50 disabled:pointer-events-none cursor-pointer"
-                  aria-label="Adjuntar archivos"
+                  className='inline-flex shrink-0 justify-center items-center size-8 rounded-lg text-blue-500 hover:bg-blue-50 focus:z-10 focus:outline-hidden focus:bg-blue-50 disabled:opacity-50 disabled:pointer-events-none cursor-pointer'
+                  aria-label='Adjuntar archivos'
                   disabled={loading}
                 >
                   <svg
-                    className="shrink-0 size-4"
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="24"
-                    height="24"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
+                    className='shrink-0 size-4'
+                    xmlns='http://www.w3.org/2000/svg'
+                    width='24'
+                    height='24'
+                    viewBox='0 0 24 24'
+                    fill='none'
+                    stroke='currentColor'
+                    strokeWidth='2'
+                    strokeLinecap='round'
+                    strokeLinejoin='round'
                   >
-                    <path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"></path>
+                    <path d='m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48'></path>
                   </svg>
                 </button>
                 <button
-                  type="button"
+                  type='button'
                   onClick={() => setShowCalendar(true)}
-                  className="inline-flex shrink-0 justify-center items-center size-8 rounded-lg text-gray-500 hover:bg-gray-50 focus:z-10 focus:outline-hidden focus:bg-gray-50 disabled:opacity-50 disabled:pointer-events-none cursor-pointer"
-                  aria-label="Programar publicación"
+                  className='inline-flex shrink-0 justify-center items-center size-8 rounded-lg text-gray-500 hover:bg-gray-50 focus:z-10 focus:outline-hidden focus:bg-gray-50 disabled:opacity-50 disabled:pointer-events-none cursor-pointer'
+                  aria-label='Programar publicación'
                   disabled={loading}
                 >
                   <svg
-                    className="shrink-0 size-4"
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="24"
-                    height="24"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
+                    className='shrink-0 size-4'
+                    xmlns='http://www.w3.org/2000/svg'
+                    width='24'
+                    height='24'
+                    viewBox='0 0 24 24'
+                    fill='none'
+                    stroke='currentColor'
+                    strokeWidth='2'
+                    strokeLinecap='round'
+                    strokeLinejoin='round'
                   >
-                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
-                    <line x1="16" y1="2" x2="16" y2="6"></line>
-                    <line x1="8" y1="2" x2="8" y2="6"></line>
-                    <line x1="3" y1="10" x2="21" y2="10"></line>
+                    <rect
+                      x='3'
+                      y='4'
+                      width='18'
+                      height='18'
+                      rx='2'
+                      ry='2'
+                    ></rect>
+                    <line x1='16' y1='2' x2='16' y2='6'></line>
+                    <line x1='8' y1='2' x2='8' y2='6'></line>
+                    <line x1='3' y1='10' x2='21' y2='10'></line>
                   </svg>
                 </button>
               </div>
 
-              <div className="flex items-center gap-x-2">
+              <div className='flex items-center gap-x-2'>
                 <button
-                  type="button"
+                  type='button'
                   onClick={handleSend}
-                  className="inline-flex shrink-0 justify-center items-center size-8 rounded-lg text-white bg-gradient-to-r from-blue-400 to-pink-400 hover:from-blue-400/90 hover:to-pink-400/90 focus:z-10 focus:outline-hidden disabled:opacity-50 disabled:pointer-events-none cursor-pointer"
-                  aria-label="Enviar mensaje"
+                  className='inline-flex shrink-0 justify-center items-center size-8 rounded-lg text-white bg-gradient-to-r from-blue-400 to-pink-400 hover:from-blue-400/90 hover:to-pink-400/90 focus:z-10 focus:outline-hidden disabled:opacity-50 disabled:pointer-events-none cursor-pointer'
+                  aria-label='Enviar mensaje'
                   disabled={loading}
                 >
                   <svg
-                    className="shrink-0 size-3.5"
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="16"
-                    height="16"
-                    fill="currentColor"
-                    viewBox="0 0 16 16"
+                    className='shrink-0 size-3.5'
+                    xmlns='http://www.w3.org/2000/svg'
+                    width='16'
+                    height='16'
+                    fill='currentColor'
+                    viewBox='0 0 16 16'
                   >
-                    <path d="M15.964.686a.5.5 0 0 0-.65-.65L.767 5.855H.766l-.452.18a.5.5 0 0 0-.082.887l.41.26.001.002 4.995 3.178 3.178 4.995.002.002.26.41a.5.5 0 0 0 .886-.083l6-15Zm-1.833 1.89L6.637 10.07l-.215-.338a.5.5 0 0 0-.154-.154l-.338-.215 7.494-7.494 1.178-.471-.47 1.178Z"></path>
+                    <path d='M15.964.686a.5.5 0 0 0-.65-.65L.767 5.855H.766l-.452.18a.5.5 0 0 0-.082.887l.41.26.001.002 4.995 3.178 3.178 4.995.002.002.26.41a.5.5 0 0 0 .886-.083l6-15Zm-1.833 1.89L6.637 10.07l-.215-.338a.5.5 0 0 0-.154-.154l-.338-.215 7.494-7.494 1.178-.471-.47 1.178Z'></path>
                   </svg>
                 </button>
               </div>
@@ -292,7 +323,7 @@ export default function Composer({ onSend, loading = false }) {
           </div>
         </div>
       </div>
-      
+
       <CalendarModal
         isOpen={showCalendar}
         onClose={() => setShowCalendar(false)}

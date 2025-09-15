@@ -13,7 +13,9 @@ export function useScheduledPosts() {
 
   // Obtener usuario actual
   const getCurrentUser = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
     return user;
   };
 
@@ -22,7 +24,7 @@ export function useScheduledPosts() {
     try {
       setLoading(true);
       setError(null);
-      
+
       const user = await getCurrentUser();
       if (!user) {
         throw new Error('User not authenticated');
@@ -45,11 +47,11 @@ export function useScheduledPosts() {
   };
 
   // Crear nueva publicación programada
-  const createPost = async (postData) => {
+  const createPost = async postData => {
     try {
       setLoading(true);
       setError(null);
-      
+
       const user = await getCurrentUser();
       if (!user) {
         throw new Error('User not authenticated');
@@ -62,8 +64,8 @@ export function useScheduledPosts() {
         },
         body: JSON.stringify({
           userId: user.id,
-          ...postData
-        })
+          ...postData,
+        }),
       });
 
       const data = await response.json();
@@ -89,7 +91,7 @@ export function useScheduledPosts() {
     try {
       setLoading(true);
       setError(null);
-      
+
       const user = await getCurrentUser();
       if (!user) {
         throw new Error('User not authenticated');
@@ -103,8 +105,8 @@ export function useScheduledPosts() {
         body: JSON.stringify({
           id,
           userId: user.id,
-          ...updateData
-        })
+          ...updateData,
+        }),
       });
 
       const data = await response.json();
@@ -114,9 +116,7 @@ export function useScheduledPosts() {
       }
 
       // Actualizar lista local
-      setPosts(prev => prev.map(post => 
-        post.id === id ? data.post : post
-      ));
+      setPosts(prev => prev.map(post => (post.id === id ? data.post : post)));
       return data.post;
     } catch (err) {
       console.error('Error updating scheduled post:', err);
@@ -128,19 +128,22 @@ export function useScheduledPosts() {
   };
 
   // Eliminar publicación programada
-  const deletePost = async (id) => {
+  const deletePost = async id => {
     try {
       setLoading(true);
       setError(null);
-      
+
       const user = await getCurrentUser();
       if (!user) {
         throw new Error('User not authenticated');
       }
 
-      const response = await fetch(`/api/scheduled-posts?id=${id}&userId=${user.id}`, {
-        method: 'DELETE'
-      });
+      const response = await fetch(
+        `/api/scheduled-posts?id=${id}&userId=${user.id}`,
+        {
+          method: 'DELETE',
+        }
+      );
 
       const data = await response.json();
 
@@ -161,8 +164,9 @@ export function useScheduledPosts() {
   };
 
   // Obtener publicaciones por fecha (para el calendario)
-  const getPostsByDate = (date) => {
-    const dateStr = date instanceof Date ? date.toISOString().split('T')[0] : date;
+  const getPostsByDate = date => {
+    const dateStr =
+      date instanceof Date ? date.toISOString().split('T')[0] : date;
     return posts.filter(post => post.scheduled_date === dateStr);
   };
 
@@ -193,6 +197,6 @@ export function useScheduledPosts() {
     updatePost,
     deletePost,
     getPostsByDate,
-    getPostsGroupedByDate
+    getPostsGroupedByDate,
   };
 }

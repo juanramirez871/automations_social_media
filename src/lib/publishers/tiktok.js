@@ -1,20 +1,22 @@
 export async function getTikTokToken(supabase, userId) {
   try {
     const { data, error } = await supabase
-      .from("profiles")
-      .select("tiktok_access_token, tiktok_expires_at, tiktok_open_id, tiktok_granted_scopes")
-      .eq("id", userId)
+      .from('profiles')
+      .select(
+        'tiktok_access_token, tiktok_expires_at, tiktok_open_id, tiktok_granted_scopes'
+      )
+      .eq('id', userId)
       .maybeSingle();
-      
+
     if (error) {
       throw error;
     }
-    
+
     const token = data?.tiktok_access_token || null;
     const expiresAt = data?.tiktok_expires_at || null;
     const openId = data?.tiktok_open_id || null;
     const grantedScopes = data?.tiktok_granted_scopes || null;
-    
+
     return { token, expiresAt, openId, grantedScopes };
   } catch (e) {
     return { token: null, expiresAt: null, openId: null, grantedScopes: null };
@@ -25,21 +27,21 @@ export function normalizeVerifiedTikTokUrl(inputUrl) {
   if (!inputUrl || typeof inputUrl !== 'string') {
     return inputUrl;
   }
-  
+
   if (inputUrl.includes('res.cloudinary.com')) {
     return inputUrl.replace(
       /https:\/\/res\.cloudinary\.com\/[^/]+\//,
       'https://media.kaioficial.com/tiktok/cdn/'
     );
   }
-  
+
   return inputUrl;
 }
 
 export async function getRemoteFileMeta(url) {
   let contentLength = null;
   let contentType = 'application/octet-stream';
-  
+
   try {
     const head = await fetch(url, { method: 'HEAD' });
     if (head.ok) {
@@ -49,11 +51,20 @@ export async function getRemoteFileMeta(url) {
       if (ctype) contentType = ctype;
     }
   } catch {}
-  
-  return { contentLength: Number.isFinite(contentLength) ? contentLength : null, contentType };
+
+  return {
+    contentLength: Number.isFinite(contentLength) ? contentLength : null,
+    contentType,
+  };
 }
 
-export async function tiktokInitFileUpload({ token, mode, title, privacyLevel, videoUrl }) {
+export async function tiktokInitFileUpload({
+  token,
+  mode,
+  title,
+  privacyLevel,
+  videoUrl,
+}) {
   const isDirect = mode === 'direct';
   const url = isDirect
     ? 'https://open.tiktokapis.com/v2/post/publish/video/init/'
@@ -61,12 +72,12 @@ export async function tiktokInitFileUpload({ token, mode, title, privacyLevel, v
   const effectivePrivacy = privacyLevel || 'SELF_ONLY';
 
   const { contentLength, contentType } = await getRemoteFileMeta(videoUrl);
-  
+
   const MIN_CHUNK_SIZE = 5 * 1024 * 1024;
   const MAX_CHUNK_SIZE = 64 * 1024 * 1024;
-  
+
   let chunkSize, totalChunks;
-  
+
   if (!contentLength || contentLength < MIN_CHUNK_SIZE) {
     chunkSize = contentLength || MIN_CHUNK_SIZE;
     totalChunks = 1;
@@ -116,7 +127,8 @@ export async function tiktokInitFileUpload({ token, mode, title, privacyLevel, v
 
   const responseData = await response.json().catch(() => ({}));
   if (!response.ok) {
-    const errorMsg = responseData?.error?.message || 'Error inicializando subida de TikTok';
+    const errorMsg =
+      responseData?.error?.message || 'Error inicializando subida de TikTok';
     throw new Error(errorMsg);
   }
 
@@ -124,20 +136,38 @@ export async function tiktokInitFileUpload({ token, mode, title, privacyLevel, v
   const uploadUrl = responseData?.data?.upload_url;
 
   if (!publishId || !uploadUrl) {
-    throw new Error('Respuesta init de TikTok no contiene publish_id o upload_url');
+    throw new Error(
+      'Respuesta init de TikTok no contiene publish_id o upload_url'
+    );
   }
 
-  return { publishId, uploadUrl, videoSize: contentLength, chunkSize, totalChunks, contentType };
+  return {
+    publishId,
+    uploadUrl,
+    videoSize: contentLength,
+    chunkSize,
+    totalChunks,
+    contentType,
+  };
 }
 
-export async function tiktokUploadFromUrl({ uploadUrl, videoUrl, videoSize, chunkSize, totalChunks, contentType }) {
+export async function tiktokUploadFromUrl({
+  uploadUrl,
+  videoUrl,
+  videoSize,
+  chunkSize,
+  totalChunks,
+  contentType,
+}) {
   const videoResp = await fetch(videoUrl);
   if (!videoResp.ok || !videoResp.body) {
     throw new Error(`Error descargando video: ${videoResp.status}`);
   }
 
   if (totalChunks === 1 || !videoSize) {
-    const headers = { 'Content-Type': contentType || 'application/octet-stream' };
+    const headers = {
+      'Content-Type': contentType || 'application/octet-stream',
+    };
     if (videoSize) {
       headers['Content-Length'] = String(videoSize);
       headers['Content-Range'] = `bytes 0-${videoSize - 1}/${videoSize}`;
@@ -151,9 +181,12 @@ export async function tiktokUploadFromUrl({ uploadUrl, videoUrl, videoSize, chun
     });
 
     let putJson = {};
-    try { putJson = await putRes.json(); } catch {}
+    try {
+      putJson = await putRes.json();
+    } catch {}
     if (!putRes.ok) {
-      const msg = putJson?.error?.message || 'Falló la subida de video a TikTok';
+      const msg =
+        putJson?.error?.message || 'Falló la subida de video a TikTok';
       throw new Error(msg);
     }
   } else {
@@ -162,7 +195,7 @@ export async function tiktokUploadFromUrl({ uploadUrl, videoUrl, videoSize, chun
       const start = i * chunkSize;
       const end = Math.min(start + chunkSize, videoSize);
       const chunk = videoBuffer.slice(start, end);
-      
+
       const headers = {
         'Content-Type': contentType || 'application/octet-stream',
         'Content-Length': String(chunk.byteLength),
@@ -176,33 +209,49 @@ export async function tiktokUploadFromUrl({ uploadUrl, videoUrl, videoSize, chun
       });
 
       let putJson = {};
-      try { putJson = await putRes.json(); } catch {}
+      try {
+        putJson = await putRes.json();
+      } catch {}
       if (!putRes.ok) {
-        const msg = putJson?.error?.message || `Falló la subida del chunk ${i + 1}`;
+        const msg =
+          putJson?.error?.message || `Falló la subida del chunk ${i + 1}`;
         throw new Error(msg);
       }
     }
   }
 }
 
-export async function publishToTikTok({ caption, videoUrl, userId, privacyLevel, supabase }) {
+export async function publishToTikTok({
+  caption,
+  videoUrl,
+  userId,
+  privacyLevel,
+  supabase,
+}) {
   try {
     if (!videoUrl) {
       throw new Error('TikTok requiere un video');
     }
-    
-    const { token: ttToken, expiresAt: ttExpiresAt, openId, grantedScopes } = await getTikTokToken(supabase, userId);
+
+    const {
+      token: ttToken,
+      expiresAt: ttExpiresAt,
+      openId,
+      grantedScopes,
+    } = await getTikTokToken(supabase, userId);
     if (!ttToken) {
       throw new Error('No hay token de TikTok configurado');
     }
-    
+
     if (ttExpiresAt && new Date(ttExpiresAt) < new Date()) {
       throw new Error('Token de TikTok expirado');
     }
 
     const scopes = Array.isArray(grantedScopes)
       ? grantedScopes
-      : (typeof grantedScopes === 'string' ? grantedScopes.split(/[\s,]+/).filter(Boolean) : []);
+      : typeof grantedScopes === 'string'
+        ? grantedScopes.split(/[\s,]+/).filter(Boolean)
+        : [];
     const hasDirectPost = scopes.includes('video.publish');
     const hasUpload = scopes.includes('video.upload');
 
@@ -214,19 +263,26 @@ export async function publishToTikTok({ caption, videoUrl, userId, privacyLevel,
     if (hasDirectPost) {
       let creatorInfo = null;
       try {
-        const ciRes = await fetch('https://open.tiktokapis.com/v2/post/publish/creator_info/query/', {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${ttToken}`,
-            'Content-Type': 'application/json; charset=UTF-8',
-          },
-        });
+        const ciRes = await fetch(
+          'https://open.tiktokapis.com/v2/post/publish/creator_info/query/',
+          {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${ttToken}`,
+              'Content-Type': 'application/json; charset=UTF-8',
+            },
+          }
+        );
         creatorInfo = await ciRes.json().catch(() => ({}));
       } catch (e) {}
 
       const options = creatorInfo?.data?.privacy_level_options;
       let effectivePrivacy = 'SELF_ONLY';
-      if (privacyLevel && Array.isArray(options) && options.includes(privacyLevel)) {
+      if (
+        privacyLevel &&
+        Array.isArray(options) &&
+        options.includes(privacyLevel)
+      ) {
         effectivePrivacy = privacyLevel;
       }
 
@@ -242,27 +298,72 @@ export async function publishToTikTok({ caption, videoUrl, userId, privacyLevel,
         },
       };
 
-      const initRes = await fetch('https://open.tiktokapis.com/v2/post/publish/video/init/', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${ttToken}`,
-          'Content-Type': 'application/json; charset=UTF-8',
-        },
-        body: JSON.stringify(initBody),
-      });
+      const initRes = await fetch(
+        'https://open.tiktokapis.com/v2/post/publish/video/init/',
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${ttToken}`,
+            'Content-Type': 'application/json; charset=UTF-8',
+          },
+          body: JSON.stringify(initBody),
+        }
+      );
       const initJson = await initRes.json().catch(() => ({}));
 
       if (!initRes.ok) {
         const errMsg = initJson?.error?.message || '';
-        if (/URL ownership|ownership verification|pull_from_url|guidelines/i.test(errMsg)) {
+        if (
+          /URL ownership|ownership verification|pull_from_url|guidelines/i.test(
+            errMsg
+          )
+        ) {
           try {
-            const { publishId: upId, uploadUrl, videoSize, chunkSize, totalChunks, contentType } = await tiktokInitFileUpload({ token: ttToken, mode: 'direct', title, privacyLevel: effectivePrivacy, videoUrl });
-            await tiktokUploadFromUrl({ uploadUrl, videoUrl, videoSize, chunkSize, totalChunks, contentType });
+            const {
+              publishId: upId,
+              uploadUrl,
+              videoSize,
+              chunkSize,
+              totalChunks,
+              contentType,
+            } = await tiktokInitFileUpload({
+              token: ttToken,
+              mode: 'direct',
+              title,
+              privacyLevel: effectivePrivacy,
+              videoUrl,
+            });
+            await tiktokUploadFromUrl({
+              uploadUrl,
+              videoUrl,
+              videoSize,
+              chunkSize,
+              totalChunks,
+              contentType,
+            });
             publishId = upId;
           } catch (e) {
             if (hasUpload) {
-              const { publishId: upId, uploadUrl, videoSize, chunkSize, totalChunks, contentType } = await tiktokInitFileUpload({ token: ttToken, mode: 'inbox', videoUrl });
-              await tiktokUploadFromUrl({ uploadUrl, videoUrl, videoSize, chunkSize, totalChunks, contentType });
+              const {
+                publishId: upId,
+                uploadUrl,
+                videoSize,
+                chunkSize,
+                totalChunks,
+                contentType,
+              } = await tiktokInitFileUpload({
+                token: ttToken,
+                mode: 'inbox',
+                videoUrl,
+              });
+              await tiktokUploadFromUrl({
+                uploadUrl,
+                videoUrl,
+                videoSize,
+                chunkSize,
+                totalChunks,
+                contentType,
+              });
               publishId = upId;
             } else {
               throw e;
@@ -270,11 +371,32 @@ export async function publishToTikTok({ caption, videoUrl, userId, privacyLevel,
           }
         } else {
           if (hasUpload) {
-            const { publishId: upId, uploadUrl, videoSize, chunkSize, totalChunks, contentType } = await tiktokInitFileUpload({ token: ttToken, mode: 'inbox', videoUrl });
-            await tiktokUploadFromUrl({ uploadUrl, videoUrl, videoSize, chunkSize, totalChunks, contentType });
+            const {
+              publishId: upId,
+              uploadUrl,
+              videoSize,
+              chunkSize,
+              totalChunks,
+              contentType,
+            } = await tiktokInitFileUpload({
+              token: ttToken,
+              mode: 'inbox',
+              videoUrl,
+            });
+            await tiktokUploadFromUrl({
+              uploadUrl,
+              videoUrl,
+              videoSize,
+              chunkSize,
+              totalChunks,
+              contentType,
+            });
             publishId = upId;
           } else {
-            throw new Error(errMsg || 'Error inicializando publicación en TikTok (Direct Post)');
+            throw new Error(
+              errMsg ||
+                'Error inicializando publicación en TikTok (Direct Post)'
+            );
           }
         }
       } else {
@@ -287,20 +409,45 @@ export async function publishToTikTok({ caption, videoUrl, userId, privacyLevel,
           video_url: pullUrl,
         },
       };
-      const initRes = await fetch('https://open.tiktokapis.com/v2/post/publish/inbox/video/init/', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${ttToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(initBody),
-      });
+      const initRes = await fetch(
+        'https://open.tiktokapis.com/v2/post/publish/inbox/video/init/',
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${ttToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(initBody),
+        }
+      );
       const initJson = await initRes.json().catch(() => ({}));
       if (!initRes.ok) {
         const errMsg = initJson?.error?.message || '';
-        if (/URL ownership|ownership verification|pull_from_url|guidelines/i.test(errMsg)) {
-          const { publishId: upId, uploadUrl, videoSize, chunkSize, totalChunks, contentType } = await tiktokInitFileUpload({ token: ttToken, mode: 'inbox', videoUrl });
-          await tiktokUploadFromUrl({ uploadUrl, videoUrl, videoSize, chunkSize, totalChunks, contentType });
+        if (
+          /URL ownership|ownership verification|pull_from_url|guidelines/i.test(
+            errMsg
+          )
+        ) {
+          const {
+            publishId: upId,
+            uploadUrl,
+            videoSize,
+            chunkSize,
+            totalChunks,
+            contentType,
+          } = await tiktokInitFileUpload({
+            token: ttToken,
+            mode: 'inbox',
+            videoUrl,
+          });
+          await tiktokUploadFromUrl({
+            uploadUrl,
+            videoUrl,
+            videoSize,
+            chunkSize,
+            totalChunks,
+            contentType,
+          });
           publishId = upId;
         } else {
           throw new Error(errMsg || 'Error subiendo video a TikTok (Inbox)');
@@ -309,19 +456,24 @@ export async function publishToTikTok({ caption, videoUrl, userId, privacyLevel,
         publishId = initJson?.data?.publish_id || null;
       }
     } else {
-      throw new Error('Permisos de TikTok insuficientes (requiere video.publish o video.upload)');
+      throw new Error(
+        'Permisos de TikTok insuficientes (requiere video.publish o video.upload)'
+      );
     }
 
     if (publishId) {
       try {
-        const statusRes = await fetch('https://open.tiktokapis.com/v2/post/publish/status/fetch/', {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${ttToken}`,
-            'Content-Type': 'application/json; charset=UTF-8',
-          },
-          body: JSON.stringify({ publish_id: publishId }),
-        });
+        const statusRes = await fetch(
+          'https://open.tiktokapis.com/v2/post/publish/status/fetch/',
+          {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${ttToken}`,
+              'Content-Type': 'application/json; charset=UTF-8',
+            },
+            body: JSON.stringify({ publish_id: publishId }),
+          }
+        );
         const statusJson = await statusRes.json().catch(() => ({}));
         if (statusRes.ok) {
           status = statusJson?.data?.status || null;
@@ -335,7 +487,6 @@ export async function publishToTikTok({ caption, videoUrl, userId, privacyLevel,
       id: publishId,
       status,
     };
-    
   } catch (error) {
     return {
       platform: 'tiktok',

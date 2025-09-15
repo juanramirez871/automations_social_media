@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextResponse } from 'next/server';
 
 export async function GET(request) {
   try {
@@ -19,18 +19,21 @@ export async function GET(request) {
           }
         </script>
       </body></html>`;
-      return new NextResponse(html, { headers: { "Content-Type": "text/html; charset=utf-8" } });
+      return new NextResponse(html, {
+        headers: { 'Content-Type': 'text/html; charset=utf-8' },
+      });
     }
 
-    const scopeParam = "public_profile,email,pages_manage_posts,pages_read_engagement";
+    const scopeParam =
+      'public_profile,email,pages_manage_posts,pages_read_engagement';
     const state = Math.random().toString(36).slice(2);
 
-    const fbAuthUrl = new URL("https://www.facebook.com/v23.0/dialog/oauth");
-    fbAuthUrl.searchParams.set("client_id", clientId);
-    fbAuthUrl.searchParams.set("redirect_uri", redirectUri);
-    fbAuthUrl.searchParams.set("response_type", "code");
-    fbAuthUrl.searchParams.set("scope", scopeParam);
-    fbAuthUrl.searchParams.set("state", state);
+    const fbAuthUrl = new URL('https://www.facebook.com/v23.0/dialog/oauth');
+    fbAuthUrl.searchParams.set('client_id', clientId);
+    fbAuthUrl.searchParams.set('redirect_uri', redirectUri);
+    fbAuthUrl.searchParams.set('response_type', 'code');
+    fbAuthUrl.searchParams.set('scope', scopeParam);
+    fbAuthUrl.searchParams.set('state', state);
 
     return NextResponse.redirect(fbAuthUrl.toString(), { status: 302 });
   } catch (e) {
@@ -43,6 +46,8 @@ export async function GET(request) {
         }
       </script>
     </body></html>`;
-    return new NextResponse(html, { headers: { "Content-Type": "text/html; charset=utf-8" } });
+    return new NextResponse(html, {
+      headers: { 'Content-Type': 'text/html; charset=utf-8' },
+    });
   }
 }

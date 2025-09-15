@@ -14,9 +14,14 @@ Escribe una descripción breve y profesional (2-4 líneas), tono natural y claro
 Incluye 2-5 hashtags relevantes (al final), 0-2 emojis discretos si corresponde.
 Agrega un CTA sutil solo si aplica.
 Reglas de salida: Devuelve únicamente el texto final del caption, sin comillas, sin encabezados ni explicaciones.`;
-        const userText = typeof prompt === 'string' && prompt
-          ? prompt
-          : (Array.isArray(messages) && messages.length > 0 ? (typeof messages[messages.length - 1]?.content === 'string' ? messages[messages.length - 1].content : '') : '');
+        const userText =
+          typeof prompt === 'string' && prompt
+            ? prompt
+            : Array.isArray(messages) && messages.length > 0
+              ? typeof messages[messages.length - 1]?.content === 'string'
+                ? messages[messages.length - 1].content
+                : ''
+              : '';
 
         const { text } = await generateText({
           model: google('gemini-2.5-flash'),
@@ -45,42 +50,111 @@ Sé conciso, profesional y útil.
 
 IMPORTANTE: Si tu respuesta es de tipo texto, devuélvela bonita y clara usando Markdown (usa títulos, listas, negritas, tablas, bloques de código, etc. si aplica).`;
 
-    const extractText = (m) => {
+    const extractText = m => {
       if (typeof m?.content === 'string' && m.content) return m.content;
       if (Array.isArray(m?.parts)) {
-        const t = m.parts.find((p) => p?.type === 'text');
+        const t = m.parts.find(p => p?.type === 'text');
         return t?.text || '';
       }
       return '';
     };
 
-    const lastText = extractText(messages?.[messages?.length - 1] || { content: '' }).toLowerCase();
+    const lastText = extractText(
+      messages?.[messages?.length - 1] || { content: '' }
+    ).toLowerCase();
 
     const onTopicKeywords = [
-      'instagram', 'facebook', 'post', 'publicación', 'publicaciones', 'programar', 'programación', 'reel', 'reels', 'story', 'stories', 'feed', 'social', 'redes', 'caption', 'hashtag', 'hashtags', 'calendario', 'contenido', 'copy', 'carrusel', 'carrousel', 'meta', 'creator studio', 'business suite', 'hora', 'horario', 'día', 'semana', 'mes'
+      'instagram',
+      'facebook',
+      'post',
+      'publicación',
+      'publicaciones',
+      'programar',
+      'programación',
+      'reel',
+      'reels',
+      'story',
+      'stories',
+      'feed',
+      'social',
+      'redes',
+      'caption',
+      'hashtag',
+      'hashtags',
+      'calendario',
+      'contenido',
+      'copy',
+      'carrusel',
+      'carrousel',
+      'meta',
+      'creator studio',
+      'business suite',
+      'hora',
+      'horario',
+      'día',
+      'semana',
+      'mes',
     ];
     const offTopicPatterns = [
-      'qué es', 'que es', 'quién es', 'quien es', 'define', 'definición', 'explica', 'historia', 'biografía', 'biografia', 'clima', 'tiempo', 'capital de', 'matem', 'programación', 'código', 'deporte', 'fútbol', 'futbol', 'música', 'musica', 'película', 'pelicula', 'carro', 'coche', 'auto', 'gato', 'perro'
+      'qué es',
+      'que es',
+      'quién es',
+      'quien es',
+      'define',
+      'definición',
+      'explica',
+      'historia',
+      'biografía',
+      'biografia',
+      'clima',
+      'tiempo',
+      'capital de',
+      'matem',
+      'programación',
+      'código',
+      'deporte',
+      'fútbol',
+      'futbol',
+      'música',
+      'musica',
+      'película',
+      'pelicula',
+      'carro',
+      'coche',
+      'auto',
+      'gato',
+      'perro',
     ];
 
-    const hasOnTopic = onTopicKeywords.some((k) => lastText.includes(k));
-    const hasOffTopic = offTopicPatterns.some((k) => lastText.includes(k));
+    const hasOnTopic = onTopicKeywords.some(k => lastText.includes(k));
+    const hasOffTopic = offTopicPatterns.some(k => lastText.includes(k));
 
     // Componer mensajes: siempre incluir la instrucción de sistema de Roro
     const composedUIMessages = [
       { role: 'system', parts: [{ type: 'text', text: roroSystemText }] },
       ...(!hasOnTopic && hasOffTopic
-        ? [{ role: 'system', parts: [{ type: 'text', text: 'El mensaje del usuario parece fuera del ámbito de redes sociales. Responde exactamente: "No puedo ayudarte con eso" y no agregues nada más.' }] }]
+        ? [
+            {
+              role: 'system',
+              parts: [
+                {
+                  type: 'text',
+                  text: 'El mensaje del usuario parece fuera del ámbito de redes sociales. Responde exactamente: "No puedo ayudarte con eso" y no agregues nada más.',
+                },
+              ],
+            },
+          ]
         : []),
       ...(Array.isArray(messages) ? messages : []),
     ];
 
     // Normalizar a formato con parts para evitar errores
-    const normalizeToParts = (m) => {
+    const normalizeToParts = m => {
       if (Array.isArray(m?.parts)) return m;
-      const text = typeof m?.content === 'string' && m.content
-        ? m.content
-        : extractText(m);
+      const text =
+        typeof m?.content === 'string' && m.content
+          ? m.content
+          : extractText(m);
       return { ...m, parts: [{ type: 'text', text }] };
     };
     const normalized = composedUIMessages.map(normalizeToParts);
@@ -107,14 +181,21 @@ IMPORTANTE: Si tu respuesta es de tipo texto, devuélvela bonita y clara usando 
       },
       execute: async () => {
         wantPlatforms = true;
-        return { shown: true, networks: ['instagram', 'facebook', 'youtube', 'tiktok'] };
+        return {
+          shown: true,
+          networks: ['instagram', 'facebook', 'youtube', 'tiktok'],
+        };
       },
     });
 
     const showPostPublishSelection = tool({
       description:
         'Muestra el widget para seleccionar en qué plataformas (Instagram, Facebook, YouTube, TikTok) publicar/subir un post. Úsala cuando el usuario quiera publicar, subir, postear o programar contenido en redes sociales.',
-      parameters: { type: 'object', properties: {}, additionalProperties: false },
+      parameters: {
+        type: 'object',
+        properties: {},
+        additionalProperties: false,
+      },
       execute: async () => {
         wantPostPublish = true;
         return { shown: true, widget: 'post-publish' };
@@ -124,7 +205,11 @@ IMPORTANTE: Si tu respuesta es de tipo texto, devuélvela bonita y clara usando 
     const requestInstagramAuth = tool({
       description:
         'Muestra el widget de autenticación OAuth de Instagram cuando el usuario quiera conectar/configurar Instagram o actualizar su cuenta.',
-      parameters: { type: 'object', properties: {}, additionalProperties: false },
+      parameters: {
+        type: 'object',
+        properties: {},
+        additionalProperties: false,
+      },
       execute: async () => {
         wantInstagramAuth = true;
         return { shown: true, widget: 'instagram-auth' };
@@ -134,7 +219,11 @@ IMPORTANTE: Si tu respuesta es de tipo texto, devuélvela bonita y clara usando 
     const requestFacebookAuth = tool({
       description:
         'Muestra el widget de autenticación de Facebook cuando el usuario quiera conectar/configurar Facebook o actualizar cuenta.',
-      parameters: { type: 'object', properties: {}, additionalProperties: false },
+      parameters: {
+        type: 'object',
+        properties: {},
+        additionalProperties: false,
+      },
       execute: async () => {
         wantFacebookAuth = true;
         return { shown: true, widget: 'facebook-auth' };
@@ -144,7 +233,11 @@ IMPORTANTE: Si tu respuesta es de tipo texto, devuélvela bonita y clara usando 
     const requestYouTubeAuth = tool({
       description:
         'Muestra el widget de autenticación de YouTube cuando el usuario quiera conectar/configurar YouTube o actualizar cuenta.',
-      parameters: { type: 'object', properties: {}, additionalProperties: false },
+      parameters: {
+        type: 'object',
+        properties: {},
+        additionalProperties: false,
+      },
       execute: async () => {
         wantYouTubeAuth = true;
         return { shown: true, widget: 'youtube-auth' };
@@ -154,7 +247,11 @@ IMPORTANTE: Si tu respuesta es de tipo texto, devuélvela bonita y clara usando 
     const requestTikTokAuth = tool({
       description:
         'Muestra el widget de autenticación de TikTok cuando el usuario quiera conectar/configurar TikTok o actualizar cuenta.',
-      parameters: { type: 'object', properties: {}, additionalProperties: false },
+      parameters: {
+        type: 'object',
+        properties: {},
+        additionalProperties: false,
+      },
       execute: async () => {
         wantTikTokAuth = true;
         return { shown: true, widget: 'tiktok-auth' };
@@ -162,8 +259,13 @@ IMPORTANTE: Si tu respuesta es de tipo texto, devuélvela bonita y clara usando 
     });
 
     const showLogoutControl = tool({
-      description: 'Muestra el control para cerrar sesión cuando el usuario pida cerrar sesión o salir.',
-      parameters: { type: 'object', properties: {}, additionalProperties: false },
+      description:
+        'Muestra el control para cerrar sesión cuando el usuario pida cerrar sesión o salir.',
+      parameters: {
+        type: 'object',
+        properties: {},
+        additionalProperties: false,
+      },
       execute: async () => {
         wantLogout = true;
         return { shown: true, widget: 'logout' };
@@ -171,8 +273,13 @@ IMPORTANTE: Si tu respuesta es de tipo texto, devuélvela bonita y clara usando 
     });
 
     const showCalendar = tool({
-      description: 'Muestra el calendario modal cuando el usuario quiera ver el calendario, programar una fecha, o mencione calendario.',
-      parameters: { type: 'object', properties: {}, additionalProperties: false },
+      description:
+        'Muestra el calendario modal cuando el usuario quiera ver el calendario, programar una fecha, o mencione calendario.',
+      parameters: {
+        type: 'object',
+        properties: {},
+        additionalProperties: false,
+      },
       execute: async () => {
         wantCalendar = true;
         return { shown: true, widget: 'calendar' };
@@ -180,8 +287,13 @@ IMPORTANTE: Si tu respuesta es de tipo texto, devuélvela bonita y clara usando 
     });
 
     const showClearChatControl = tool({
-      description: 'Muestra el control para vaciar/borrar la conversación cuando el usuario lo solicite.',
-      parameters: { type: 'object', properties: {}, additionalProperties: false },
+      description:
+        'Muestra el control para vaciar/borrar la conversación cuando el usuario lo solicite.',
+      parameters: {
+        type: 'object',
+        properties: {},
+        additionalProperties: false,
+      },
       execute: async () => {
         wantClearChat = true;
         return { shown: true, widget: 'clear-chat' };
@@ -194,8 +306,15 @@ IMPORTANTE: Si tu respuesta es de tipo texto, devuélvela bonita y clara usando 
       parameters: {
         type: 'object',
         properties: {
-          prompt: { type: 'string', description: 'Descripción base o ideas provistas por el usuario' },
-          platforms: { type: 'array', items: { type: 'string' }, description: 'Plataformas destino (para ajustar hashtags y tono)' }
+          prompt: {
+            type: 'string',
+            description: 'Descripción base o ideas provistas por el usuario',
+          },
+          platforms: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Plataformas destino (para ajustar hashtags y tono)',
+          },
         },
         required: [],
         additionalProperties: false,
@@ -209,7 +328,18 @@ IMPORTANTE: Si tu respuesta es de tipo texto, devuélvela bonita y clara usando 
     const { text } = await generateText({
       model: google('gemini-2.5-flash'),
       messages: convertToModelMessages(normalized),
-      tools: { showSupportedNetworks, showPostPublishSelection, requestInstagramAuth, requestFacebookAuth, requestYouTubeAuth, requestTikTokAuth, showLogoutControl, showClearChatControl, suggestCaption, showCalendar },
+      tools: {
+        showSupportedNetworks,
+        showPostPublishSelection,
+        requestInstagramAuth,
+        requestFacebookAuth,
+        requestYouTubeAuth,
+        requestTikTokAuth,
+        showLogoutControl,
+        showClearChatControl,
+        suggestCaption,
+        showCalendar,
+      },
       maxTokens: 1000,
       temperature: 0.7,
       maxSteps: 3,
