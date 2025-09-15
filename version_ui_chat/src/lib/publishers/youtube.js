@@ -2,7 +2,7 @@ export async function getYouTubeToken(supabase, userId) {
   try {
     const { data, error } = await supabase
       .from("profiles")
-      .select("youtube_access_token, youtube_refresh_token, youtube_expires_at, youtube_channel_id, youtube_channel_name")
+      .select("youtube_access_token, youtube_refresh_token, youtube_expires_at, youtube_channel_id, youtube_channel_title")
       .eq("id", userId)
       .maybeSingle();
       
@@ -14,7 +14,7 @@ export async function getYouTubeToken(supabase, userId) {
     const refreshToken = data?.youtube_refresh_token || null;
     const expiresAt = data?.youtube_expires_at || null;
     const channelId = data?.youtube_channel_id || null;
-    const channelName = data?.youtube_channel_name || null;
+    const channelName = data?.youtube_channel_title || null;
     
     return { token, refreshToken, expiresAt, channelId, channelName };
   } catch (e) {
@@ -30,8 +30,8 @@ export async function refreshYouTubeAccessToken(supabase, userId, refreshToken) 
         'Content-Type': 'application/x-www-form-urlencoded',
       },
       body: new URLSearchParams({
-        client_id: process.env.YOUTUBE_CLIENT_ID,
-        client_secret: process.env.YOUTUBE_CLIENT_SECRET,
+        client_id: process.env.GOOGLE_CLIENT_ID,
+        client_secret: process.env.GOOGLE_CLIENT_SECRET,
         refresh_token: refreshToken,
         grant_type: 'refresh_token',
       }),
@@ -78,14 +78,46 @@ export async function publishToYouTube({ caption, videoUrl, userId, supabase }) 
       throw new Error('No hay token de YouTube configurado');
     }
     
-    if (expiresAt && new Date(expiresAt) < new Date()) {
-      if (!refreshToken) {
-        throw new Error('Token de YouTube expirado y no hay refresh token');
+    console.log('YouTube token info:', { hasToken: !!token, expiresAt, hasRefreshToken: !!refreshToken });
+    
+    // Si no hay expiresAt o el token está expirado, intentar refrescar
+    const shouldRefresh = !expiresAt || (expiresAt && new Date(expiresAt) < new Date());
+    
+    if (shouldRefresh && refreshToken) {
+      console.log('Token expirado o sin fecha de expiración, refrescando...');
+      try {
+        token = await refreshYouTubeAccessToken(supabase, userId, refreshToken);
+        console.log('Token refrescado exitosamente');
+      } catch (refreshError) {
+        console.error('Error refrescando token:', refreshError.message);
+        throw new Error('Token de YouTube expirado y no se pudo refrescar: ' + refreshError.message);
       }
-      token = await refreshYouTubeAccessToken(supabase, userId, refreshToken);
+    } else if (shouldRefresh && !refreshToken) {
+      throw new Error('Token de YouTube expirado y no hay refresh token disponible');
     }
     
     const cleanToken = token.trim().replace(/\s+/g, '').replace(/[\r\n\t]/g, '');
+    console.log('Token limpio (primeros 20 chars):', cleanToken.substring(0, 20) + '...');
+    
+    // Verificar que el token sea válido haciendo una petición de prueba
+    try {
+      const testResponse = await fetch('https://www.googleapis.com/youtube/v3/channels?part=snippet&mine=true', {
+        headers: {
+          'Authorization': `Bearer ${cleanToken}`,
+        },
+      });
+      
+      if (!testResponse.ok) {
+        const testError = await testResponse.json().catch(() => ({}));
+        console.error('Token validation failed:', testError);
+        throw new Error(`Token inválido: ${testError?.error?.message || testResponse.statusText}`);
+      }
+      
+      console.log('Token validado exitosamente');
+    } catch (validationError) {
+      console.error('Error validando token:', validationError.message);
+      throw new Error('Token de YouTube inválido: ' + validationError.message);
+    }
     
     const videoMetadata = {
       snippet: {
@@ -121,7 +153,13 @@ export async function publishToYouTube({ caption, videoUrl, userId, supabase }) 
     const uploadData = await uploadResponse.json();
     
     if (!uploadResponse.ok) {
-      const errorMsg = uploadData?.error?.message || 'Error subiendo video a YouTube';
+      console.error('YouTube API Error:', {
+        status: uploadResponse.status,
+        statusText: uploadResponse.statusText,
+        error: uploadData?.error,
+        fullResponse: uploadData
+      });
+      const errorMsg = uploadData?.error?.message || `Error ${uploadResponse.status}: ${uploadResponse.statusText}`;
       throw new Error(errorMsg);
     }
     

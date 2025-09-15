@@ -30,7 +30,10 @@ export default function Composer({ onSend, loading = false }) {
       newItems.push({ id: `${Date.now()}-${f.name}-${Math.random().toString(36).slice(2, 8)}`, file: f, url, kind, name: f.name });
     });
 
-    if (newItems.length) setPreviews((prev) => [...prev, ...newItems]);
+    if (newItems.length) {
+      setPreviews((prev) => [...prev, ...newItems]);
+      setMessage(""); // Limpiar el texto cuando se suben archivos
+    }
     if (newErrors.length) setErrors((prev) => [...prev, ...newErrors]);
   };
 
@@ -70,7 +73,12 @@ export default function Composer({ onSend, loading = false }) {
     setPreviews((prev) => {
       const removed = prev.find((p) => p.id === id);
       if (removed) URL.revokeObjectURL(removed.url);
-      return prev.filter((p) => p.id !== id);
+      const newPreviews = prev.filter((p) => p.id !== id);
+      // Si no quedan archivos, limpiar cualquier mensaje de error
+      if (newPreviews.length === 0) {
+        setErrors([]);
+      }
+      return newPreviews;
     });
   };
 
@@ -118,9 +126,11 @@ export default function Composer({ onSend, loading = false }) {
 
   const handleSend = () => {
     const text = message.trim();
+    // Solo permitir envío si hay texto (sin archivos) o archivos (sin texto)
     if (!text && previews.length === 0) return;
+    
     const files = previews.map((p) => p.file);
-    onSend?.({ text, files });
+    onSend?.({ text: previews.length > 0 ? "" : text, files });
     setMessage("");
     setPreviews([]);
     setErrors([]);
@@ -149,7 +159,7 @@ export default function Composer({ onSend, loading = false }) {
         >
           <textarea
             className={`p-3 sm:p-4 ${textareaPadding} block w-full border-gray-200 rounded-lg sm:text-sm focus:border-blue-300 focus:ring-blue-300 disabled:opacity-50 disabled:pointer-events-none`}
-            placeholder="Escribe tu mensaje..."
+            placeholder={previews.length > 0 ? "" : "Escribe tu mensaje..."}
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             onDrop={onDrop}
@@ -157,7 +167,7 @@ export default function Composer({ onSend, loading = false }) {
             onDragOver={onDragOver}
             onDragLeave={onDragLeave}
             onKeyDown={handleKeyDown}
-            disabled={loading}
+            disabled={loading || previews.length > 0}
           ></textarea>
 
           <div className="absolute bottom-px inset-x-px p-2 rounded-b-lg bg-white/80 backdrop-blur supports-[backdrop-filter]:bg-white/70">

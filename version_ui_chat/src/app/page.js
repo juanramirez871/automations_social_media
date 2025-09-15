@@ -326,6 +326,29 @@ export default function Home() {
     }
     const userId = sessionData?.session?.user?.id;
 
+    // Validar archivos antes de subir a Cloudinary si estamos en await-media
+    if (Array.isArray(files) && files.length > 0 && publishStage === 'await-media') {
+      const hasVideoOnlyPlatforms = publishTargets.some(p => p === 'youtube' || p === 'tiktok');
+      const hasImages = files.some(f => {
+        const isImage = f.type?.startsWith('image/') || /\.(png|jpe?g|gif|webp|svg)$/i.test(f.name);
+        return isImage;
+      });
+      const hasVideos = files.some(f => {
+        const isVideo = f.type?.startsWith('video/') || /\.(mp4|mov|webm|ogg|mkv|m4v)$/i.test(f.name);
+        return isVideo;
+      });
+      
+      if (hasVideoOnlyPlatforms && hasImages && !hasVideos) {
+        const videoOnlyPlatforms = publishTargets.filter(p => p === 'youtube' || p === 'tiktok');
+        const platformNames = videoOnlyPlatforms.map(p => p === 'youtube' ? 'YouTube' : 'TikTok').join(' y ');
+        setMessages((prev) => [
+          ...prev,
+          { id: newId('video-required'), role: 'assistant', type: 'text', content: `❌ **Error:** ${platformNames} solo acepta videos, no imágenes.\n\nsube un video (MP4, MOV, WEBM) para continuar.` },
+        ]);
+        return;
+      }
+    }
+
     // Subir adjuntos a Cloudinary antes de construir el mensaje
     let uploadedAttachments = [];
     if (Array.isArray(files) && files.length > 0) {
@@ -447,15 +470,11 @@ export default function Home() {
         const targets = targetsArr.join(', ');
         const prompt = `Genera una descripción profesional y atractiva en español para redes sociales, con base en este texto del usuario. Requisitos: 2-4 líneas, tono natural y claro, 2-5 hashtags relevantes (sin exceso), 0-2 emojis discretos, incluir un CTA sutil si aplica. Devuelve solo el texto final del caption. Contexto de plataformas: ${targets || 'generales'}. Texto base: ${trimmed}`;
         try {
+          setLoading(true);
           const res = await fetch('/api/chat', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              messages: [{
-                role: "user",
-                content: `${trimmed}\n\nIMPORTANTE: Si tu respuesta es de tipo texto, devuélvela bonita y clara usando Markdown (usa títulos, listas, negritas, tablas, bloques de código, etc. si aplica).`
-              }]
-            }),
+            body: JSON.stringify({ mode: 'caption', prompt: `${trimmed}\nPlataformas destino: ${targets || 'generales'}` }),
           });
           const data = await res.json();
           const suggestion = (data?.text || '').trim();
@@ -465,9 +484,11 @@ export default function Home() {
           setMessages((prev) => [...prev, preface, capWidget]);
           await saveMessageToDB({ userId, role: 'assistant', content: preface.content, attachments: null, type: 'text' });
           await saveMessageToDB({ userId, role: 'assistant', content: '', attachments: null, type: 'widget-caption-suggest', meta: capMeta });
+          setLoading(false);
           // Nos mantenemos en await-description para permitir "regenerar" o "escribir la mía".
           return;
         } catch (e) {
+          setLoading(false);
           const fallback = `Perfecto. Redes: ${targets || '—'}. Usa esta descripción o edítala: ${trimmed}`;
           const schedulePreface = { id: newId('schedule-preface-fallback'), role: 'assistant', type: 'text', content: 'Paso final: agenda la subida del post. Indica la fecha y hora.' };
           const scheduleWidget = { id: newId('schedule-widget-fallback'), role: 'assistant', type: 'widget-schedule', meta: { defaultValue: null } };
@@ -945,10 +966,27 @@ export default function Home() {
               }
               if (m.type === "widget-await-media") {
                 const sel = Array.isArray(m?.meta?.targets) ? m.meta.targets : [];
+                const hasVideoOnlyPlatforms = sel.some(p => p === 'youtube' || p === 'tiktok');
+                const hasImagePlatforms = sel.some(p => p === 'instagram' || p === 'facebook');
+                const onlyVideosPlatforms = sel.every(p => p === 'youtube' || p === 'tiktok');
+                
                 return (
                   <AssistantMessage key={m.id} borderClass="border-indigo-100">
                     <div className="text-sm leading-relaxed">
-                      <div className="mb-1">Para continuar, adjunta al menos una imagen o video usando el botón de adjuntos debajo del cuadro de texto. Formatos aceptados: JPG, PNG, MP4, MOV, WEBM.</div>
+                      {onlyVideosPlatforms ? (
+                        <div className="mb-1">Para continuar, adjunta un <strong>video</strong> usando el botón de adjuntos debajo del cuadro de texto. Formatos aceptados: <strong>MP4, MOV, WEBM</strong>.</div>
+                      ) : hasVideoOnlyPlatforms ? (
+                        <div className="mb-1">Para continuar, adjunta un <strong>video</strong> usando el botón de adjuntos debajo del cuadro de texto (requerido por YouTube/TikTok). Formatos aceptados: <strong>MP4, MOV, WEBM</strong>.</div>
+                      ) : (
+                        <div className="mb-1">Para continuar, adjunta al menos una imagen o video usando el botón de adjuntos debajo del cuadro de texto. Formatos aceptados: JPG, PNG, MP4, MOV, WEBM.</div>
+                      )}
+                      
+                      {hasVideoOnlyPlatforms && !onlyVideosPlatforms && (
+                        <div className="mb-2 text-xs text-amber-600 bg-amber-50 p-2 rounded border border-amber-200">
+                          ⚠️ <strong>Nota:</strong> Incluiste {sel.filter(p => p === 'youtube' || p === 'tiktok').map(p => p === 'youtube' ? 'YouTube' : 'TikTok').join(' y ')} que solo acepta videos. Debes subir un video para publicar en todas las plataformas.
+                        </div>
+                      )}
+                      
                       {sel && sel.length > 0 && (
                         <div className="text-[11px] text-gray-500">Seleccionaste: {sel.join(', ')}</div>
                       )}
