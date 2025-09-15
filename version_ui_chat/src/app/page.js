@@ -196,6 +196,9 @@ export default function Home() {
           if (rType === "widget-clear-chat") {
             return { id: r.id, role: "assistant", type: "widget-clear-chat" };
           }
+          if (rType === "widget-calendar") {
+            return { id: r.id, role: "assistant", type: "widget-calendar" };
+          }
           if (rType === "widget-caption-suggest") {
             const caption = r?.meta?.caption || '';
             const base = r?.meta?.base || '';
@@ -537,6 +540,7 @@ export default function Home() {
           "tiktok-auth": "widget-tiktok-auth",
           logout: "widget-logout",
           "clear-chat": "widget-clear-chat",
+          calendar: "widget-calendar",
         };
 
         const widgetAdditionsMeta = [];
@@ -930,6 +934,24 @@ export default function Home() {
                   </AssistantMessage>
                 );
               }
+              if (m.type === "widget-calendar") {
+                return (
+                  <AssistantMessage key={m.id} borderClass="border-blue-200">
+                    <div className="text-sm leading-relaxed">
+                      <div className="flex items-center gap-2 mb-2">
+                        <div className="h-1 w-6 rounded-full bg-gradient-to-r from-blue-400 to-blue-300" />
+                        <p className="text-sm font-medium text-blue-700">Calendario</p>
+                      </div>
+                      <p className="text-sm text-gray-600 mb-3">Haz clic en el icono de calendario 📅 en el composer para programar una publicación.</p>
+                      <div className="bg-blue-50 p-3 rounded-lg">
+                        <p className="text-xs text-blue-800">
+                          💡 También puedes usar el calendario desde el botón que está al lado del icono de adjuntar archivos.
+                        </p>
+                      </div>
+                    </div>
+                  </AssistantMessage>
+                );
+              }
               if (m.type === "widget-post-publish") {
                 return (
                   <AssistantMessage key={m.id} borderClass="border-indigo-200">
@@ -1182,7 +1204,14 @@ export default function Home() {
                               content: confirmMessage
                             };
 
-                            setMessages((prev) => [...prev, confirm]);
+                            const nextPostMessage = {
+                              id: newId('next-post-offer'),
+                              role: 'assistant',
+                              type: 'text',
+                              content: '¿Te gustaría subir otro post? Solo dime "sí" o "publicar" para empezar de nuevo.'
+                            };
+
+                            setMessages((prev) => [...prev, confirm, nextPostMessage]);
 
                             if (userId) {
                               await saveMessageToDB({
@@ -1204,6 +1233,13 @@ export default function Home() {
                                 attachments: null,
                                 type: 'text'
                               });
+                              await saveMessageToDB({
+                                userId,
+                                role: 'assistant',
+                                content: nextPostMessage.content,
+                                attachments: null,
+                                type: 'text'
+                              });
                             }
                           } else {
                             // Solo programación (comportamiento anterior)
@@ -1216,7 +1252,14 @@ export default function Home() {
                               content: `Perfecto. Programé la subida para ${pretty}.`
                             };
 
-                            setMessages((prev) => [...prev, confirm]);
+                            const nextPostMessage = {
+                              id: newId('next-post-offer-schedule'),
+                              role: 'assistant',
+                              type: 'text',
+                              content: '¿Te gustaría subir otro post? Solo dime "sí" o "publicar" para empezar de nuevo.'
+                            };
+
+                            setMessages((prev) => [...prev, confirm, nextPostMessage]);
 
                             if (userId) {
                               await saveMessageToDB({
@@ -1231,6 +1274,13 @@ export default function Home() {
                                 userId,
                                 role: 'assistant',
                                 content: confirm.content,
+                                attachments: null,
+                                type: 'text'
+                              });
+                              await saveMessageToDB({
+                                userId,
+                                role: 'assistant',
+                                content: nextPostMessage.content,
                                 attachments: null,
                                 type: 'text'
                               });

@@ -95,6 +95,7 @@ IMPORTANTE: Si tu respuesta es de tipo texto, devuélvela bonita y clara usando 
     let wantClearChat = false;
     let wantPostPublish = false;
     let wantCaptionSuggest = false;
+    let wantCalendar = false;
 
     const showSupportedNetworks = tool({
       description:
@@ -169,6 +170,15 @@ IMPORTANTE: Si tu respuesta es de tipo texto, devuélvela bonita y clara usando 
       },
     });
 
+    const showCalendar = tool({
+      description: 'Muestra el calendario modal cuando el usuario quiera ver el calendario, programar una fecha, o mencione calendario.',
+      parameters: { type: 'object', properties: {}, additionalProperties: false },
+      execute: async () => {
+        wantCalendar = true;
+        return { shown: true, widget: 'calendar' };
+      },
+    });
+
     const showClearChatControl = tool({
       description: 'Muestra el control para vaciar/borrar la conversación cuando el usuario lo solicite.',
       parameters: { type: 'object', properties: {}, additionalProperties: false },
@@ -199,7 +209,7 @@ IMPORTANTE: Si tu respuesta es de tipo texto, devuélvela bonita y clara usando 
     const { text } = await generateText({
       model: google('gemini-2.5-flash'),
       messages: convertToModelMessages(normalized),
-      tools: { showSupportedNetworks, showPostPublishSelection, requestInstagramAuth, requestFacebookAuth, requestYouTubeAuth, requestTikTokAuth, showLogoutControl, showClearChatControl, suggestCaption },
+      tools: { showSupportedNetworks, showPostPublishSelection, requestInstagramAuth, requestFacebookAuth, requestYouTubeAuth, requestTikTokAuth, showLogoutControl, showClearChatControl, suggestCaption, showCalendar },
       maxTokens: 1000,
       temperature: 0.7,
       maxSteps: 3,
@@ -216,6 +226,7 @@ IMPORTANTE: Si tu respuesta es de tipo texto, devuélvela bonita y clara usando 
     if (wantLogout) widgets.push('logout');
     if (wantClearChat) widgets.push('clear-chat');
     if (wantCaptionSuggest) widgets.push('caption-suggest');
+    if (wantCalendar) widgets.push('calendar');
 
     return Response.json({ text, widgets });
   } catch (error) {
