@@ -120,17 +120,7 @@ export async function POST(request) {
     const now = new Date();
     const { data: postsToExecute, error: fetchError } = await supabase
       .from('scheduled_posts')
-      .select(`
-        *,
-        profiles!inner(
-          instagram_access_token,
-          instagram_user_id,
-          facebook_access_token,
-          facebook_page_id,
-          youtube_access_token,
-          tiktok_access_token
-        )
-      `)
+      .select('*')
       .eq('status', 'pending')
       .lte('scheduled_datetime', now.toISOString());
 
@@ -139,10 +129,31 @@ export async function POST(request) {
       return NextResponse.json({ error: 'Failed to fetch posts' }, { status: 500 });
     }
 
+    // Obtener perfiles de usuario para cada post
+    const postsWithProfiles = [];
+    for (const post of postsToExecute || []) {
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select(`
+          instagram_access_token,
+          instagram_user_id,
+          facebook_access_token,
+          facebook_page_id,
+          youtube_access_token,
+          tiktok_access_token
+        `)
+        .eq('id', post.user_id)
+        .single();
+
+      if (profile) {
+        postsWithProfiles.push({ ...post, profiles: profile });
+      }
+    }
+
     const results = [];
 
     // Procesar cada publicación
-    for (const post of postsToExecute) {
+    for (const post of finalPostsToExecute) {
       try {
         // Marcar como ejecutándose
         await supabase
@@ -217,11 +228,11 @@ export async function POST(request) {
       }
     }
 
-    return NextResponse.json({
-      message: `Processed ${postsToExecute.length} scheduled posts`,
+return NextResponse.json({
+      success: true,
+      message: `Processed ${finalPostsToExecute.length} scheduled posts`,
       results
     });
-
   } catch (error) {
     console.error('Error in POST /api/execute-scheduled-posts:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

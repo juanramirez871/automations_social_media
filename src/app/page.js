@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import ReactMarkdown from "react-markdown";
 import IntroHeader from "@/components/IntroHeader";
 import AssistantMessage from "@/components/AssistantMessage";
@@ -16,49 +16,33 @@ import { LogoutWidget as LogoutWidgetExt, ClearChatWidget as ClearChatWidgetExt,
 import { CaptionSuggestWidget as CaptionSuggestWidgetExt, ScheduleWidget as ScheduleWidgetExt } from "@/components/widgets/ControlWidgets";
 import { upsertInstagramToken, upsertFacebookToken, upsertYouTubeToken, upsertTikTokToken } from "@/lib/apiHelpers";
 import { saveMessageToDB, loadHistoryForCurrentUser } from "@/lib/databaseUtils";
+import { getSessionOnce } from "@/lib/sessionUtils";
+import { detectNewPublishIntent, detectCancelIntent, newId, createCancelMessage, createNeedMediaMessage, createNeedDescriptionMessage } from "@/lib/publishFlowUtils";
+import { useChatState } from "@/hooks/useChatState";
 
-// Session cache (module-scope) to avoid duplicate supabase.auth.getSession() calls
-let __sessionCache = null;
-let __sessionInflight = null;
-async function getSessionOnce() {
-  if (__sessionCache) return { data: __sessionCache };
-  if (__sessionInflight) return await __sessionInflight;
-  __sessionInflight = (async () => {
-    const res = await supabase.auth.getSession();
-    __sessionCache = res?.data || null;
-    __sessionInflight = null;
-    return { data: __sessionCache };
-  })();
-  return await __sessionInflight;
-}
-// import { detectInstagramIntent, detectUpdateCredentialsIntent, detectFacebookIntent, detectYouTubeIntent, showPlatformsWidgetHeuristic, showPlatformsWidgetByTool } from "@/lib/intentDetection";
 
 export default function Home() {
-  const [messages, setMessages] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [historyLoading, setHistoryLoading] = useState(false);
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const authGateShownRef = useRef(false);
-  const bottomRef = useRef(null);
-  const initialScrollDoneRef = useRef(false);
-  const disableSmoothUntilRef = useRef(Date.now() + 1500);
-  const [lightbox, setLightbox] = useState(null);
-  // Estado del flujo de publicación lineal
-  const [publishStage, setPublishStage] = useState('idle'); // 'idle' | 'await-media' | 'await-description'
-  const [publishTargets, setPublishTargets] = useState([]);
-  const [widgetTargetDrafts, setWidgetTargetDrafts] = useState({});
-  const [customCaptionMode, setCustomCaptionMode] = useState(false);
+  const {
+    messages, setMessages,
+    loading, setLoading,
+    historyLoading, setHistoryLoading,
+    isLoggedIn, setIsLoggedIn,
+    lightbox, setLightbox,
+    publishStage, setPublishStage,
+    publishTargets, setPublishTargets,
+    widgetTargetDrafts, setWidgetTargetDrafts,
+    customCaptionMode, setCustomCaptionMode,
+    authGateShownRef,
+    bottomRef,
+    initialScrollDoneRef,
+    disableSmoothUntilRef,
+    resetPublishFlow,
+    onAttachmentClick,
+    closeLightbox
+  } = useChatState();
   const igConnectPersistingRef = useRef(false);
 
-  // Helper to generate robust unique IDs for messages to avoid duplicate React keys
-  const newId = (suffix = "msg") => {
-    try {
-      if (typeof crypto !== "undefined" && crypto?.randomUUID) {
-        return `a-${suffix}-${crypto.randomUUID()}`;
-      }
-    } catch { }
-    return `a-${suffix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-  };
+
 
   // Subir archivo a Cloudinary vía API interna
   const uploadToCloudinary = async (file, { folder = 'ui-chat-uploads' } = {}) => {
@@ -392,30 +376,18 @@ export default function Home() {
     await saveMessageToDB({ userId, role: "user", content: trimmed, attachments: attachmentsForDB, type: uploadedAttachments.length ? "text+media" : "text" });
 
     // Detectar si el usuario quiere iniciar un nuevo flujo de publicación explícitamente
-    const wantsNewPublish = (/\b(publicar|postear|subir|programar)\b/i.test(trimmed) && /(post|publicaci\u00F3n|video|reel|contenido)/i.test(trimmed)) ||
-                           /\b(sí|si|yes|ok|vale|dale|empezar|nuevo|otra|otro)\b/i.test(trimmed);
+    const wantsNewPublish = detectNewPublishIntent(trimmed);
     if (wantsNewPublish && publishStage !== 'idle') {
       // Reiniciar el gating para permitir que aparezca el selector nuevamente
       setPublishStage('idle');
     }
 
-    // NUEVO: intención de cancelar el flujo de publicación actual
-    const lower = trimmed.toLowerCase();
-    const cancelPhrases = [
-      'cancelar', 'cancela', 'cancel',
-      'olvídalo', 'olvidalo', 'olvidalo',
-      'ya no', 'no quiero', 'mejor no',
-      'detente', 'detener', 'parar',
-      'abort', 'aborta', 'anular',
-      'no continuar', 'no sigas', 'stop'
-    ];
-    const wantsCancelPublish = cancelPhrases.some((p) => lower.includes(p));
+    // Intención de cancelar el flujo de publicación actual
+    const wantsCancelPublish = detectCancelIntent(trimmed);
     if (publishStage !== 'idle' && wantsCancelPublish) {
       // Romper el flujo de publicación solo si el usuario expresa cancelación
-      const confirm = { id: newId('cancel-publish'), role: 'assistant', type: 'text', content: 'Entendido, cancelé el flujo de publicación. Cuando quieras, podemos volver a empezar.' };
-      setPublishStage('idle');
-      setPublishTargets([]);
-      setCustomCaptionMode(false);
+      const confirm = createCancelMessage();
+      resetPublishFlow();
       setMessages((prev) => [...prev, confirm]);
       await saveMessageToDB({ userId, role: 'assistant', content: confirm.content, attachments: null, type: 'text' });
       return;
@@ -626,8 +598,7 @@ export default function Home() {
     checkSession();
   }, []);
 
-  const onAttachmentClick = (a) => setLightbox(a);
-  const closeLightbox = () => setLightbox(null);
+  
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-blue-50 via-white to-pink-50 px-4 sm:px-6 lg:px-8 text-gray-600">
