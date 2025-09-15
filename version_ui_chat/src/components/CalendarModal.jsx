@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useScheduledPosts } from "../lib/useScheduledPosts";
 
 export default function CalendarModal({ isOpen, onClose }) {
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -11,27 +12,20 @@ export default function CalendarModal({ isOpen, onClose }) {
   const [newPost, setNewPost] = useState(null);
   const [improvingNewText, setImprovingNewText] = useState(false);
   
-  // Datos mock iniciales de publicaciones programadas
-  const [scheduledPosts, setScheduledPosts] = useState(() => {
-    const year = new Date().getFullYear();
-    const month = new Date().getMonth();
-    return {
-    [`${year}-${month}-15`]: [
-      { time: '09:00', platforms: ['Instagram', 'Facebook'], content: 'Post matutino' },
-      { time: '18:00', platforms: ['TikTok'], content: 'Video viral' }
-    ],
-    [`${year}-${month}-20`]: [
-      { time: '12:00', platforms: ['YouTube'], content: 'Tutorial semanal' }
-    ],
-    [`${year}-${month}-25`]: [
-      { time: '14:30', platforms: ['Instagram', 'TikTok'], content: 'Contenido colaborativo' },
-      { time: '19:00', platforms: ['Facebook', 'YouTube'], content: 'Live stream' }
-    ],
-    [`${year}-${month}-28`]: [
-       { time: '10:15', platforms: ['Instagram'], content: 'Stories del día' }
-     ]
-    };
-  });
+  // Hook para manejar publicaciones programadas con Supabase
+  const { 
+    posts: scheduledPostsArray, 
+    loading: postsLoading, 
+    error: postsError,
+    createPost: createScheduledPost,
+    updatePost: updateScheduledPost,
+    deletePost: deleteScheduledPost,
+    getPostsByDate,
+    getPostsGroupedByDate
+  } = useScheduledPosts();
+  
+  // Convertir array de posts a formato de calendario agrupado por fecha
+  const scheduledPosts = getPostsGroupedByDate();
 
   if (!isOpen) return null;
 
@@ -40,8 +34,8 @@ export default function CalendarModal({ isOpen, onClose }) {
   const month = currentDate.getMonth();
   
   const getPostsForDay = (day) => {
-    const key = `${year}-${month}-${day}`;
-    return scheduledPosts[key] || [];
+    const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    return getPostsByDate(dateStr) || [];
   };
   
   const getPlatformColor = (platform) => {
@@ -54,70 +48,55 @@ export default function CalendarModal({ isOpen, onClose }) {
     return colors[platform] || 'bg-gray-500';
   };
   
-  const deletePost = (day, postIndex) => {
-    const key = `${year}-${month}-${day}`;
-    setScheduledPosts(prev => {
-      const newPosts = { ...prev };
-      if (newPosts[key]) {
-        newPosts[key] = newPosts[key].filter((_, idx) => idx !== postIndex);
-        if (newPosts[key].length === 0) {
-          delete newPosts[key];
-        }
+  const deletePost = async (day, postIndex) => {
+    try {
+      const postsForDay = getPostsForDay(day);
+      const postToDelete = postsForDay[postIndex];
+      
+      if (postToDelete) {
+        await deleteScheduledPost(postToDelete.id);
       }
-      return newPosts;
-    });
+    } catch (error) {
+      console.error('Error deleting post:', error);
+      // Aquí podrías mostrar un toast de error
+    }
   };
   
   const startEdit = (day, postIndex) => {
-    const key = `${year}-${month}-${day}`;
-    const post = scheduledPosts[key]?.[postIndex];
+    const postsForDay = getPostsForDay(day);
+    const post = postsForDay[postIndex];
     if (post) {
       setEditingPost({
+        id: post.id,
         originalDay: day,
         originalIndex: postIndex,
         day: day,
-        time: post.time,
+        time: post.scheduled_time,
         platforms: [...post.platforms],
         content: post.content
       });
     }
   };
   
-  const saveEdit = () => {
+  const saveEdit = async () => {
     if (!editingPost) return;
     
-    const oldKey = `${year}-${month}-${editingPost.originalDay}`;
-    const newKey = `${year}-${month}-${editingPost.day}`;
-    
-    setScheduledPosts(prev => {
-      const newPosts = { ...prev };
+    try {
+      const scheduledDate = `${year}-${String(month + 1).padStart(2, '0')}-${String(editingPost.day).padStart(2, '0')}`;
       
-      // Eliminar el post original
-      if (newPosts[oldKey]) {
-        newPosts[oldKey] = newPosts[oldKey].filter((_, idx) => idx !== editingPost.originalIndex);
-        if (newPosts[oldKey].length === 0) {
-          delete newPosts[oldKey];
-        }
-      }
-      
-      // Agregar el post editado
-      if (!newPosts[newKey]) {
-        newPosts[newKey] = [];
-      }
-      newPosts[newKey].push({
-        time: editingPost.time,
+      await updateScheduledPost(editingPost.id, {
+        content: editingPost.content,
         platforms: editingPost.platforms,
-        content: editingPost.content
+        scheduledDate: scheduledDate,
+        scheduledTime: editingPost.time
       });
       
-      // Ordenar por hora
-      newPosts[newKey].sort((a, b) => a.time.localeCompare(b.time));
-      
-      return newPosts;
-    });
-    
-    setEditingPost(null);
-    setSelectedDay(editingPost.day);
+      setEditingPost(null);
+      setSelectedDay(editingPost.day);
+    } catch (error) {
+      console.error('Error updating post:', error);
+      // Aquí podrías mostrar un toast de error
+    }
   };
   
   const cancelEdit = () => {
@@ -176,38 +155,32 @@ export default function CalendarModal({ isOpen, onClose }) {
     setCreatingPost(true);
   };
   
-  const saveNewPost = () => {
+  const saveNewPost = async () => {
     if (!newPost || !newPost.content.trim() || newPost.platforms.length === 0) return;
     
-    const selectedDate = new Date(newPost.date);
-    const selectedYear = selectedDate.getFullYear();
-    const selectedMonth = selectedDate.getMonth();
-    const selectedDay = selectedDate.getDate();
-    
-    const key = `${selectedYear}-${selectedMonth}-${selectedDay}`;
-    setScheduledPosts(prev => {
-      const newPosts = { ...prev };
-      if (!newPosts[key]) {
-        newPosts[key] = [];
-      }
-      newPosts[key].push({
-        time: newPost.time,
+    try {
+      await createScheduledPost({
+        content: newPost.content,
         platforms: newPost.platforms,
-        content: newPost.content
+        scheduledDate: newPost.date,
+        scheduledTime: newPost.time
       });
       
-      // Ordenar por hora
-      newPosts[key].sort((a, b) => a.time.localeCompare(b.time));
+      setCreatingPost(false);
+      setNewPost(null);
       
-      return newPosts;
-    });
-    
-    setCreatingPost(false);
-    setNewPost(null);
-    
-    // Si la fecha seleccionada es del mes actual, seleccionar el día
-    if (selectedYear === year && selectedMonth === month) {
-      setSelectedDay(selectedDay);
+      // Si la fecha seleccionada es del mes actual, seleccionar el día
+      const selectedDate = new Date(newPost.date);
+      const selectedYear = selectedDate.getFullYear();
+      const selectedMonth = selectedDate.getMonth();
+      const selectedDay = selectedDate.getDate();
+      
+      if (selectedYear === year && selectedMonth === month) {
+        setSelectedDay(selectedDay);
+      }
+    } catch (error) {
+      console.error('Error creating post:', error);
+      // Aquí podrías mostrar un toast de error
     }
   };
   
@@ -336,7 +309,7 @@ export default function CalendarModal({ isOpen, onClose }) {
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
               </svg>
-              + Nueva
+              Nueva
             </button>
             <button
               type="button"
@@ -406,7 +379,7 @@ export default function CalendarModal({ isOpen, onClose }) {
             </div>
             <div className="flex items-center gap-1">
               <div className="w-1.5 h-1.5 bg-green-500 rounded-full"></div>
-              <span className="text-green-800 font-medium">= 1 post</span>
+              <span className="text-green-800 font-medium">1 post</span>
             </div>
           </div>
         </div>
@@ -422,7 +395,7 @@ export default function CalendarModal({ isOpen, onClose }) {
                  {getPostsForDay(selectedDay).map((post, idx) => (
                    <div key={idx} className="bg-white p-2 rounded border-l-4 border-green-500">
                      <div className="flex items-center justify-between mb-1">
-                       <span className="text-sm font-medium text-gray-900">{post.time}</span>
+                       <span className="text-sm font-medium text-gray-900">{post.scheduled_time}</span>
                        <div className="flex items-center gap-2">
                          <div className="flex gap-1">
                            {post.platforms.map((platform, pIdx) => (
@@ -473,7 +446,7 @@ export default function CalendarModal({ isOpen, onClose }) {
             onClick={goToToday}
             className="flex-1 px-4 py-2 text-blue-600 bg-gradient-to-r from-blue-50 to-blue-100 rounded-lg hover:from-blue-100 hover:to-blue-200 transition-all duration-200 font-medium text-sm shadow-sm hover:shadow cursor-pointer"
           >
-            🏠 Hoy
+            Hoy
           </button>
           <button
             type="button"

@@ -75,6 +75,39 @@ CREATE TABLE IF NOT EXISTS public.messages (
 );
 
 -- =====================================================
+-- TABLA: scheduled_posts
+-- =====================================================
+-- Almacena publicaciones programadas para ejecutar automáticamente
+CREATE TABLE IF NOT EXISTS public.scheduled_posts (
+    id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+    
+    -- Información de la publicación
+    content TEXT NOT NULL,
+    platforms TEXT[] NOT NULL, -- Array de plataformas: ['instagram', 'facebook', 'youtube', 'tiktok']
+    
+    -- Programación
+    scheduled_date DATE NOT NULL,
+    scheduled_time TIME NOT NULL,
+    scheduled_datetime TIMESTAMP WITH TIME ZONE GENERATED ALWAYS AS (
+        (scheduled_date::timestamp + scheduled_time::interval) AT TIME ZONE 'UTC'
+    ) STORED,
+    
+    -- Estado de ejecución
+    status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'executing', 'completed', 'failed', 'cancelled')),
+    executed_at TIMESTAMP WITH TIME ZONE,
+    error_message TEXT,
+    
+    -- Metadatos
+    media_urls JSONB, -- URLs de imágenes/videos adjuntos
+    platform_results JSONB, -- Resultados de cada plataforma después de publicar
+    retry_count INTEGER DEFAULT 0,
+    max_retries INTEGER DEFAULT 3
+);
+
+-- =====================================================
 -- ÍNDICES PARA OPTIMIZACIÓN
 -- =====================================================
 
@@ -87,13 +120,21 @@ CREATE INDEX IF NOT EXISTS messages_created_at_idx ON public.messages(created_at
 CREATE INDEX IF NOT EXISTS messages_user_created_idx ON public.messages(user_id, created_at);
 CREATE INDEX IF NOT EXISTS messages_type_idx ON public.messages(type);
 
+-- Índices para scheduled_posts
+CREATE INDEX IF NOT EXISTS scheduled_posts_user_id_idx ON public.scheduled_posts(user_id);
+CREATE INDEX IF NOT EXISTS scheduled_posts_scheduled_datetime_idx ON public.scheduled_posts(scheduled_datetime);
+CREATE INDEX IF NOT EXISTS scheduled_posts_status_idx ON public.scheduled_posts(status);
+CREATE INDEX IF NOT EXISTS scheduled_posts_user_status_idx ON public.scheduled_posts(user_id, status);
+CREATE INDEX IF NOT EXISTS scheduled_posts_pending_datetime_idx ON public.scheduled_posts(scheduled_datetime) WHERE status = 'pending';
+
 -- =====================================================
 -- POLÍTICAS RLS (Row Level Security)
 -- =====================================================
 
--- Habilitar RLS en ambas tablas
+-- Habilitar RLS en todas las tablas
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.messages ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.scheduled_posts ENABLE ROW LEVEL SECURITY;
 
 -- Políticas para profiles
 -- Los usuarios solo pueden ver y modificar su propio perfil
@@ -123,6 +164,20 @@ CREATE POLICY "Users can update own messages" ON public.messages
 CREATE POLICY "Users can delete own messages" ON public.messages
     FOR DELETE USING (auth.uid() = user_id);
 
+-- Políticas para scheduled_posts
+-- Los usuarios solo pueden ver y modificar sus propias publicaciones programadas
+CREATE POLICY "Users can view own scheduled posts" ON public.scheduled_posts
+    FOR SELECT USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can insert own scheduled posts" ON public.scheduled_posts
+    FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can update own scheduled posts" ON public.scheduled_posts
+    FOR UPDATE USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can delete own scheduled posts" ON public.scheduled_posts
+    FOR DELETE USING (auth.uid() = user_id);
+
 -- =====================================================
 -- TRIGGERS PARA UPDATED_AT
 -- =====================================================
@@ -139,6 +194,12 @@ $$ LANGUAGE plpgsql;
 -- Trigger para profiles
 CREATE TRIGGER profiles_updated_at
     BEFORE UPDATE ON public.profiles
+    FOR EACH ROW
+    EXECUTE FUNCTION public.handle_updated_at();
+
+-- Trigger para scheduled_posts
+CREATE TRIGGER scheduled_posts_updated_at
+    BEFORE UPDATE ON public.scheduled_posts
     FOR EACH ROW
     EXECUTE FUNCTION public.handle_updated_at();
 
