@@ -185,7 +185,7 @@ export default function Composer({ onSend, loading = false }) {
                       <button
                         type="button"
                         onClick={() => removePreview(p.id)}
-                        className="absolute top-1 right-1 z-10 bg-pink-500 text-white rounded-full size-5 flex items-center justify-center text-xs shadow ring-2 ring-white disabled:opacity-50 disabled:pointer-events-none"
+                        className="absolute top-1 right-1 z-10 bg-pink-500 text-white rounded-full size-5 flex items-center justify-center text-xs shadow ring-2 ring-white disabled:opacity-50 disabled:pointer-events-none cursor-pointer"
                         aria-label={`Eliminar ${p.name}`}
                         disabled={loading}
                       >
@@ -220,7 +220,7 @@ export default function Composer({ onSend, loading = false }) {
                 <button
                   type="button"
                   onClick={() => inputRef.current?.click()}
-                  className="inline-flex shrink-0 justify-center items-center size-8 rounded-lg text-blue-500 hover:bg-blue-50 focus:z-10 focus:outline-hidden focus:bg-blue-50 disabled:opacity-50 disabled:pointer-events-none"
+                  className="inline-flex shrink-0 justify-center items-center size-8 rounded-lg text-blue-500 hover:bg-blue-50 focus:z-10 focus:outline-hidden focus:bg-blue-50 disabled:opacity-50 disabled:pointer-events-none cursor-pointer"
                   aria-label="Adjuntar archivos"
                   disabled={loading}
                 >
@@ -245,7 +245,7 @@ export default function Composer({ onSend, loading = false }) {
                 <button
                   type="button"
                   onClick={handleSend}
-                  className="inline-flex shrink-0 justify-center items-center size-8 rounded-lg text-white bg-gradient-to-r from-blue-400 to-pink-400 hover:from-blue-400/90 hover:to-pink-400/90 focus:z-10 focus:outline-hidden disabled:opacity-50 disabled:pointer-events-none"
+                  className="inline-flex shrink-0 justify-center items-center size-8 rounded-lg text-white bg-gradient-to-r from-blue-400 to-pink-400 hover:from-blue-400/90 hover:to-pink-400/90 focus:z-10 focus:outline-hidden disabled:opacity-50 disabled:pointer-events-none cursor-pointer"
                   aria-label="Enviar mensaje"
                   disabled={loading}
                 >

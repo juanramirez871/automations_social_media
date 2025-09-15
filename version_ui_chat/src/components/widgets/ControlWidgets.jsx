@@ -61,7 +61,7 @@ export const LogoutWidget = ({ onLogout }) => {
         type="button"
         onClick={handleLogout}
         disabled={working}
-        className="inline-flex items-center gap-2 rounded-lg bg-gray-700 px-3 py-1.5 text-white text-xs disabled:opacity-50"
+        className="inline-flex items-center gap-2 rounded-lg bg-gray-700 px-3 py-1.5 text-white text-xs disabled:opacity-50 cursor-pointer"
       >
         {working ? (
           <span className="size-3.5 rounded-full border-2 border-white/60 border-t-transparent animate-spin" aria-hidden="true"></span>
@@ -99,7 +99,7 @@ export const ClearChatWidget = ({ onClear }) => {
         type="button"
         onClick={handleClear}
         disabled={deleting}
-        className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-3 py-1.5 text-white text-xs disabled:opacity-50"
+        className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-3 py-1.5 text-white text-xs disabled:opacity-50 cursor-pointer"
       >
         {deleting ? (
           <span className="size-3.5 rounded-full border-2 border-white/60 border-t-transparent animate-spin" aria-hidden="true"></span>
@@ -287,7 +287,7 @@ export const PostPublishWidget = ({ onContinue, defaultSelected = [], onChangeTa
     <button
       type="button"
       onClick={() => toggle(k)}
-      className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-medium transition-all ${targets[k] ? `${color.activeBg} ${color.activeText} ${color.activeBorder}` : `${color.inactiveBg} ${color.inactiveText} ${color.inactiveBorder}`}`}
+      className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-medium transition-all cursor-pointer ${targets[k] ? `${color.activeBg} ${color.activeText} ${color.activeBorder}` : `${color.inactiveBg} ${color.inactiveText} ${color.inactiveBorder}`}`}
     >
       <span className={`size-1.5 rounded-full ${targets[k] ? color.dotActive : color.dotInactive}`}></span>
       {label}
@@ -328,7 +328,7 @@ export const PostPublishWidget = ({ onContinue, defaultSelected = [], onChangeTa
           type="button"
           onClick={() => canContinue && typeof onContinue === 'function' && onContinue(selected)}
           disabled={!canContinue}
-          className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs text-white disabled:opacity-60"
+          className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs text-white disabled:opacity-60 cursor-pointer"
         >
           Continuar
         </button>
@@ -368,7 +368,7 @@ export const CaptionSuggestWidget = ({ caption = '', onAccept, onRegenerate, onC
           onClick={() => handle('regenerate', onRegenerate)}
           disabled={busy}
           aria-busy={busy && active === 'regenerate'}
-          className="inline-flex items-center gap-2 rounded-lg bg-gray-100 px-3 py-1.5 text-xs text-gray-800 transition-all duration-200 ease-out hover:bg-gray-200 hover:-translate-y-0.5 hover:shadow-sm active:scale-95 disabled:opacity-50 disabled:pointer-events-none"
+          className="inline-flex items-center gap-2 rounded-lg bg-gray-100 px-3 py-1.5 text-xs text-gray-800 transition-all duration-200 ease-out hover:bg-gray-200 hover:-translate-y-0.5 hover:shadow-sm active:scale-95 disabled:opacity-50 disabled:pointer-events-none cursor-pointer"
         >
           {active === 'regenerate' ? (
             <span className="size-3.5 rounded-full border-2 border-gray-700/40 border-t-transparent animate-spin" aria-hidden="true"></span>
@@ -382,7 +382,7 @@ export const CaptionSuggestWidget = ({ caption = '', onAccept, onRegenerate, onC
           onClick={() => handle('custom', onCustom)}
           disabled={busy}
           aria-busy={busy && active === 'custom'}
-          className="inline-flex items-center gap-2 rounded-lg bg-amber-100 px-3 py-1.5 text-xs text-amber-900 transition-all duration-200 ease-out hover:bg-amber-200 hover:-translate-y-0.5 hover:shadow-sm active:scale-95 disabled:opacity-50 disabled:pointer-events-none"
+          className="inline-flex items-center gap-2 rounded-lg bg-amber-100 px-3 py-1.5 text-xs text-amber-900 transition-all duration-200 ease-out hover:bg-amber-200 hover:-translate-y-0.5 hover:shadow-sm active:scale-95 disabled:opacity-50 disabled:pointer-events-none cursor-pointer"
         >
           {active === 'custom' ? (
             <span className="size-3.5 rounded-full border-2 border-amber-900/40 border-t-transparent animate-spin" aria-hidden="true"></span>
@@ -396,7 +396,7 @@ export const CaptionSuggestWidget = ({ caption = '', onAccept, onRegenerate, onC
           onClick={() => handle('accept', onAccept, caption)}
           disabled={busy}
           aria-busy={busy && active === 'accept'}
-          className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs text-white transition-all duration-200 ease-out hover:bg-emerald-700 hover:-translate-y-0.5 hover:shadow-sm active:scale-95 disabled:opacity-50 disabled:pointer-events-none"
+          className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs text-white transition-all duration-200 ease-out hover:bg-emerald-700 hover:-translate-y-0.5 hover:shadow-sm active:scale-95 disabled:opacity-50 disabled:pointer-events-none cursor-pointer"
         >
           {active === 'accept' ? (
             <span className="size-3.5 rounded-full border-2 border-white/60 border-t-transparent animate-spin" aria-hidden="true"></span>
@@ -574,7 +574,7 @@ export const ScheduleWidget = ({ defaultValue = null, onConfirm, publishData = n
             onClick={handleConfirm}
             disabled={busy}
             aria-busy={busy}
-            className="inline-flex items-center gap-2 rounded-lg bg-violet-600 px-3 py-2 text-xs text-white transition-all duration-200 ease-out hover:bg-violet-700 hover:-translate-y-0.5 hover:shadow-sm active:scale-95 disabled:opacity-50 disabled:pointer-events-none"
+            className="inline-flex items-center gap-2 rounded-lg bg-violet-600 px-3 py-2 text-xs text-white transition-all duration-200 ease-out hover:bg-violet-700 hover:-translate-y-0.5 hover:shadow-sm active:scale-95 disabled:opacity-50 disabled:pointer-events-none cursor-pointer"
           >
             {busy ? (
               <span className="size-3.5 rounded-full border-2 border-white/60 border-t-transparent animate-spin" aria-hidden="true"></span>

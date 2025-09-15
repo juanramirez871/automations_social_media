@@ -39,7 +39,7 @@ export const InstagramCredentialsWidget = ({ widgetId, onSubmit }) => {
         <input type="text" value={u} onChange={(e) => setU(e.target.value)} placeholder="Usuario de Instagram" className="w-full rounded-lg border border-fuchsia-200 px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-fuchsia-300" />
         <input type="password" value={p} onChange={(e) => setP(e.target.value)} placeholder="Contraseña de Instagram" className="w-full rounded-lg border border-fuchsia-200 px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-fuchsia-300" />
         <div className="sm:col-span-2">
-          <button type="submit" disabled={saving || !u || !p} className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-fuchsia-500 to-pink-500 px-4 py-2 text-white text-sm disabled:opacity-50">
+          <button type="submit" disabled={saving || !u || !p} className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-fuchsia-500 to-pink-500 px-4 py-2 text-white text-sm disabled:opacity-50 cursor-pointer">
             {saving ? (
               <span className="size-4 rounded-full border-2 border-white/60 border-t-transparent animate-spin" aria-hidden="true"></span>
             ) : (
@@ -142,7 +142,7 @@ export const InstagramAuthWidget = ({ widgetId, onConnected, onError }) => {
         type="button"
         onClick={startLogin}
         disabled={connecting}
-        className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-fuchsia-500 to-pink-500 px-4 py-2 text-white text-sm disabled:opacity-50"
+        className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-fuchsia-500 to-pink-500 px-4 py-2 text-white text-sm disabled:opacity-50 cursor-pointer"
       >
         {connecting ? (
           <span className="size-4 rounded-full border-2 border-white/60 border-t-transparent animate-spin" aria-hidden="true"></span>

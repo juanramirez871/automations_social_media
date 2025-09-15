@@ -13,7 +13,7 @@ export default function UploadsList({ files = [] }) {
             <li key={name} className="flex items-center gap-x-2 p-3 text-sm bg-white border border-gray-200 text-gray-600 first:rounded-t-lg first:mt-0 last:rounded-b-lg">
               <div className="w-full flex justify-between truncate">
                 <span className="me-3 flex-1 w-0 truncate">{name}</span>
-                <button type="button" className="flex items-center gap-x-2 text-gray-500 hover:text-blue-500 focus:outline-hidden focus:text-blue-500 whitespace-nowrap">
+                <button type="button" className="flex items-center gap-x-2 text-gray-500 hover:text-blue-500 focus:outline-hidden focus:text-blue-500 whitespace-nowrap cursor-pointer">
                   <svg className="shrink-0 size-4" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
                     <polyline points="7 10 12 15 17 10"></polyline>

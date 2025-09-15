@@ -666,12 +666,21 @@ export default function Home() {
                   <AssistantMessage key={m.id} borderClass="border-blue-200">
                     <AuthFormWidgetExt
                       mode={m.mode}
-                      onLogin={async ({ mode, name, email, pass }) => {
+                      onLogin={async ({ mode, name, email, pass, aiModel, apiKey }) => {
                         if (supabase) {
                           try {
                             if (mode === "signup") {
-                              const { error } = await supabase.auth.signUp({ email, password: pass, options: { data: { name } } });
+                              const { data: authData, error } = await supabase.auth.signUp({ email, password: pass, options: { data: { name } } });
                               if (error) throw error;
+                              
+                              // Guardar configuración de IA en el perfil
+                              if (authData?.user?.id && aiModel && apiKey) {
+                                const { error: profileError } = await supabase
+                                  .from('profiles')
+                                  .update({ ai_model: aiModel, ai_api_key: apiKey })
+                                  .eq('id', authData.user.id);
+                                if (profileError) console.warn('Error guardando configuración de IA:', profileError);
+                              }
                             } else {
                               const { error } = await supabase.auth.signInWithPassword({ email, password: pass });
                               if (error) throw error;
@@ -1443,7 +1452,7 @@ export default function Home() {
             <button
               type="button"
               onClick={closeLightbox}
-              className="absolute -top-3 -right-3 bg-white text-gray-700 rounded-full size-8 flex items-center justify-center shadow ring-1 ring-black/10"
+              className="absolute -top-3 -right-3 bg-white text-gray-700 rounded-full size-8 flex items-center justify-center shadow ring-1 ring-black/10 cursor-pointer"
               aria-label="Cerrar"
             >
               ×

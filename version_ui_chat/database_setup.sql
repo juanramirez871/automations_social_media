@@ -52,7 +52,11 @@ CREATE TABLE IF NOT EXISTS public.profiles (
     tiktok_refresh_token TEXT,
     tiktok_expires_at TIMESTAMP WITH TIME ZONE,
     tiktok_open_id TEXT,
-    tiktok_granted_scopes JSONB
+    tiktok_granted_scopes JSONB,
+    
+    -- AI Model Configuration
+    ai_model TEXT DEFAULT 'gemini' CHECK (ai_model IN ('chatgpt', 'gemini', 'deepseek')),
+    ai_api_key TEXT
 );
 
 -- =====================================================

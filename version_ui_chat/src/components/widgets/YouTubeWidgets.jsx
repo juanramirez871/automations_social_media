@@ -78,7 +78,7 @@ export const YouTubeAuthWidget = ({ widgetId, onConnected, onError }) => {
         type="button"
         onClick={startLogin}
         disabled={connecting}
-        className="inline-flex items-center gap-2 rounded-lg bg-[#FF0000] px-4 py-2 text-white text-sm disabled:opacity-50"
+        className="inline-flex items-center gap-2 rounded-lg bg-[#FF0000] px-4 py-2 text-white text-sm disabled:opacity-50 cursor-pointer"
       >
         {connecting ? (
           <span className="size-4 rounded-full border-2 border-white/60 border-t-transparent animate-spin" aria-hidden="true"></span>
