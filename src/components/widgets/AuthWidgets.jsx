@@ -94,7 +94,7 @@ export const AuthFormWidget = ({ mode, onLogin, onError }) => {
             value={pass}
             onChange={e => setPass(e.target.value)}
             className='w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:ring-blue-300 focus:border-blue-300'
-            placeholder='••••••••'
+            placeholder=''
           />
         </div>
         {mode === 'signup' && (
@@ -107,7 +107,7 @@ export const AuthFormWidget = ({ mode, onLogin, onError }) => {
               value={confirm}
               onChange={e => setConfirm(e.target.value)}
               className='w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:ring-blue-300 focus:border-blue-300'
-              placeholder='••••••••'
+              placeholder=''
             />
           </div>
         )}
@@ -135,7 +135,7 @@ export const AuthFormWidget = ({ mode, onLogin, onError }) => {
               value={apiKey}
               onChange={e => setApiKey(e.target.value)}
               className='w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:ring-blue-300 focus:border-blue-300'
-              placeholder='Tu API key del modelo seleccionado'
+              placeholder=''
             />
             <p className='text-xs text-gray-400 mt-1'>
               Necesaria para generar contenido con IA

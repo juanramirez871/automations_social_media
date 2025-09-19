@@ -1,6 +1,38 @@
 'use client';
 
+import { useState, useEffect } from 'react';
+import { supabase } from '@/lib/supabaseClient';
+
 export default function IntroHeader() {
+  const [userEmail, setUserEmail] = useState(null);
+
+  useEffect(() => {
+    const getUserEmail = async () => {
+      if (!supabase) return;
+      
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user?.email) {
+          setUserEmail(session.user.email);
+        }
+      } catch (error) {
+        console.error('Error obteniendo email del usuario:', error);
+      }
+    };
+
+    getUserEmail();
+
+    // Escuchar cambios en la autenticación
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (session?.user?.email) {
+        setUserEmail(session.user.email);
+      } else {
+        setUserEmail(null);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
   return (
     <header className='relative max-w-4xl mx-auto pt-10'>
       {/* Fondos decorativos con blur */}
@@ -29,10 +61,21 @@ export default function IntroHeader() {
             <span>Impulsado por IA</span>
           </div>
 
+          {/* Información del usuario logueado */}
+          {userEmail && (
+            <div className='mt-3 inline-flex items-center gap-2 rounded-full border border-green-200/60 bg-green-50/70 px-3 py-1 text-xs text-green-700 shadow-sm'>
+              <span
+                className='inline-block size-1.5 rounded-full bg-green-500'
+                aria-hidden='true'
+              />
+              <span>Conectado como: {userEmail}</span>
+            </div>
+          )}
+
           {/* Título con degradado */}
           <h1 className='mt-4 text-3xl sm:text-4xl font-extrabold tracking-tight'>
             <span className='bg-clip-text text-transparent bg-gradient-to-r from-sky-500 via-blue-500 to-sky-600'>
-              ¡Hola! Bienvenido
+              {userEmail ? `¡Hola! Bienvenido` : '¡Hola! Bienvenido'}
             </span>
           </h1>
 

@@ -568,9 +568,33 @@ export default function CalendarModal({ isOpen, onClose }) {
                     className='bg-white p-2 rounded border-l-4 border-green-500'
                   >
                     <div className='flex items-center justify-between mb-1'>
-                      <span className='text-sm font-medium text-gray-900'>
-                        {post.scheduled_time}
-                      </span>
+                      <div className='flex items-center gap-2'>
+                        <span className='text-sm font-medium text-gray-900'>
+                          {post.scheduled_time}
+                        </span>
+                        {/* Estado de la publicación */}
+                        {post.status && (
+                          <span
+                            className={`px-2 py-0.5 text-xs font-medium rounded-full ${
+                              post.status === 'completed'
+                                ? 'bg-green-100 text-green-800'
+                                : post.status === 'failed'
+                                ? 'bg-red-100 text-red-800'
+                                : post.status === 'executing'
+                                ? 'bg-yellow-100 text-yellow-800'
+                                : 'bg-gray-100 text-gray-800'
+                            }`}
+                          >
+                            {post.status === 'completed'
+                              ? 'Publicado'
+                              : post.status === 'failed'
+                              ? 'Error'
+                              : post.status === 'executing'
+                              ? 'Publicando'
+                              : 'Pendiente'}
+                          </span>
+                        )}
+                      </div>
                       <div className='flex items-center gap-2'>
                         <div className='flex gap-1'>
                           {post.platforms.map((platform, pIdx) => (
@@ -625,6 +649,14 @@ export default function CalendarModal({ isOpen, onClose }) {
                       </div>
                     </div>
                     <p className='text-xs text-gray-600'>{post.content}</p>
+                    {/* Mensaje de error si existe */}
+                    {post.status === 'failed' && post.error_message && (
+                      <div className='mt-2 p-2 bg-red-50 border border-red-200 rounded-lg'>
+                        <p className='text-xs text-red-700 font-medium'>
+                          Error: {post.error_message}
+                        </p>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>

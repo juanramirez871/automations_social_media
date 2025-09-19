@@ -52,7 +52,7 @@ export const InstagramCredentialsWidget = ({ widgetId, onSubmit }) => {
           type='password'
           value={p}
           onChange={e => setP(e.target.value)}
-          placeholder='Contraseña de Instagram'
+          placeholder=''
           className='w-full rounded-lg border border-fuchsia-200 px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-fuchsia-300'
         />
         <div className='sm:col-span-2'>

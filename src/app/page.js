@@ -58,6 +58,10 @@ import {
   createNeedDescriptionMessage,
 } from '@/lib/publishFlowUtils';
 import { useChatState } from '@/hooks/useChatState';
+import { 
+  checkPlatformConfiguration, 
+  createConfigurationErrorMessage 
+} from '@/lib/platformConfigChecker';
 
 export default function Home() {
   const {
@@ -1533,6 +1537,24 @@ export default function Home() {
                           const { data: sessionData } = await getSessionOnce();
                           const userId = sessionData?.session?.user?.id;
                           if (!userId) return;
+
+                          // Verificar configuración de las plataformas seleccionadas
+                          const configErrors = await checkPlatformConfiguration(userId, selected);
+                          if (configErrors.length > 0) {
+                            const errorMessage = createConfigurationErrorMessage(configErrors);
+                            if (errorMessage) {
+                              setMessages(prev => [...prev, errorMessage]);
+                              await saveMessageToDB({
+                                userId,
+                                role: 'assistant',
+                                content: errorMessage.content,
+                                attachments: null,
+                                type: 'text',
+                              });
+                            }
+                            return; // No continuar si hay errores de configuración
+                          }
+
                           // Guardar en estado y pasar a pedir medios
                           setPublishTargets(selected || []);
                           setPublishStage('await-media');
@@ -1653,7 +1675,7 @@ export default function Home() {
                       )}
 
                       {hasVideoOnlyPlatforms && !onlyVideosPlatforms && (
-                        <div className='mb-2 text-xs text-amber-600 bg-amber-50 p-2 rounded border border-amber-200'>
+                        <div className='mb-2 text-xs p-2 rounded border border-amber-200'>
                           ⚠️ <strong>Nota:</strong> Incluiste{' '}
                           {sel
                             .filter(p => p === 'youtube' || p === 'tiktok')
