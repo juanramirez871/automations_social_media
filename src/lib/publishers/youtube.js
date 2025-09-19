@@ -1,3 +1,5 @@
+import { getValidYouTubeToken } from './youtubeRefresh';
+
 export async function getYouTubeToken(supabase, userId) {
   try {
     const { data, error } = await supabase
@@ -90,43 +92,28 @@ export async function publishToYouTube({
       throw new Error('YouTube requiere un video');
     }
 
-    let { token, refreshToken, expiresAt } = await getYouTubeToken(
-      supabase,
-      userId
-    );
+    console.log('🔑 TOKEN: Obteniendo token válido de YouTube...');
+    
+    // Usar la nueva función que maneja el refresh automático
+    const { 
+      token, 
+      refreshToken, 
+      expiresAt, 
+      channelId, 
+      channelTitle 
+    } = await getValidYouTubeToken(supabase, userId);
 
     if (!token) {
       throw new Error('No hay token de YouTube configurado');
     }
 
-    console.log('YouTube token info:', {
+    console.log('✅ Token de YouTube obtenido exitosamente:', {
       hasToken: !!token,
       expiresAt,
       hasRefreshToken: !!refreshToken,
+      channelId,
+      channelTitle
     });
-
-    // Si no hay expiresAt o el token está expirado, intentar refrescar
-    const shouldRefresh =
-      !expiresAt || (expiresAt && new Date(expiresAt) < new Date());
-
-    if (shouldRefresh && refreshToken) {
-      console.log('Token expirado o sin fecha de expiración, refrescando...');
-      try {
-        token = await refreshYouTubeAccessToken(supabase, userId, refreshToken);
-        console.log('Token refrescado exitosamente');
-      } catch (refreshError) {
-        console.error('Error refrescando token:', refreshError.message);
-        throw new Error(
-          `Token de YouTube expirado y no se pudo refrescar: ${
-            refreshError.message
-          }`
-        );
-      }
-    } else if (shouldRefresh && !refreshToken) {
-      throw new Error(
-        'Token de YouTube expirado y no hay refresh token disponible'
-      );
-    }
 
     const cleanToken = token
       .trim()

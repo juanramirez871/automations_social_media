@@ -100,22 +100,19 @@ async function checkFacebookConfiguration(userId) {
   }
 }
 
+import { getValidYouTubeToken } from './publishers/youtubeRefresh';
+
 /**
  * Verifica la configuración de YouTube para el usuario
  */
 async function checkYouTubeConfiguration(userId) {
   try {
-    const { token, refreshToken, expiresAt, channelId } = await getYouTubeToken(supabase, userId);
+    // Usar la nueva función que maneja automáticamente el refresh
+    const { token, refreshToken, expiresAt, channelId } = await getValidYouTubeToken(supabase, userId);
 
     if (!token) {
       return {
-        error: 'No hay token de YouTube configurado. Necesitas conectar tu cuenta de YouTube para poder publicar en esta plataforma.'
-      };
-    }
-
-    if (expiresAt && new Date(expiresAt) < new Date() && !refreshToken) {
-      return {
-        error: 'El token de YouTube ha expirado y no hay refresh token disponible. Necesitas reconectar tu cuenta de YouTube.'
+        error: 'Session expirada de youtube. Necesitas conectar tu cuenta de YouTube para poder publicar en esta plataforma.'
       };
     }
 
@@ -127,6 +124,13 @@ async function checkYouTubeConfiguration(userId) {
 
     return { success: true };
   } catch (e) {
+    // Si el error es por token expirado sin refresh token, dar un mensaje específico
+    if (e.message.includes('refresh token disponible')) {
+      return {
+        error: 'El token de YouTube ha expirado y no hay refresh token disponible. Necesitas reconectar tu cuenta de YouTube.'
+      };
+    }
+    
     return {
       error: `Error verificando configuración de YouTube: ${e.message}`
     };
