@@ -57,11 +57,22 @@ export async function publishToFacebook({
       const mediaType = imageUrl ? 'photo' : 'video';
 
       endpoint = `https://graph.facebook.com/v21.0/${pageId}/${mediaType}s`;
-      postData = {
-        url: mediaUrl,
-        caption: caption || '',
-        access_token: cleanToken,
-      };
+      
+      if (imageUrl) {
+        // Para imágenes usar 'url'
+        postData = {
+          url: mediaUrl,
+          caption: caption || '',
+          access_token: cleanToken,
+        };
+      } else {
+        // Para videos usar 'file_url'
+        postData = {
+          file_url: mediaUrl,
+          description: caption || '',
+          access_token: cleanToken,
+        };
+      }
     } else {
       endpoint = `https://graph.facebook.com/v21.0/${pageId}/feed`;
       postData = {
