@@ -13,6 +13,8 @@ export default function CalendarModal({ isOpen, onClose }) {
   const [improvingNewText, setImprovingNewText] = useState(false);
   const [uploadingMedia, setUploadingMedia] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState([]);
+  const [errorMessage, setErrorMessage] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
 
   // Hook para manejar publicaciones programadas con Supabase
   const {
@@ -26,10 +28,10 @@ export default function CalendarModal({ isOpen, onClose }) {
     getPostsGroupedByDate,
   } = useScheduledPosts();
 
+  if (!isOpen) return null;
+
   // Convertir array de posts a formato de calendario agrupado por fecha
   const scheduledPosts = getPostsGroupedByDate();
-
-  if (!isOpen) return null;
 
   const today = new Date();
   const year = currentDate.getFullYear();
@@ -54,15 +56,19 @@ export default function CalendarModal({ isOpen, onClose }) {
 
   const deletePost = async (day, postIndex) => {
     try {
+      setErrorMessage('');
       const postsForDay = getPostsForDay(day);
       const postToDelete = postsForDay[postIndex];
 
       if (postToDelete) {
         await deleteScheduledPost(postToDelete.id);
+        setSuccessMessage('Post eliminado correctamente');
+        setTimeout(() => setSuccessMessage(''), 3000);
       }
     } catch (error) {
       console.error('Error deleting post:', error);
-      // Aquí podrías mostrar un toast de error
+      setErrorMessage(error.message || 'Error al eliminar el post');
+      setTimeout(() => setErrorMessage(''), 5000);
     }
   };
 
@@ -87,6 +93,7 @@ export default function CalendarModal({ isOpen, onClose }) {
     if (!editingPost) return;
 
     try {
+      setErrorMessage('');
       const scheduledDate = `${year}-${String(month + 1).padStart(2, '0')}-${String(editingPost.day).padStart(2, '0')}`;
 
       await updateScheduledPost(editingPost.id, {
@@ -98,9 +105,12 @@ export default function CalendarModal({ isOpen, onClose }) {
 
       setEditingPost(null);
       setSelectedDay(editingPost.day);
+      setSuccessMessage('Post actualizado correctamente');
+      setTimeout(() => setSuccessMessage(''), 3000);
     } catch (error) {
       console.error('Error updating post:', error);
-      // Aquí podrías mostrar un toast de error
+      setErrorMessage(error.message || 'Error al actualizar el post');
+      setTimeout(() => setErrorMessage(''), 5000);
     }
   };
 
@@ -123,6 +133,7 @@ export default function CalendarModal({ isOpen, onClose }) {
 
     setImprovingText(true);
     try {
+      setErrorMessage('');
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -141,7 +152,8 @@ export default function CalendarModal({ isOpen, onClose }) {
       }
     } catch (error) {
       console.error('Error mejorando texto:', error);
-      // Aquí podrías mostrar un toast o mensaje de error
+      setErrorMessage(error.message || 'Error al mejorar el texto con IA');
+      setTimeout(() => setErrorMessage(''), 5000);
     } finally {
       setImprovingText(false);
     }
@@ -168,6 +180,7 @@ export default function CalendarModal({ isOpen, onClose }) {
       return;
 
     try {
+      setErrorMessage('');
       await createScheduledPost({
         content: newPost.content,
         platforms: newPost.platforms,
@@ -189,9 +202,13 @@ export default function CalendarModal({ isOpen, onClose }) {
       if (selectedYear === year && selectedMonth === month) {
         setSelectedDay(selectedDay);
       }
+      
+      setSuccessMessage('Post agendado correctamente');
+      setTimeout(() => setSuccessMessage(''), 3000);
     } catch (error) {
       console.error('Error creating post:', error);
-      // Aquí podrías mostrar un toast de error
+      setErrorMessage(error.message || 'Error al agendar el post');
+      setTimeout(() => setErrorMessage(''), 5000);
     }
   };
 
@@ -216,6 +233,7 @@ export default function CalendarModal({ isOpen, onClose }) {
 
     setImprovingNewText(true);
     try {
+      setErrorMessage('');
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -234,6 +252,8 @@ export default function CalendarModal({ isOpen, onClose }) {
       }
     } catch (error) {
       console.error('Error mejorando texto:', error);
+      setErrorMessage(error.message || 'Error al mejorar el texto con IA');
+      setTimeout(() => setErrorMessage(''), 5000);
     } finally {
       setImprovingNewText(false);
     }
@@ -518,7 +538,7 @@ export default function CalendarModal({ isOpen, onClose }) {
           </button>
         </div>
 
-        {/* Días de la semana */}
+        {/* Dias de la semana */}
         <div className='grid grid-cols-7 gap-1 mb-3'>
           {dayNames.map(day => (
             <div
@@ -1128,6 +1148,29 @@ export default function CalendarModal({ isOpen, onClose }) {
                 Crear Publicación
               </button>
             </div>
+
+            {/* Mensajes de error y éxito */}
+            {errorMessage && (
+              <div className='mt-4 p-3 bg-red-50 border border-red-200 rounded-lg'>
+                <div className='flex items-center'>
+                  <svg className='w-5 h-5 text-red-500 mr-2' fill='currentColor' viewBox='0 0 20 20'>
+                    <path fillRule='evenodd' d='M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z' clipRule='evenodd' />
+                  </svg>
+                  <p className='text-sm text-red-700'>{errorMessage}</p>
+                </div>
+              </div>
+            )}
+
+            {successMessage && (
+              <div className='mt-4 p-3 bg-green-50 border border-green-200 rounded-lg'>
+                <div className='flex items-center'>
+                  <svg className='w-5 h-5 text-green-500 mr-2' fill='currentColor' viewBox='0 0 20 20'>
+                    <path fillRule='evenodd' d='M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z' clipRule='evenodd' />
+                  </svg>
+                  <p className='text-sm text-green-700'>{successMessage}</p>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
