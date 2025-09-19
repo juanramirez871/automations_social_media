@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useScheduledPosts } from '../lib/useScheduledPosts';
+import { supabase } from '../lib/supabaseClient';
 
 export default function CalendarModal({ isOpen, onClose }) {
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -134,12 +135,20 @@ export default function CalendarModal({ isOpen, onClose }) {
     setImprovingText(true);
     try {
       setErrorMessage('');
+      
+      // Obtener el usuario autenticado
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        throw new Error('Usuario no autenticado');
+      }
+
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           messages: [{ role: 'user', content: editingPost.content }],
           mode: 'caption',
+          userId: user.id,
         }),
       });
 
@@ -234,12 +243,20 @@ export default function CalendarModal({ isOpen, onClose }) {
     setImprovingNewText(true);
     try {
       setErrorMessage('');
+      
+      // Obtener el usuario autenticado
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        throw new Error('Usuario no autenticado');
+      }
+
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           messages: [{ role: 'user', content: newPost.content }],
           mode: 'caption',
+          userId: user.id,
         }),
       });
 
