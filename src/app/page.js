@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import IntroHeader from '@/components/IntroHeader';
 import AssistantMessage from '@/components/AssistantMessage';
@@ -94,6 +94,48 @@ export default function Home() {
     closeLightbox,
   } = useChatState();
   const igConnectPersistingRef = useRef(false);
+  
+  // Estado para las iniciales del usuario
+  const [userInitials, setUserInitials] = useState('AZ');
+
+  // Función para generar iniciales a partir del email o nombre
+  const generateInitials = (email, name = null) => {
+    if (name && name.trim()) {
+      // Si tenemos nombre, usar las primeras letras de cada palabra
+      const nameParts = name.trim().split(' ');
+      if (nameParts.length >= 2) {
+        return (nameParts[0][0] + nameParts[1][0]).toUpperCase();
+      } else {
+        return nameParts[0].substring(0, 2).toUpperCase();
+      }
+    } else if (email) {
+      // Si solo tenemos email, usar las primeras dos letras antes del @
+      const emailPrefix = email.split('@')[0];
+      return emailPrefix.substring(0, 2).toUpperCase();
+    }
+    return 'AZ'; // Fallback por defecto
+  };
+
+  // Función para obtener y actualizar las iniciales del usuario
+  const updateUserInitials = async () => {
+    try {
+      const { data: sessionData } = await getSessionOnce();
+      const user = sessionData?.session?.user;
+      if (user) {
+        const initials = generateInitials(user.email, user.user_metadata?.full_name);
+        setUserInitials(initials);
+      }
+    } catch (error) {
+      console.error('Error obteniendo iniciales del usuario:', error);
+    }
+  };
+
+  // Actualizar iniciales cuando el usuario se autentica
+  useEffect(() => {
+    if (isLoggedIn) {
+      updateUserInitials();
+    }
+  }, [isLoggedIn]);
 
   // Subir archivo directamente a Cloudinary (sin pasar por Vercel)
   const uploadToCloudinary = async (
@@ -2648,6 +2690,7 @@ export default function Home() {
             return (
               <UserMessage
                 key={m.id}
+                avatar={userInitials}
                 attachments={m.attachments}
                 onAttachmentClick={onAttachmentClick}
               >
