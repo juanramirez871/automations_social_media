@@ -633,9 +633,43 @@ export default function Home() {
 
     // Detectar si el usuario quiere iniciar un nuevo flujo de publicación explícitamente
     const wantsNewPublish = detectNewPublishIntent(trimmed);
-    if (wantsNewPublish && publishStage !== 'idle') {
-      // Reiniciar el gating para permitir que aparezca el selector nuevamente
-      setPublishStage('idle');
+    if (wantsNewPublish) {
+      // Reiniciar completamente el flujo de publicación
+      resetPublishFlow();
+      
+      // Mostrar mensaje de confirmación de reinicio y selector de plataformas
+      const restartMessage = {
+        id: newId('restart-flow'),
+        role: 'assistant',
+        type: 'text',
+        content: 'Perfecto, empecemos con un nuevo post. Paso 1: Selecciona las plataformas donde quieres publicar.',
+      };
+      
+      const platformsWidget = {
+        id: newId('platforms-widget'),
+        role: 'assistant',
+        type: 'widget-post-publish',
+      };
+      
+      setMessages(prev => [...prev, restartMessage, platformsWidget]);
+      
+      if (userId) {
+        await saveMessageToDB({
+          userId,
+          role: 'assistant',
+          content: restartMessage.content,
+          attachments: null,
+          type: 'text',
+        });
+        await saveMessageToDB({
+          userId,
+          role: 'assistant',
+          content: '',
+          attachments: null,
+          type: 'widget-post-publish',
+        });
+      }
+      return;
     }
 
     // Intención de cancelar el flujo de publicación actual

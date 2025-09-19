@@ -46,7 +46,7 @@ export async function publishToMultiplePlatforms({
     }
 
     try {
-      return await PUBLISHERS[platform]({
+      const result = await PUBLISHERS[platform]({
         caption,
         imageUrl,
         videoUrl,
@@ -54,7 +54,16 @@ export async function publishToMultiplePlatforms({
         privacyLevel,
         supabase,
       });
+      
+      console.log(`Resultado de publicación en ${platform}:`, {
+        success: result.success,
+        error: result.error || 'ninguno',
+        platform: result.platform
+      });
+      
+      return result;
     } catch (error) {
+      console.error(`Error no capturado en publisher ${platform}:`, error);
       return {
         platform,
         success: false,

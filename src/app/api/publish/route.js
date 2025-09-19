@@ -23,6 +23,7 @@ export async function POST(request) {
     const supabase = await createSupabaseClient();
 
     // Publicar en todas las plataformas usando el sistema modular
+    console.log('Iniciando publicación en plataformas:', platforms);
     const results = await publishToMultiplePlatforms({
       caption,
       imageUrl,
@@ -33,11 +34,13 @@ export async function POST(request) {
       supabase,
     });
 
+    console.log('Resultados de publicación completos:', results);
+
     // Determinar el estado general
     const hasSuccess = results.some(r => r.success);
     const hasErrors = results.some(r => !r.success);
 
-    return NextResponse.json({
+    const response = {
       success: hasSuccess,
       results,
       message: hasSuccess
@@ -45,7 +48,11 @@ export async function POST(request) {
           ? 'Publicado parcialmente'
           : 'Publicado exitosamente'
         : 'Error en la publicación',
-    });
+    };
+
+    console.log('Respuesta final de la API:', response);
+
+    return NextResponse.json(response);
   } catch (error) {
     if (
       error.message === 'Usuario no especificado' ||

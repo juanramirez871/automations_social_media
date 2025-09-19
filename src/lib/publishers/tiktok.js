@@ -1,3 +1,5 @@
+import { getValidTikTokToken } from './tiktokRefresh';
+
 export async function getTikTokToken(supabase, userId) {
   try {
     const { data, error } = await supabase
@@ -240,16 +242,24 @@ export async function publishToTikTok({
   supabase,
 }) {
   try {
+    console.log('Iniciando publicación en TikTok:', {
+      userId,
+      hasVideoUrl: !!videoUrl,
+      captionLength: caption?.length || 0,
+      captionPreview: caption?.substring(0, 50) + (caption?.length > 50 ? '...' : '')
+    });
+
     if (!videoUrl) {
       throw new Error('TikTok requiere un video');
     }
 
+    // Usar la nueva función que maneja el refresh automático
     const {
       token: ttToken,
       expiresAt: ttExpiresAt,
       openId,
       grantedScopes,
-    } = await getTikTokToken(supabase, userId);
+    } = await getValidTikTokToken(supabase, userId);
 
     if (!ttToken) {
       throw new Error('No hay token de TikTok configurado');
@@ -511,6 +521,14 @@ export async function publishToTikTok({
       status,
     };
   } catch (error) {
+    console.error('Error en publishToTikTok:', {
+      error: error.message,
+      stack: error.stack,
+      userId,
+      videoUrl: videoUrl ? 'presente' : 'ausente',
+      caption: caption ? caption.substring(0, 50) + '...' : 'sin caption'
+    });
+    
     return {
       platform: 'tiktok',
       success: false,
