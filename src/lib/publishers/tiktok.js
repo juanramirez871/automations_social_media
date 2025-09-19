@@ -39,6 +39,7 @@ export function normalizeVerifiedTikTokUrl(inputUrl) {
     );
   }
 
+  console.log(inputUrl, "inputUrl")
   return inputUrl;
 }
 

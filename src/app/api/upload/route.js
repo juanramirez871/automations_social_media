@@ -3,6 +3,16 @@ import { v2 as cloudinary } from 'cloudinary';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+// Configuración para aumentar el límite de payload
+export const config = {
+  api: {
+    responseLimit: '20mb',
+    bodyParser: {
+      sizeLimit: '20mb',
+    },
+  },
+};
+
 export async function POST(req) {
   try {
     const formData = await req.formData();
@@ -15,6 +25,20 @@ export async function POST(req) {
       });
     }
 
+    // Validación de tamaño de archivo (límite de 18MB para evitar problemas en Vercel)
+    const MAX_FILE_SIZE = 18 * 1024 * 1024; // 18MB
+    if (file.size > MAX_FILE_SIZE) {
+      return new Response(
+        JSON.stringify({ 
+          error: `El archivo es demasiado grande. Tamaño máximo permitido: 18MB. Tamaño actual: ${(file.size / 1024 / 1024).toFixed(2)}MB` 
+        }), 
+        {
+          status: 413,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      );
+    }
+
     const folder = formData.get('folder') || 'ui-chat-uploads';
     const resourceType = formData.get('resourceType') || 'auto';
 
@@ -25,14 +49,37 @@ export async function POST(req) {
       api_secret: process.env.CLOUDINARY_API_SECRET,
     });
 
+    console.log(`Procesando archivo: ${file.name}, tamaño: ${(file.size / 1024 / 1024).toFixed(2)}MB`);
+
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
+    // Configuración optimizada para archivos grandes
+    const uploadOptions = {
+      resource_type: resourceType,
+      folder,
+      // Configuraciones para mejorar la subida de archivos grandes
+      chunk_size: 10 * 1024 * 1024, // 10MB chunks para archivos grandes
+      timeout: 120000, // 2 minutos de timeout
+    };
+
+    // Configuración específica para videos grandes
+    if (resourceType === 'video' && file.size > 10 * 1024 * 1024) {
+      uploadOptions.eager = [
+        { width: 1280, height: 720, crop: 'limit', quality: 'auto' }
+      ];
+      uploadOptions.eager_async = true;
+    }
+
     const result = await new Promise((resolve, reject) => {
       const stream = cloudinary.uploader.upload_stream(
-        { resource_type: resourceType, folder },
+        uploadOptions,
         (error, uploadResult) => {
-          if (error) return reject(error);
+          if (error) {
+            console.error('Error en Cloudinary:', error);
+            return reject(error);
+          }
+          console.log(`Upload exitoso: ${uploadResult.secure_url}`);
           resolve(uploadResult);
         }
       );

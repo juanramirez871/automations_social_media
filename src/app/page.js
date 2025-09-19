@@ -93,26 +93,59 @@ export default function Home() {
   } = useChatState();
   const igConnectPersistingRef = useRef(false);
 
-  // Subir archivo a Cloudinary vía API interna
+  // Subir archivo directamente a Cloudinary (sin pasar por Vercel)
   const uploadToCloudinary = async (
     file,
     { folder = 'ui-chat-uploads' } = {}
   ) => {
     try {
-      const fd = new FormData();
-      fd.append('file', file);
-      fd.append('folder', folder);
-      fd.append('resourceType', 'auto');
-      const res = await fetch('/api/upload', { method: 'POST', body: fd });
-      if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
-      const data = await res.json();
+      // Validación del lado del cliente para archivos grandes
+      const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB - sin límites de Vercel
+      if (file.size > MAX_FILE_SIZE) {
+        throw new Error(`El archivo "${file.name}" es demasiado grande. Tamaño máximo: 100MB. Tamaño actual: ${(file.size / 1024 / 1024).toFixed(2)}MB`);
+      }
+
+      // Obtener firma de Cloudinary
+      const signatureResponse = await fetch('/api/cloudinary-signature', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ folder }),
+      });
+
+      if (!signatureResponse.ok) {
+        throw new Error('Error al obtener la firma de Cloudinary');
+      }
+
+      const { signature, timestamp, cloud_name, api_key, folder: signatureFolder } = await signatureResponse.json();
+
+      // Crear FormData para upload directo a Cloudinary
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('signature', signature);
+      formData.append('timestamp', timestamp);
+      formData.append('api_key', api_key);
+      formData.append('folder', signatureFolder);
+
+      // Upload directo a Cloudinary
+      const uploadResponse = await fetch(`https://api.cloudinary.com/v1_1/${cloud_name}/auto/upload`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!uploadResponse.ok) {
+        const errorData = await uploadResponse.json().catch(() => ({}));
+        throw new Error(errorData.error?.message || `Upload failed: ${uploadResponse.status}`);
+      }
+
+      const result = await uploadResponse.json();
       return {
-        secureUrl: data.secureUrl,
-        publicId: data.publicId,
-        resourceType: data.resourceType,
+        secureUrl: result.secure_url,
+        publicId: result.public_id,
+        resourceType: result.resource_type,
       };
     } catch (e) {
-      return null;
+      console.error('Error uploading file:', e.message);
+      throw e; // Re-lanzar el error para que sea manejado por el código que llama
     }
   };
 
@@ -581,31 +614,64 @@ export default function Home() {
     let uploadedAttachments = [];
     if (Array.isArray(files) && files.length > 0) {
       setLoading(true);
-      const uploads = [];
-      for (const f of files) {
-        uploads.push(
-          (async () => {
-            const isVideo =
-              f.type?.startsWith('video/') ||
-              /(\.(mp4|mov|webm|ogg|mkv|m4v))$/i.test(f.name || '');
-            const kind = isVideo ? 'video' : 'image';
-            const res = await uploadToCloudinary(f);
-            if (res?.secureUrl) {
-              return {
-                kind,
-                url: res.secureUrl,
-                publicId: res.publicId,
-                name: f.name,
-              };
-            } else {
-              // Fallback: no URL si falló
-              return null;
-            }
-          })()
-        );
+      try {
+        const uploads = [];
+        for (const f of files) {
+          uploads.push(
+            (async () => {
+              try {
+                const isVideo =
+                  f.type?.startsWith('video/') ||
+                  /(\.(mp4|mov|webm|ogg|mkv|m4v))$/i.test(f.name || '');
+                const kind = isVideo ? 'video' : 'image';
+                const res = await uploadToCloudinary(f);
+                if (res?.secureUrl) {
+                  return {
+                    kind,
+                    url: res.secureUrl,
+                    publicId: res.publicId,
+                    name: f.name,
+                  };
+                } else {
+                  return null;
+                }
+              } catch (error) {
+                // Mostrar error específico del archivo
+                setMessages(prev => [
+                  ...prev,
+                  {
+                    id: newId('upload-error'),
+                    role: 'assistant',
+                    type: 'text',
+                    content: `❌ **Error al subir archivo:** ${error.message}`,
+                  },
+                ]);
+                return null;
+              }
+            })()
+          );
+        }
+        const results = await Promise.all(uploads);
+        uploadedAttachments = results.filter(Boolean);
+        
+        // Si no se pudo subir ningún archivo, detener el proceso
+        if (files.length > 0 && uploadedAttachments.length === 0) {
+          setLoading(false);
+          return;
+        }
+      } catch (error) {
+        setLoading(false);
+        setMessages(prev => [
+          ...prev,
+          {
+            id: newId('upload-error'),
+            role: 'assistant',
+            type: 'text',
+            content: `❌ **Error general en la subida:** ${error.message}`,
+          },
+        ]);
+        return;
       }
-      const results = await Promise.all(uploads);
-      uploadedAttachments = results.filter(Boolean);
       setLoading(false);
     }
 
