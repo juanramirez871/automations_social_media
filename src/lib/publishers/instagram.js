@@ -1,167 +1,144 @@
-export async function getInstagramToken(supabase, userId) {
-  try {
-    const { data, error } = await supabase
-      .from('profiles')
-      .select(
-        'instagram_access_token, instagram_expires_at, instagram_user_id, instagram_username, instagram_granted_scopes'
-      )
-      .eq('id', userId)
-      .maybeSingle();
+import { getSupabaseClient } from '@/lib/supabaseUniversal';
+import { getValidInstagramToken } from './instagramRefresh';
 
-    if (error) {
-      throw error;
-    }
-
-    const token = data?.instagram_access_token || null;
-    const expiresAt = data?.instagram_expires_at || null;
-    const igUserId = data?.instagram_user_id || null;
-    const igUsername = data?.instagram_username || null;
-    const grantedScopes = data?.instagram_granted_scopes || null;
-
-    return { token, expiresAt, igUserId, igUsername, grantedScopes };
-  } catch (e) {
-    return {
-      token: null,
-      expiresAt: null,
-      igUserId: null,
-      igUsername: null,
-      grantedScopes: null,
-    };
+export async function getInstagramToken(userId) {
+  const supabase = getSupabaseClient();
+  
+  if (!supabase) {
+    console.error('❌ Supabase client no está disponible');
+    return null;
   }
+
+  console.log(userId)
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('instagram_access_token, instagram_expires_at, instagram_user_id')
+    .eq('id', userId)
+    .maybeSingle();
+
+  if (error) {
+    console.error('Error fetching Instagram token:', error);
+    return null;
+  }
+  console.log(data, "userInfo")
+  return {
+    token: data?.instagram_access_token,
+    expires_at: data?.instagram_expires_at,
+    user_id: data?.instagram_user_id,
+  };
 }
 
-export async function publishToInstagram({
-  caption,
-  imageUrl,
-  videoUrl,
-  userId,
-  supabase,
-}) {
+export async function publishToInstagram({ userId, imageUrl, videoUrl, caption }) {
   try {
-    const { token, expiresAt, igUserId } = await getInstagramToken(
-      supabase,
-      userId
-    );
-
-    if (!token) {
-      console.error('[IG DEBUG] No hay token de Instagram configurado');
-      throw new Error('No hay token de Instagram configurado');
-    }
-
-    const cleanToken = token
-      .trim()
-      .replace(/\s+/g, '')
-      .replace(/[\r\n\t]/g, '');
-
-    console.log(
-      '[IG DEBUG] cleanToken:',
-      `${cleanToken.slice(0, 10)}...`,
-      'length:',
-      cleanToken.length
-    );
-
-    if (expiresAt && new Date(expiresAt) < new Date()) {
-      console.error('[IG DEBUG] Token de Instagram expirado');
-      throw new Error('Token de Instagram expirado');
-    }
-
-    if (!imageUrl && !videoUrl) {
-      console.error('[IG DEBUG] Instagram requiere una imagen o video');
-      throw new Error('Instagram requiere una imagen o video');
-    }
-
+    // Usar imageUrl o videoUrl como mediaUrl
     const mediaUrl = imageUrl || videoUrl;
-    const mediaType = imageUrl ? 'IMAGE' : 'VIDEO';
+    
+    // Usar la función original getInstagramToken en lugar del refresh automático
+    const userInfo = await getInstagramToken(userId);
+    const token = userInfo?.token;
+    const igUserId = userInfo?.user_id;
+    if (!token) {
+      throw new Error('No se encontró token de Instagram');
+    }
 
+    if (!igUserId) {
+      throw new Error('No se encontró el ID de usuario de Instagram');
+    }
+
+    // Limpiar el token (remover espacios en blanco)
+    const cleanToken = token.trim();
+
+    // Verificar que la URL del media sea válida
+    console.log(mediaUrl, "media")
+    if (!mediaUrl || !mediaUrl.startsWith('http')) {
+      throw new Error('URL del media inválida');
+    }
+
+    console.log('📸 Iniciando publicación en Instagram...');
+
+    // Paso 1: Crear contenedor de media
+    const containerUrl = `https://graph.facebook.com/v18.0/${igUserId}/media`;
     const containerParams = new URLSearchParams({
-      image_url: mediaType === 'IMAGE' ? mediaUrl : undefined,
-      video_url: mediaType === 'VIDEO' ? mediaUrl : undefined,
-      media_type: mediaType,
+      image_url: mediaUrl,
       caption: caption || '',
       access_token: cleanToken,
     });
 
-    for (const [key, value] of [...containerParams.entries()]) {
-      if (value === undefined || value === 'undefined') {
-        containerParams.delete(key);
-      }
-    }
-
-    console.log(
-      '[IG DEBUG] containerParams:',
-      Object.fromEntries(containerParams.entries())
-    );
-
-    const containerResponse = await fetch(
-      `https://graph.facebook.com/v19.0/${igUserId}/media`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: containerParams.toString(),
-      }
-    );
+    const containerResponse = await fetch(containerUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: containerParams,
+    });
 
     const containerData = await containerResponse.json();
 
-    console.log(
-      '[IG DEBUG] containerResponse:',
-      containerResponse.status,
-      containerData
-    );
-
     if (!containerResponse.ok) {
-      const errorMsg =
-        containerData?.error?.message || 'Error creando container de Instagram';
-
-      console.error('[IG DEBUG] Error en containerResponse:', errorMsg);
-      throw new Error(errorMsg);
+      console.error('❌ Error creando contenedor de media:', containerData);
+      
+      // Verificar si es un error de token expirado
+      if (containerData.error?.code === 190 || 
+          containerData.error?.message?.toLowerCase().includes('expired') ||
+          containerData.error?.message?.toLowerCase().includes('invalid')) {
+        throw new Error('INSTAGRAM_TOKEN_EXPIRED');
+      }
+      
+      throw new Error(
+        containerData.error?.message || 
+        containerData.error || 
+        'Error creando contenedor de media en Instagram'
+      );
     }
 
-    const containerId = containerData.id;
+    const creationId = containerData.id;
+    console.log('✅ Contenedor de media creado:', creationId);
 
+    // Paso 2: Publicar el media
+    const publishUrl = `https://graph.facebook.com/v18.0/${igUserId}/media_publish`;
     const publishParams = new URLSearchParams({
-      creation_id: containerId,
+      creation_id: creationId,
       access_token: cleanToken,
     });
 
-    console.log(
-      '[IG DEBUG] publishParams:',
-      Object.fromEntries(publishParams.entries())
-    );
-
-    const publishResponse = await fetch(
-      `https://graph.facebook.com/v19.0/${igUserId}/media_publish`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: publishParams.toString(),
-      }
-    );
+    const publishResponse = await fetch(publishUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: publishParams,
+    });
 
     const publishData = await publishResponse.json();
 
     if (!publishResponse.ok) {
-      const errorMsg =
-        publishData?.error?.message || 'Error publicando en Instagram';
-
-      throw new Error(errorMsg);
+      console.error('❌ Error publicando media:', publishData);
+      
+      // Verificar si es un error de token expirado
+      if (publishData.error?.code === 190 || 
+          publishData.error?.message?.toLowerCase().includes('expired') ||
+          publishData.error?.message?.toLowerCase().includes('invalid')) {
+        throw new Error('INSTAGRAM_TOKEN_EXPIRED');
+      }
+      
+      throw new Error(
+        publishData.error?.message || 
+        publishData.error || 
+        'Error publicando media en Instagram'
+      );
     }
 
-    const mediaId = publishData.id;
-
+    console.log('✅ Media publicado exitosamente en Instagram:', publishData.id);
+    
     return {
-      platform: 'instagram',
       success: true,
-      id: mediaId,
-      url: `https://www.instagram.com/p/${mediaId}/`,
+      postId: publishData.id,
+      message: 'Publicado exitosamente en Instagram',
     };
   } catch (error) {
+    console.error('❌ Error en publishToInstagram:', error);
+    
     return {
-      platform: 'instagram',
       success: false,
       error: error.message,
     };

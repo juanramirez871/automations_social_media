@@ -1,3 +1,5 @@
+import { getValidFacebookToken } from './facebookRefresh.js';
+
 export async function getFacebookToken(supabase, userId) {
   try {
     const { data, error } = await supabase
@@ -31,17 +33,11 @@ export async function publishToFacebook({
   supabase,
 }) {
   try {
-    const { token, expiresAt, pageId } = await getFacebookToken(
-      supabase,
-      userId
-    );
+    // Usar el nuevo sistema de refresh automático de tokens
+    const { token, pageId, pageName } = await getValidFacebookToken(supabase, userId);
 
     if (!token) {
       throw new Error('No hay token de Facebook configurado');
-    }
-
-    if (expiresAt && new Date(expiresAt) < new Date()) {
-      throw new Error('Token de Facebook expirado');
     }
 
     if (!pageId) {
@@ -87,6 +83,13 @@ export async function publishToFacebook({
     if (!response.ok) {
       const errorMsg =
         responseData?.error?.message || 'Error publicando en Facebook';
+
+      // Detectar errores específicos de token expirado
+      if (responseData?.error?.code === 190 || 
+          responseData?.error?.message?.includes('expired') ||
+          responseData?.error?.message?.includes('revoked')) {
+        throw new Error('El token de Facebook ha expirado. Necesitas reconectar tu cuenta de Facebook para continuar publicando.');
+      }
 
       throw new Error(errorMsg);
     }

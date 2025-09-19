@@ -19,6 +19,8 @@ import {
   FacebookAuthWidget as FacebookAuthWidgetExt,
   FacebookConnectedWidget as FacebookConnectedWidgetExt,
 } from '@/components/widgets/FacebookWidgets';
+import { FacebookReconnectWidget as FacebookReconnectWidgetExt } from '@/components/widgets/FacebookReconnectWidget';
+import { InstagramReconnectWidget as InstagramReconnectWidgetExt } from '@/components/widgets/InstagramReconnectWidget';
 import {
   YouTubeAuthWidget as YouTubeAuthWidgetExt,
   YouTubeConnectedWidget as YouTubeConnectedWidgetExt,
@@ -302,6 +304,20 @@ export default function Home() {
                 fbId,
                 name,
                 scopes,
+              };
+            }
+            if (rType === 'widget-facebook-reconnect') {
+              return {
+                id: r.id,
+                role: 'assistant',
+                type: 'widget-facebook-reconnect',
+              };
+            }
+            if (rType === 'widget-instagram-reconnect') {
+              return {
+                id: r.id,
+                role: 'assistant',
+                type: 'widget-instagram-reconnect',
               };
             }
             if (rType === 'widget-youtube-auth') {
@@ -1164,6 +1180,84 @@ export default function Home() {
                   </AssistantMessage>
                 );
               }
+              if (m.type === 'widget-instagram-reconnect') {
+                return (
+                  <AssistantMessage key={m.id} borderClass='border-red-200'>
+                    <InstagramReconnectWidgetExt
+                      onReconnected={async payload => {
+                        try {
+                          const access_token = payload?.access_token;
+                          const expires_in = payload?.expires_in;
+                          const profile = payload?.ig_user || {};
+
+                          const expiresAt = expires_in
+                            ? new Date(
+                              Date.now() + Number(expires_in) * 1000
+                            ).toISOString()
+                            : null;
+
+                          const { data: sessionData } = await getSessionOnce();
+                          const userId = sessionData?.session?.user?.id;
+                          if (!userId) throw new Error('Sesión inválida');
+
+                          const ok = await upsertInstagramToken({
+                            userId,
+                            token: access_token,
+                            expiresAt,
+                            igUserId: profile?.id || null,
+                            igUsername: profile?.username || null,
+                            grantedScopes: payload?.granted_scopes || [],
+                          });
+
+                          if (!ok)
+                            throw new Error(
+                              'No fue posible guardar el token en el perfil'
+                            );
+                          
+                          // Mostrar mensaje de éxito de reconexión
+                          const reconnected = {
+                            id: `a-${Date.now()}-ig-reconnected`,
+                            role: 'assistant',
+                            type: 'text',
+                            content: `✅ **Instagram reconectado exitosamente**\n\nTu token de Instagram ha sido renovado. Ya puedes continuar publicando en Instagram sin problemas.`,
+                          };
+                          setMessages(prev => [...prev, reconnected]);
+                          if (userId) {
+                            await saveMessageToDB({
+                              userId,
+                              role: 'assistant',
+                              content: reconnected.content,
+                              attachments: null,
+                              type: 'text',
+                            });
+                          }
+                        } catch (err) {
+                          setMessages(prev => [
+                            ...prev,
+                            {
+                              id: `a-${Date.now()}-ig-reconnect-error`,
+                              role: 'assistant',
+                              type: 'text',
+                              content: `Error reconectando Instagram: ${err?.message || err}`,
+                            },
+                          ]);
+                        }
+                      }}
+                      onError={reason => {
+                        setMessages(prev => [
+                          ...prev,
+                          {
+                            id: `a-${Date.now()}-ig-reconnect-error`,
+                            role: 'assistant',
+                            type: 'text',
+                            content: `Error reconectando Instagram: ${reason}`,
+                          },
+                        ]);
+                      }}
+                    />
+                  </AssistantMessage>
+                );
+              }
               if (m.type === 'widget-auth-gate') {
                 return (
                   <AssistantMessage key={m.id} borderClass='border-blue-200'>
@@ -1510,6 +1604,93 @@ export default function Home() {
                       name={m.name}
                       fbId={m.fbId}
                       scopes={m.scopes}
+                    />
+                  </AssistantMessage>
+                );
+              }
+              if (m.type === 'widget-facebook-reconnect') {
+                return (
+                  <AssistantMessage key={m.id} borderClass='border-red-200'>
+                    <FacebookReconnectWidgetExt
+                      onReconnected={async payload => {
+                        try {
+                          const access_token = payload?.access_token;
+                          const expires_in = payload?.expires_in;
+                          const profile = payload?.fb_user || {};
+                          const permissions = payload?.granted_scopes || [];
+                          const pageId =
+                            payload?.pageId ?? payload?.data?.pageId ?? null;
+                          const pageName =
+                            payload?.pageName ??
+                            payload?.data?.pageName ??
+                            null;
+
+                          const expiresAt = expires_in
+                            ? new Date(
+                              Date.now() + Number(expires_in) * 1000
+                            ).toISOString()
+                            : null;
+
+                          const { data: sessionData } = await getSessionOnce();
+                          const userId = sessionData?.session?.user?.id;
+                          if (!userId) throw new Error('Sesión inválida');
+
+                          const ok = await upsertFacebookToken({
+                            userId,
+                            token: access_token,
+                            expiresAt,
+                            fbUserId: profile?.id || null,
+                            grantedScopes: permissions,
+                            fbName: profile?.name || null,
+                            pageId: pageId,
+                            pageName: pageName,
+                          });
+
+                          if (!ok)
+                            throw new Error(
+                              'No fue posible guardar el token en el perfil'
+                            );
+                          
+                          // Mostrar mensaje de éxito de reconexión
+                          const reconnected = {
+                            id: `a-${Date.now()}-fb-reconnected`,
+                            role: 'assistant',
+                            type: 'text',
+                            content: `✅ **Facebook reconectado exitosamente**\n\nTu token de Facebook ha sido renovado. Ya puedes continuar publicando en Facebook sin problemas.`,
+                          };
+                          setMessages(prev => [...prev, reconnected]);
+                          if (userId) {
+                            await saveMessageToDB({
+                              userId,
+                              role: 'assistant',
+                              content: reconnected.content,
+                              attachments: null,
+                              type: 'text',
+                            });
+                          }
+                        } catch (err) {
+                          setMessages(prev => [
+                            ...prev,
+                            {
+                              id: `a-${Date.now()}-fb-reconnect-error`,
+                              role: 'assistant',
+                              type: 'text',
+                              content: `Error reconectando Facebook: ${err?.message || err}`,
+                            },
+                          ]);
+                        }
+                      }}
+                      onError={reason => {
+                        setMessages(prev => [
+                          ...prev,
+                          {
+                            id: `a-${Date.now()}-fb-reconnect-error`,
+                            role: 'assistant',
+                            type: 'text',
+                            content: `Error reconectando Facebook: ${reason}`,
+                          },
+                        ]);
+                      }}
                     />
                   </AssistantMessage>
                 );

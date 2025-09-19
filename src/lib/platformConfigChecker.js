@@ -1,5 +1,6 @@
-import { supabase } from '@/lib/supabaseClient';
+import { getSupabaseClient } from '@/lib/supabaseUniversal';
 import { getInstagramToken } from '@/lib/publishers/instagram';
+import { getValidInstagramToken } from '@/lib/publishers/instagramRefresh';
 
 /**
  * Verifica el estado de configuración de plataformas específicas
@@ -45,18 +46,32 @@ export async function checkPlatformConfiguration(userId, platforms = ['instagram
  */
 async function checkInstagramConfiguration(userId) {
   try {
-    const { token, expiresAt } = await getInstagramToken(supabase, userId);
+    const supabase = getSupabaseClient();
+    
+    if (!supabase) {
+      console.error('❌ Supabase client no está disponible');
+      return { configured: false, error: 'Cliente de Supabase no disponible' };
+    }
 
-    if (!token) {
+    const token = await getInstagramToken(userId);
+
+    if (!token?.token) {
       return {
         error: 'No hay token de Instagram configurado. Necesitas conectar tu cuenta de Instagram para poder publicar en esta plataforma.'
       };
     }
 
-    if (expiresAt && new Date(expiresAt) < new Date()) {
-      return {
-        error: 'El token de Instagram ha expirado. Necesitas reconectar tu cuenta de Instagram.'
-      };
+    // Verificar si el token está expirado
+    if (token.expires_at) {
+      const now = new Date();
+      const expiration = new Date(token.expires_at);
+      
+      if (expiration <= now) {
+        return {
+          error: 'El token de Instagram ha expirado. Necesitas reconectar tu cuenta de Instagram.',
+          type: 'token_expired'
+        };
+      }
     }
 
     return { success: true };
@@ -70,19 +85,21 @@ async function checkInstagramConfiguration(userId) {
 /**
  * Verifica la configuración de Facebook para el usuario
  */
-async function checkFacebookConfiguration(userId) {
+export async function checkFacebookConfiguration(userId) {
   try {
-    const { token, expiresAt, pageId } = await getFacebookToken(supabase, userId);
+    const supabase = getSupabaseClient();
+    
+    if (!supabase) {
+      console.error('❌ Supabase client no está disponible');
+      return { configured: false, error: 'Cliente de Supabase no disponible' };
+    }
+
+    const tokenResult = await getValidFacebookToken(userId);
+    const { token, pageId, pageName } = tokenResult;
 
     if (!token) {
       return {
         error: 'No hay token de Facebook configurado. Necesitas conectar tu cuenta de Facebook para poder publicar en esta plataforma.'
-      };
-    }
-
-    if (expiresAt && new Date(expiresAt) < new Date()) {
-      return {
-        error: 'El token de Facebook ha expirado. Necesitas reconectar tu cuenta de Facebook.'
       };
     }
 
@@ -94,13 +111,26 @@ async function checkFacebookConfiguration(userId) {
 
     return { success: true };
   } catch (e) {
+    // Manejar errores específicos de token expirado
+    if (e.message.includes('El token de Facebook ha expirado')) {
+      return {
+        error: 'El token de Facebook ha expirado. Necesitas reconectar tu cuenta de Facebook.'
+      };
+    }
+    
+    if (e.message.includes('Session expirada de Facebook')) {
+      return {
+        error: 'No hay token de Facebook configurado. Necesitas conectar tu cuenta de Facebook para poder publicar en esta plataforma.'
+      };
+    }
+    
     return {
       error: `Error verificando configuración de Facebook: ${e.message}`
     };
   }
 }
 
-import { getValidYouTubeToken } from './publishers/youtubeRefresh';
+import { getValidFacebookToken } from './publishers/facebookRefresh.js';
 
 /**
  * Verifica la configuración de YouTube para el usuario
@@ -175,6 +205,22 @@ async function checkTikTokConfiguration(userId) {
  */
 export function createConfigurationErrorMessage(errors) {
   if (errors.length === 0) return null;
+
+  // Verificar si hay errores específicos de Facebook que requieren reconexión
+  const facebookTokenError = errors.find(err => 
+    err.platform === 'Facebook' && 
+    (err.error.includes('expirado') || err.error.includes('expired') || err.error.includes('reconectar'))
+  );
+
+  if (facebookTokenError) {
+    // Si hay un error de token expirado de Facebook, mostrar widget de reconexión
+    return {
+      id: `config-error-${Date.now()}`,
+      role: 'assistant',
+      type: 'widget-facebook-reconnect',
+      content: `⚠️ **Token de Facebook expirado**\n\n${facebookTokenError.error}\n\nHaz clic en el botón de abajo para reconectar tu cuenta de Facebook.`
+    };
+  }
 
   const errorList = errors.map(err => `• **${err.platform}**: ${err.error}`).join('\n');
   

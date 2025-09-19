@@ -1,10 +1,10 @@
-import { createServerClient } from '@/lib/supabaseServer';
+import { getSupabaseClient } from '@/lib/supabaseUniversal';
 import { NextResponse } from 'next/server';
 
 // GET - Obtener configuración actual de IA
 export async function GET(request) {
   try {
-    const supabase = createServerClient();
+    const supabase = getSupabaseClient();
 
     // Verificar autenticación
     const {
@@ -80,7 +80,7 @@ export async function PUT(request) {
       );
     }
 
-    const supabase = createServerClient();
+    const supabase = getSupabaseClient();
 
     // Verificar autenticación
     const {

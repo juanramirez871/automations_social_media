@@ -1,6 +1,6 @@
 'use client';
 
-import { supabase } from './supabaseClient';
+import { getSupabaseClient } from '@/lib/supabaseUniversal';
 
 // Guardar mensaje en la base de datos
 export const saveMessageToDB = async ({
@@ -12,6 +12,12 @@ export const saveMessageToDB = async ({
   meta /* name, messageId */,
 }) => {
   if (!userId || !role) return false;
+  const supabase = getSupabaseClient();
+  if (!supabase) {
+    console.error('❌ Supabase client no está disponible');
+    return false;
+  }
+
   const baseRow = { user_id: userId, role, content };
   const fullRow = { ...baseRow };
 
@@ -55,9 +61,16 @@ export const saveMessageToDB = async ({
 };
 
 // Cargar historial de mensajes para el usuario actual (proveer userId para evitar getSession adicional)
-export const loadHistoryForCurrentUser = async userId => {
+export async function loadHistoryForCurrentUser(userId) {
   try {
     if (!userId) return [];
+    
+    const supabase = getSupabaseClient();
+    
+    if (!supabase) {
+      console.error('❌ Supabase client no está disponible');
+      return [];
+    }
 
     const { data, error } = await supabase
       .from('messages')
@@ -73,4 +86,7 @@ export const loadHistoryForCurrentUser = async userId => {
 
     return [];
   }
-};
+}
+
+// Alias para compatibilidad
+export const getMessages = loadHistoryForCurrentUser;

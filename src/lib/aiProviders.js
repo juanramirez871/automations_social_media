@@ -1,6 +1,6 @@
 import { google, createGoogleGenerativeAI } from '@ai-sdk/google';
 import { openai } from '@ai-sdk/openai';
-import { createServerClient } from '@/lib/supabaseServer';
+import { getSupabaseClient } from '@/lib/supabaseUniversal';
 
 /**
  * Obtiene la configuración de IA del usuario
@@ -10,7 +10,7 @@ import { createServerClient } from '@/lib/supabaseServer';
 export async function getUserAIConfig(userId) {
   try {
     console.log('🔍 getUserAIConfig - userId:', userId);
-    const supabase = createServerClient();
+    const supabase = getSupabaseClient();
 
     const { data: profile, error } = await supabase
       .from('profiles')
@@ -121,7 +121,7 @@ export async function updateUserAIConfig(userId, provider, apiKey) {
       throw new Error('API key is required');
     }
 
-    const supabase = createServerClient();
+    const supabase = getSupabaseClient();
 
     const { error } = await supabase.from('profiles').upsert({
       id: userId,
