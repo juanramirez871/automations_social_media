@@ -1,4 +1,4 @@
-import { google } from '@ai-sdk/google';
+import { google, createGoogleGenerativeAI } from '@ai-sdk/google';
 import { openai } from '@ai-sdk/openai';
 import { createServerClient } from '@/lib/supabaseServer';
 
@@ -9,6 +9,7 @@ import { createServerClient } from '@/lib/supabaseServer';
  */
 export async function getUserAIConfig(userId) {
   try {
+    console.log('🔍 getUserAIConfig - userId:', userId);
     const supabase = createServerClient();
 
     const { data: profile, error } = await supabase
@@ -17,7 +18,17 @@ export async function getUserAIConfig(userId) {
       .eq('id', userId)
       .single();
 
+    console.log('📊 getUserAIConfig - profile data:', {
+      hasProfile: !!profile,
+      hasModel: !!profile?.ai_model,
+      hasApiKey: !!profile?.ai_api_key,
+      model: profile?.ai_model,
+      apiKeyLength: profile?.ai_api_key?.length || 0,
+      error: error?.message
+    });
+
     if (error || !profile || !profile.ai_model || !profile.ai_api_key) {
+      console.log('❌ getUserAIConfig - Configuración incompleta, lanzando AI_CONFIG_REQUIRED');
       // Si no hay configuración, lanzar error para mostrar widget de configuración
       throw new Error('AI_CONFIG_REQUIRED');
     }
@@ -25,12 +36,17 @@ export async function getUserAIConfig(userId) {
     const provider = profile.ai_model;
     const userApiKey = profile.ai_api_key;
 
+    console.log('✅ getUserAIConfig - Configuración válida encontrada:', {
+      provider,
+      apiKeyLength: userApiKey.length
+    });
+
     return getAIModel(provider, userApiKey);
   } catch (error) {
     if (error.message === 'AI_CONFIG_REQUIRED') {
       throw error; // Re-lanzar para manejo específico
     }
-    console.error('Error getting user AI config:', error);
+    console.error('❌ Error getting user AI config:', error);
     throw new Error('AI_CONFIG_ERROR');
   }
 }
@@ -58,12 +74,21 @@ export function getAIModel(provider, userApiKey) {
 
     case 'gemini':
     default:
+      console.log("🔑 Configurando Google provider con API key:", {
+        hasApiKey: !!userApiKey,
+        apiKeyLength: userApiKey?.length || 0,
+        apiKeyPrefix: userApiKey?.substring(0, 8) + '...'
+      });
+      
+      // Crear instancia personalizada del provider de Google con la API key del usuario
+      const googleProvider = createGoogleGenerativeAI({
+        apiKey: userApiKey,
+      });
+      
       return {
         provider: 'gemini',
         apiKey: userApiKey,
-        model: google('gemini-2.5-flash', {
-          apiKey: userApiKey,
-        }),
+        model: googleProvider('gemini-2.5-flash'),
       };
   }
 }

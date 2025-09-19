@@ -12,12 +12,20 @@ export async function POST(req) {
   try {
     const payload = await req.json();
     const { messages, mode, prompt, userId } = payload || {};
+    
+    console.log('🚀 Chat API - Iniciando request:', {
+      userId,
+      hasMessages: !!messages,
+      messagesCount: messages?.length || 0
+    });
 
     // Obtener el modelo de IA configurado para el usuario
     let userModel;
 
     try {
+      console.log('🔍 Chat API - Obteniendo modelo para usuario:', userId);
       userModel = await getModelForUser(userId);
+      console.log('✅ Chat API - Modelo obtenido exitosamente');
       console.log('🔍 Debug userModel:', {
         provider: userModel?.config?.provider,
         modelId: userModel?.modelId,
