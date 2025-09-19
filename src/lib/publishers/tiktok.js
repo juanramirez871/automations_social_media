@@ -1,4 +1,6 @@
 import { getValidTikTokToken } from './tiktokRefresh';
+import { pollTikTokPublishStatus, getTikTokStatusInfo } from './tiktokStatusChecker';
+import { validateVideoUrl, checkTikTokCompatibility } from './tiktokUrlValidator';
 
 export async function getTikTokToken(supabase, userId) {
   try {
@@ -75,6 +77,7 @@ export async function tiktokInitFileUpload({
     : 'https://open.tiktokapis.com/v2/post/publish/inbox/video/init/';
   const effectivePrivacy = privacyLevel || 'SELF_ONLY';
 
+  console.log(videoUrl, "videoUrl")
   const { contentLength, contentType } = await getRemoteFileMeta(videoUrl);
 
   const MIN_CHUNK_SIZE = 5 * 1024 * 1024;
@@ -252,6 +255,38 @@ export async function publishToTikTok({
     if (!videoUrl) {
       throw new Error('TikTok requiere un video');
     }
+
+    // Validar la URL del video antes de proceder
+    console.log('Validando accesibilidad de la URL del video...');
+    const urlValidation = await validateVideoUrl(videoUrl);
+    
+    if (!urlValidation.isValid) {
+      console.error('URL del video no válida:', {
+        url: videoUrl,
+        error: urlValidation.error,
+        details: urlValidation.details
+      });
+      
+      throw new Error(`Video no accesible: ${urlValidation.error}`);
+    }
+
+    // Verificar compatibilidad específica con TikTok
+    const compatibility = await checkTikTokCompatibility(videoUrl);
+    
+    if (!compatibility.compatible) {
+      console.error('URL no compatible con TikTok:', {
+        url: videoUrl,
+        issues: compatibility.issues,
+        recommendations: compatibility.recommendations
+      });
+      
+      throw new Error(`Video no compatible con TikTok: ${compatibility.issues.join(', ')}`);
+    }
+
+    console.log('URL del video validada exitosamente:', {
+      url: videoUrl,
+      details: urlValidation.details
+    });
 
     // Usar la nueva función que maneja el refresh automático
     const {
@@ -514,12 +549,68 @@ export async function publishToTikTok({
       } catch (e) { }
     }
 
-    return {
-      platform: 'tiktok',
-      success: true,
-      id: publishId,
+    console.log('Video iniciado en TikTok exitosamente:', {
+      publishId,
       status,
-    };
+      userId
+    });
+
+    // Verificar el estado final del video con polling
+    try {
+      console.log('Iniciando verificación del estado final del video...');
+      const finalStatus = await pollTikTokPublishStatus(publishId, ttToken, {
+        maxAttempts: 15,        // 15 intentos máximo
+        intervalMs: 10000,      // 10 segundos entre intentos
+        timeoutMs: 180000,      // 3 minutos timeout total
+      });
+
+      console.log('Estado final del video en TikTok:', finalStatus);
+
+      return {
+        platform: 'tiktok',
+        success: finalStatus.success,
+        id: publishId,
+        status: finalStatus.status,
+        publicPostIds: finalStatus.publicPostIds || [],
+        processingTime: `${finalStatus.timeElapsed / 1000}s`,
+        attempts: finalStatus.attempts,
+        ...(finalStatus.failReason && { failReason: finalStatus.failReason })
+      };
+
+    } catch (pollingError) {
+      console.warn('Error o timeout en verificación de estado:', pollingError.message);
+      
+      // Intentar una verificación final rápida
+      let finalQuickStatus = status;
+      try {
+        const statusRes = await fetch(
+          'https://open.tiktokapis.com/v2/post/publish/status/fetch/',
+          {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${ttToken}`,
+              'Content-Type': 'application/json; charset=UTF-8',
+            },
+            body: JSON.stringify({ publish_id: publishId }),
+          }
+        );
+        const statusJson = await statusRes.json().catch(() => ({}));
+        if (statusRes.ok) {
+          finalQuickStatus = statusJson?.data?.status || status;
+        }
+      } catch (e) {
+        console.warn('Error en verificación rápida final:', e.message);
+      }
+
+      return {
+        platform: 'tiktok',
+        success: true, // Consideramos éxito si se inició correctamente
+        id: publishId,
+        status: finalQuickStatus,
+        warning: 'No se pudo verificar el estado final del video',
+        pollingError: pollingError.message
+      };
+    }
   } catch (error) {
     console.error('Error en publishToTikTok:', {
       error: error.message,
@@ -529,10 +620,67 @@ export async function publishToTikTok({
       caption: caption ? caption.substring(0, 50) + '...' : 'sin caption'
     });
     
+    // Manejo específico para errores de descarga de video
+    let errorMessage = error.message;
+    let failReason = 'unknown_error';
+    let recommendations = [];
+
+    if (error.message.includes('video_pull_failed')) {
+      failReason = 'video_pull_failed';
+      errorMessage = 'TikTok no pudo descargar el video desde la URL proporcionada';
+      recommendations = [
+        'Verificar que la URL sea accesible públicamente',
+        'Asegurar que el video esté en un formato compatible (MP4, MOV, WEBM)',
+        'Verificar que el servidor responda rápidamente',
+        'Comprobar que no haya restricciones de CORS'
+      ];
+    } else if (error.message.includes('Video no accesible') || error.message.includes('URL del video no válida')) {
+      failReason = 'url_validation_failed';
+      errorMessage = 'La URL del video no es accesible o válida';
+      recommendations = [
+        'Verificar que la URL sea correcta y accesible',
+        'Asegurar que use protocolo HTTPS',
+        'Verificar que el archivo sea un video válido'
+      ];
+    } else if (error.message.includes('Video no compatible con TikTok')) {
+      failReason = 'compatibility_failed';
+      errorMessage = 'El video no cumple con los requisitos de TikTok';
+      recommendations = [
+        'Usar un dominio público accesible (no localhost)',
+        'Verificar que el video sea menor a 4GB',
+        'Asegurar formato de video compatible'
+      ];
+    } else if (error.message.includes('Token de TikTok expirado') || error.message.includes('access_token_invalid')) {
+      failReason = 'token_expired';
+      errorMessage = 'Token de acceso de TikTok expirado o inválido';
+      recommendations = [
+        'Reconectar la cuenta de TikTok',
+        'Verificar permisos de la aplicación'
+      ];
+    } else if (error.message.includes('rate_limit_exceeded')) {
+      failReason = 'rate_limit';
+      errorMessage = 'Límite de velocidad de TikTok excedido';
+      recommendations = [
+        'Esperar antes de intentar nuevamente',
+        'Reducir la frecuencia de publicaciones'
+      ];
+    } else if (error.message.includes('Error descargando video')) {
+      failReason = 'download_failed';
+      errorMessage = 'Error al descargar el video desde la URL';
+      recommendations = [
+        'Verificar que la URL sea estable y accesible',
+        'Comprobar la velocidad de respuesta del servidor',
+        'Verificar que no haya restricciones de acceso'
+      ];
+    }
+
     return {
       platform: 'tiktok',
       success: false,
-      error: error.message,
+      error: errorMessage,
+      failReason,
+      recommendations,
+      originalError: error.message
     };
   }
 }
