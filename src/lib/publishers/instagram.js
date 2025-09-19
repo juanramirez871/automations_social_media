@@ -58,11 +58,25 @@ export async function publishToInstagram({ userId, imageUrl, videoUrl, caption }
 
     // Paso 1: Crear contenedor de media
     const containerUrl = `https://graph.facebook.com/v18.0/${igUserId}/media`;
-    const containerParams = new URLSearchParams({
-      image_url: mediaUrl,
-      caption: caption || '',
-      access_token: cleanToken,
-    });
+    
+    let containerParams;
+    if (videoUrl) {
+      // Para videos usar video_url con media_type REELS
+      containerParams = new URLSearchParams({
+        video_url: mediaUrl,
+        media_type: 'REELS',
+        caption: caption || '',
+        share_to_feed: 'true',
+        access_token: cleanToken,
+      });
+    } else {
+      // Para imágenes usar image_url
+      containerParams = new URLSearchParams({
+        image_url: mediaUrl,
+        caption: caption || '',
+        access_token: cleanToken,
+      });
+    }
 
     const containerResponse = await fetch(containerUrl, {
       method: 'POST',
@@ -93,6 +107,39 @@ export async function publishToInstagram({ userId, imageUrl, videoUrl, caption }
 
     const creationId = containerData.id;
     console.log('✅ Contenedor de media creado:', creationId);
+
+    // Paso 1.5: Verificar el estado del contenedor (especialmente importante para videos)
+    if (videoUrl) {
+      console.log('📹 Verificando estado del contenedor de video...');
+      let isReady = false;
+      let attempts = 0;
+      const maxAttempts = 12; // Máximo 1 minuto de espera (5 segundos * 12)
+
+      while (!isReady && attempts < maxAttempts) {
+        const statusUrl = `https://graph.facebook.com/v18.0/${creationId}?fields=status_code&access_token=${cleanToken}`;
+        
+        try {
+          const statusResponse = await fetch(statusUrl);
+          const statusData = await statusResponse.json();
+          
+          if (statusData.status_code === 'FINISHED') {
+            isReady = true;
+            console.log('✅ Contenedor de video listo para publicar');
+          } else {
+            console.log(`⏳ Estado del contenedor: ${statusData.status_code || 'PROCESSING'}, esperando...`);
+            await new Promise(resolve => setTimeout(resolve, 5000)); // Esperar 5 segundos
+            attempts++;
+          }
+        } catch (error) {
+          console.log('⚠️ Error verificando estado, continuando...', error.message);
+          break;
+        }
+      }
+
+      if (!isReady) {
+        throw new Error('El video no se procesó a tiempo. Intenta nuevamente en unos minutos.');
+      }
+    }
 
     // Paso 2: Publicar el media
     const publishUrl = `https://graph.facebook.com/v18.0/${igUserId}/media_publish`;
