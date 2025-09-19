@@ -16,6 +16,7 @@ export function useScheduledPosts() {
     const {
       data: { user },
     } = await supabase.auth.getUser();
+
     return user;
   };
 
@@ -26,6 +27,7 @@ export function useScheduledPosts() {
       setError(null);
 
       const user = await getCurrentUser();
+
       if (!user) {
         throw new Error('User not authenticated');
       }
@@ -53,6 +55,7 @@ export function useScheduledPosts() {
       setError(null);
 
       const user = await getCurrentUser();
+
       if (!user) {
         throw new Error('User not authenticated');
       }
@@ -76,6 +79,7 @@ export function useScheduledPosts() {
 
       // Actualizar lista local
       setPosts(prev => [...prev, data.post]);
+
       return data.post;
     } catch (err) {
       console.error('Error creating scheduled post:', err);
@@ -93,6 +97,7 @@ export function useScheduledPosts() {
       setError(null);
 
       const user = await getCurrentUser();
+
       if (!user) {
         throw new Error('User not authenticated');
       }
@@ -117,6 +122,7 @@ export function useScheduledPosts() {
 
       // Actualizar lista local
       setPosts(prev => prev.map(post => (post.id === id ? data.post : post)));
+
       return data.post;
     } catch (err) {
       console.error('Error updating scheduled post:', err);
@@ -134,6 +140,7 @@ export function useScheduledPosts() {
       setError(null);
 
       const user = await getCurrentUser();
+
       if (!user) {
         throw new Error('User not authenticated');
       }
@@ -153,6 +160,7 @@ export function useScheduledPosts() {
 
       // Actualizar lista local
       setPosts(prev => prev.filter(post => post.id !== id));
+
       return true;
     } catch (err) {
       console.error('Error deleting scheduled post:', err);
@@ -167,19 +175,23 @@ export function useScheduledPosts() {
   const getPostsByDate = date => {
     const dateStr =
       date instanceof Date ? date.toISOString().split('T')[0] : date;
+
     return posts.filter(post => post.scheduled_date === dateStr);
   };
 
   // Obtener publicaciones agrupadas por fecha
   const getPostsGroupedByDate = () => {
     const grouped = {};
+
     posts.forEach(post => {
       const date = post.scheduled_date;
+
       if (!grouped[date]) {
         grouped[date] = [];
       }
       grouped[date].push(post);
     });
+
     return grouped;
   };
 

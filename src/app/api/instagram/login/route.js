@@ -4,8 +4,10 @@ function randomState(len = 32) {
   const chars =
     'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
   let out = '';
+
   for (let i = 0; i < len; i++)
     out += chars[Math.floor(Math.random() * chars.length)];
+
   return out;
 }
 
@@ -18,6 +20,7 @@ export async function GET(request) {
 
     // Instagram Business Login (usando Facebook OAuth pero con variables específicas)
     const authUrl = new URL('https://www.facebook.com/v18.0/dialog/oauth');
+
     authUrl.searchParams.set(
       'client_id',
       process.env.INSTAGRAM_APP_ID || process.env.FACEBOOK_APP_ID
@@ -67,6 +70,7 @@ export async function GET(request) {
         }
       </script>
     </body></html>`;
+
     return new NextResponse(html, {
       headers: { 'Content-Type': 'text/html; charset=utf-8' },
     });

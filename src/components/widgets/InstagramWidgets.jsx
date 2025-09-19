@@ -111,6 +111,7 @@ export const InstagramAuthWidget = ({ widgetId, onConnected, onError }) => {
         if (ev.data?.source !== 'ig-oauth') return;
         // Filtrar por widgetId que inició el flujo: desde callback via cookie o query
         const msgWidgetId = ev.data?.widgetId || null;
+
         if (widgetId && msgWidgetId && msgWidgetId !== widgetId) return;
         if (handledRef.current) return;
         handledRef.current = true;
@@ -118,6 +119,7 @@ export const InstagramAuthWidget = ({ widgetId, onConnected, onError }) => {
         if (!ev.data.ok) {
           setConnecting(false);
           onError && onError(ev.data?.error || 'oauth_error');
+
           return;
         }
 
@@ -127,6 +129,7 @@ export const InstagramAuthWidget = ({ widgetId, onConnected, onError }) => {
           expires_in: d.expires_in || null,
           user: d.user || {},
         };
+
         onConnected && onConnected(payload);
       } catch (e) {
         onError && onError(e?.message || 'unknown_error');
@@ -134,7 +137,9 @@ export const InstagramAuthWidget = ({ widgetId, onConnected, onError }) => {
         setConnecting(false);
       }
     };
+
     window.addEventListener('message', onMsg);
+
     return () => window.removeEventListener('message', onMsg);
   }, [widgetId, onConnected, onError]);
 
@@ -156,6 +161,7 @@ export const InstagramAuthWidget = ({ widgetId, onConnected, onError }) => {
     const left = (width - w) / 2 + dualScreenLeft;
     const top = (height - h) / 2 + dualScreenTop;
     const url = `/api/instagram/login${widgetId ? `?widgetId=${encodeURIComponent(widgetId)}` : ''}`;
+
     window.open(
       url,
       'ig_oauth',

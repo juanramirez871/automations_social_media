@@ -27,12 +27,15 @@ export default function Composer({ onSend, loading = false }) {
       const isVideo =
         f.type?.startsWith('video/') ||
         /\.(mp4|mov|webm|ogg|mkv|m4v)$/i.test(f.name);
+
       if (!isImage && !isVideo) {
         newErrors.push(`${f.name}: formato no permitido`);
+
         return;
       }
       const kind = isVideo ? 'video' : 'image';
       const url = URL.createObjectURL(f);
+
       newItems.push({
         id: `${Date.now()}-${f.name}-${Math.random().toString(36).slice(2, 8)}`,
         file: f,
@@ -54,15 +57,19 @@ export default function Composer({ onSend, loading = false }) {
     e.stopPropagation();
     setDragActive(false);
     const dt = e.dataTransfer;
+
     if (dt?.files?.length) {
       handleFiles(dt.files);
+
       return;
     }
     if (dt?.items?.length) {
       const asFiles = [];
+
       for (const item of dt.items) {
         if (item.kind === 'file') {
           const f = item.getAsFile();
+
           if (f) asFiles.push(f);
         }
       }
@@ -84,12 +91,15 @@ export default function Composer({ onSend, loading = false }) {
   const removePreview = id => {
     setPreviews(prev => {
       const removed = prev.find(p => p.id === id);
+
       if (removed) URL.revokeObjectURL(removed.url);
       const newPreviews = prev.filter(p => p.id !== id);
+
       // Si no quedan archivos, limpiar cualquier mensaje de error
       if (newPreviews.length === 0) {
         setErrors([]);
       }
+
       return newPreviews;
     });
   };
@@ -106,15 +116,19 @@ export default function Composer({ onSend, loading = false }) {
       e.preventDefault();
       setDragActive(false);
       const dt = e.dataTransfer;
+
       if (dt?.files?.length) {
         handleFiles(dt.files);
+
         return;
       }
       if (dt?.items?.length) {
         const asFiles = [];
+
         for (const item of dt.items) {
           if (item.kind === 'file') {
             const f = item.getAsFile();
+
             if (f) asFiles.push(f);
           }
         }
@@ -129,6 +143,7 @@ export default function Composer({ onSend, loading = false }) {
     window.addEventListener('dragover', handleWindowDragOver);
     window.addEventListener('drop', handleWindowDrop);
     window.addEventListener('dragleave', handleWindowDragLeave);
+
     return () => {
       window.removeEventListener('dragover', handleWindowDragOver);
       window.removeEventListener('drop', handleWindowDrop);
@@ -138,10 +153,12 @@ export default function Composer({ onSend, loading = false }) {
 
   const handleSend = () => {
     const text = message.trim();
+
     // Solo permitir envío si hay texto (sin archivos) o archivos (sin texto)
     if (!text && previews.length === 0) return;
 
     const files = previews.map(p => p.file);
+
     onSend?.({ text: previews.length > 0 ? '' : text, files });
     setMessage('');
     setPreviews([]);

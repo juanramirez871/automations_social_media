@@ -52,9 +52,10 @@ export async function publishToInstagram({
       .trim()
       .replace(/\s+/g, '')
       .replace(/[\r\n\t]/g, '');
+
     console.log(
       '[IG DEBUG] cleanToken:',
-      cleanToken.slice(0, 10) + '...',
+      `${cleanToken.slice(0, 10)}...`,
       'length:',
       cleanToken.length
     );
@@ -103,6 +104,7 @@ export async function publishToInstagram({
     );
 
     const containerData = await containerResponse.json();
+
     console.log(
       '[IG DEBUG] containerResponse:',
       containerResponse.status,
@@ -112,6 +114,7 @@ export async function publishToInstagram({
     if (!containerResponse.ok) {
       const errorMsg =
         containerData?.error?.message || 'Error creando container de Instagram';
+
       console.error('[IG DEBUG] Error en containerResponse:', errorMsg);
       throw new Error(errorMsg);
     }
@@ -122,6 +125,7 @@ export async function publishToInstagram({
       creation_id: containerId,
       access_token: cleanToken,
     });
+
     console.log(
       '[IG DEBUG] publishParams:',
       Object.fromEntries(publishParams.entries())
@@ -143,6 +147,7 @@ export async function publishToInstagram({
     if (!publishResponse.ok) {
       const errorMsg =
         publishData?.error?.message || 'Error publicando en Instagram';
+
       throw new Error(errorMsg);
     }
 

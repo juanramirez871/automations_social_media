@@ -27,6 +27,7 @@ export async function GET(request) {
 
     if (error) {
       console.error('Error fetching scheduled posts:', error);
+
       return NextResponse.json(
         { error: 'Failed to fetch scheduled posts' },
         { status: 500 }
@@ -36,6 +37,7 @@ export async function GET(request) {
     return NextResponse.json({ posts: data });
   } catch (error) {
     console.error('Error in GET /api/scheduled-posts:', error);
+
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
@@ -77,6 +79,7 @@ export async function POST(request) {
 
     // Validar que la fecha sea futura
     const scheduledDateTime = new Date(`${scheduledDate}T${scheduledTime}`);
+
     if (scheduledDateTime <= new Date()) {
       return NextResponse.json(
         {
@@ -102,6 +105,7 @@ export async function POST(request) {
 
     if (error) {
       console.error('Error creating scheduled post:', error);
+
       return NextResponse.json(
         { error: 'Failed to create scheduled post' },
         { status: 500 }
@@ -111,6 +115,7 @@ export async function POST(request) {
     return NextResponse.json({ post: data }, { status: 201 });
   } catch (error) {
     console.error('Error in POST /api/scheduled-posts:', error);
+
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
@@ -144,6 +149,7 @@ export async function PUT(request) {
 
     // Construir objeto de actualización
     const updateData = {};
+
     if (content !== undefined) updateData.content = content;
     if (platforms !== undefined) {
       if (!Array.isArray(platforms) || platforms.length === 0) {
@@ -164,6 +170,7 @@ export async function PUT(request) {
     // Validar fecha futura si se está actualizando
     if (scheduledDate && scheduledTime) {
       const scheduledDateTime = new Date(`${scheduledDate}T${scheduledTime}`);
+
       if (scheduledDateTime <= new Date()) {
         return NextResponse.json(
           {
@@ -184,6 +191,7 @@ export async function PUT(request) {
 
     if (error) {
       console.error('Error updating scheduled post:', error);
+
       return NextResponse.json(
         { error: 'Failed to update scheduled post' },
         { status: 500 }
@@ -200,6 +208,7 @@ export async function PUT(request) {
     return NextResponse.json({ post: data });
   } catch (error) {
     console.error('Error in PUT /api/scheduled-posts:', error);
+
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
@@ -233,6 +242,7 @@ export async function DELETE(request) {
 
     if (error) {
       console.error('Error deleting scheduled post:', error);
+
       return NextResponse.json(
         { error: 'Failed to delete scheduled post' },
         { status: 500 }
@@ -251,6 +261,7 @@ export async function DELETE(request) {
     });
   } catch (error) {
     console.error('Error in DELETE /api/scheduled-posts:', error);
+
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

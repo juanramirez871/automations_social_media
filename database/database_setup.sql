@@ -55,8 +55,8 @@ CREATE TABLE IF NOT EXISTS public.profiles (
     tiktok_granted_scopes JSONB,
     
     -- AI Model Configuration
-    ai_model TEXT DEFAULT 'gemini' CHECK (ai_model IN ('chatgpt', 'gemini', 'deepseek')),
-    ai_api_key TEXT
+    ai_model TEXT NOT NULL DEFAULT 'gemini' CHECK (ai_model IN ('gemini', 'openai')),
+    ai_api_key TEXT NOT NULL
 );
 
 -- =====================================================

@@ -1,10 +1,40 @@
 import { google } from '@ai-sdk/google';
 import { generateText, convertToModelMessages, tool } from 'ai';
+import { getModelForUser, getUserAIConfig } from '@/lib/aiProviders';
+import { createClient } from '@supabase/supabase-js';
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
+);
 
 export async function POST(req) {
   try {
     const payload = await req.json();
-    const { messages, mode, prompt } = payload || {};
+    const { messages, mode, prompt, userId } = payload || {};
+
+    // Obtener el modelo de IA configurado para el usuario
+    let userModel;
+
+    try {
+      userModel = await getModelForUser(userId);
+      console.log('🔍 Debug userModel:', {
+        provider: userModel?.config?.provider,
+        modelId: userModel?.modelId,
+        type: typeof userModel,
+        constructor: userModel?.constructor?.name,
+        keys: Object.keys(userModel || {})
+      });
+    } catch (error) {
+      if (error.message === 'AI_CONFIG_REQUIRED') {
+        // Devolver widget de configuración de IA
+        return Response.json({
+          text: '⚙️ **Configuración de IA requerida**\n\nPara continuar, necesitas configurar tu proveedor de IA y API key.',
+          widgets: ['ai_provider_config'],
+        });
+      }
+      throw error; // Re-lanzar otros errores
+    }
 
     // Modo dedicado para generar un caption de forma directa (sin tools)
     if (mode === 'caption') {
@@ -24,7 +54,7 @@ Reglas de salida: Devuelve únicamente el texto final del caption, sin comillas,
               : '';
 
         const { text } = await generateText({
-          model: google('gemini-2.5-flash'),
+          model: userModel,
           messages: convertToModelMessages([
             { role: 'system', parts: [{ type: 'text', text: captionSystem }] },
             { role: 'user', parts: [{ type: 'text', text: userText }] },
@@ -36,6 +66,7 @@ Reglas de salida: Devuelve únicamente el texto final del caption, sin comillas,
         return Response.json({ text, widgets: [] });
       } catch (error) {
         console.error('Error en API chat (caption mode):', error);
+
         return new Response(
           JSON.stringify({ error: 'Error generando la descripción' }),
           { status: 500, headers: { 'Content-Type': 'application/json' } }
@@ -54,8 +85,10 @@ IMPORTANTE: Si tu respuesta es de tipo texto, devuélvela bonita y clara usando 
       if (typeof m?.content === 'string' && m.content) return m.content;
       if (Array.isArray(m?.parts)) {
         const t = m.parts.find(p => p?.type === 'text');
+
         return t?.text || '';
       }
+
       return '';
     };
 
@@ -155,6 +188,7 @@ IMPORTANTE: Si tu respuesta es de tipo texto, devuélvela bonita y clara usando 
         typeof m?.content === 'string' && m.content
           ? m.content
           : extractText(m);
+
       return { ...m, parts: [{ type: 'text', text }] };
     };
     const normalized = composedUIMessages.map(normalizeToParts);
@@ -181,6 +215,7 @@ IMPORTANTE: Si tu respuesta es de tipo texto, devuélvela bonita y clara usando 
       },
       execute: async () => {
         wantPlatforms = true;
+
         return {
           shown: true,
           networks: ['instagram', 'facebook', 'youtube', 'tiktok'],
@@ -198,6 +233,7 @@ IMPORTANTE: Si tu respuesta es de tipo texto, devuélvela bonita y clara usando 
       },
       execute: async () => {
         wantPostPublish = true;
+
         return { shown: true, widget: 'post-publish' };
       },
     });
@@ -212,6 +248,7 @@ IMPORTANTE: Si tu respuesta es de tipo texto, devuélvela bonita y clara usando 
       },
       execute: async () => {
         wantInstagramAuth = true;
+
         return { shown: true, widget: 'instagram-auth' };
       },
     });
@@ -226,6 +263,7 @@ IMPORTANTE: Si tu respuesta es de tipo texto, devuélvela bonita y clara usando 
       },
       execute: async () => {
         wantFacebookAuth = true;
+
         return { shown: true, widget: 'facebook-auth' };
       },
     });
@@ -240,6 +278,7 @@ IMPORTANTE: Si tu respuesta es de tipo texto, devuélvela bonita y clara usando 
       },
       execute: async () => {
         wantYouTubeAuth = true;
+
         return { shown: true, widget: 'youtube-auth' };
       },
     });
@@ -254,6 +293,7 @@ IMPORTANTE: Si tu respuesta es de tipo texto, devuélvela bonita y clara usando 
       },
       execute: async () => {
         wantTikTokAuth = true;
+
         return { shown: true, widget: 'tiktok-auth' };
       },
     });
@@ -268,6 +308,7 @@ IMPORTANTE: Si tu respuesta es de tipo texto, devuélvela bonita y clara usando 
       },
       execute: async () => {
         wantLogout = true;
+
         return { shown: true, widget: 'logout' };
       },
     });
@@ -282,6 +323,7 @@ IMPORTANTE: Si tu respuesta es de tipo texto, devuélvela bonita y clara usando 
       },
       execute: async () => {
         wantCalendar = true;
+
         return { shown: true, widget: 'calendar' };
       },
     });
@@ -296,6 +338,7 @@ IMPORTANTE: Si tu respuesta es de tipo texto, devuélvela bonita y clara usando 
       },
       execute: async () => {
         wantClearChat = true;
+
         return { shown: true, widget: 'clear-chat' };
       },
     });
@@ -316,51 +359,101 @@ IMPORTANTE: Si tu respuesta es de tipo texto, devuélvela bonita y clara usando 
             description: 'Plataformas destino (para ajustar hashtags y tono)',
           },
         },
-        required: [],
         additionalProperties: false,
       },
       execute: async ({ prompt = '', platforms = [] } = {}) => {
         wantCaptionSuggest = true;
+
         return { shown: true, widget: 'caption-suggest', prompt, platforms };
       },
     });
 
-    const { text } = await generateText({
-      model: google('gemini-2.5-flash'),
-      messages: convertToModelMessages(normalized),
-      tools: {
-        showSupportedNetworks,
-        showPostPublishSelection,
-        requestInstagramAuth,
-        requestFacebookAuth,
-        requestYouTubeAuth,
-        requestTikTokAuth,
-        showLogoutControl,
-        showClearChatControl,
-        suggestCaption,
-        showCalendar,
-      },
-      maxTokens: 1000,
-      temperature: 0.7,
-      maxSteps: 3,
-    });
+    console.log('=== DEBUG userModel ===');
+    console.log('userModel value:', userModel);
+    console.log('userModel type:', typeof userModel);
+    console.log('userModel constructor:', userModel?.constructor?.name);
+    console.log('userModel keys:', Object.keys(userModel || {}));
+    console.log('========================');
+    console.log(userModel)
+    try {
+      const result = await generateText({
+        model: userModel,
+        messages: convertToModelMessages(normalized),
+        tools: {
+          showSupportedNetworks,
+          showPostPublishSelection,
+          requestInstagramAuth,
+          requestFacebookAuth,
+          requestYouTubeAuth,
+          requestTikTokAuth,
+          showLogoutControl,
+          showClearChatControl,
+          suggestCaption,
+          showCalendar,
+        },
+        maxTokens: 1000,
+        temperature: 0.7,
+        maxSteps: 3,
+      });
 
-    // Construir la lista de widgets a renderizar a partir de las herramientas elegidas
-    const widgets = [];
-    if (wantPlatforms) widgets.push('platforms');
-    if (wantPostPublish) widgets.push('post-publish');
-    if (wantInstagramAuth) widgets.push('instagram-auth');
-    if (wantFacebookAuth) widgets.push('facebook-auth');
-    if (wantYouTubeAuth) widgets.push('youtube-auth');
-    if (wantTikTokAuth) widgets.push('tiktok-auth');
-    if (wantLogout) widgets.push('logout');
-    if (wantClearChat) widgets.push('clear-chat');
-    if (wantCaptionSuggest) widgets.push('caption-suggest');
-    if (wantCalendar) widgets.push('calendar');
+      console.log('=== generateText SUCCESS ===');
+      console.log('result:', result);
+      console.log('============================');
 
-    return Response.json({ text, widgets });
+      const { text } = result;
+
+      // Construir la lista de widgets a renderizar a partir de las herramientas elegidas
+      const widgets = [];
+
+      if (wantPlatforms) widgets.push('platforms');
+      if (wantPostPublish) widgets.push('post-publish');
+      if (wantInstagramAuth) widgets.push('instagram-auth');
+      if (wantFacebookAuth) widgets.push('facebook-auth');
+      if (wantYouTubeAuth) widgets.push('youtube-auth');
+      if (wantTikTokAuth) widgets.push('tiktok-auth');
+      if (wantLogout) widgets.push('logout');
+      if (wantClearChat) widgets.push('clear-chat');
+      if (wantCaptionSuggest) widgets.push('caption-suggest');
+      if (wantCalendar) widgets.push('calendar');
+
+      return Response.json({ text, widgets });
+    } catch (generateError) {
+      console.error('=== generateText ERROR ===');
+      console.error('Error details:', generateError);
+      console.error('Error message:', generateError.message);
+      console.error('Error stack:', generateError.stack);
+      console.error('==========================');
+      throw generateError; // Re-lanzar para el catch principal
+    }
   } catch (error) {
     console.error('Error en API chat:', error);
+
+    // Manejar errores específicos de IA
+    if (
+      error.message === 'AI_CONFIG_REQUIRED' ||
+      error.message === 'AI_CONFIG_ERROR'
+    ) {
+      return Response.json({
+        text: '⚠️ **Error de configuración de IA**\n\nHubo un problema con tu configuración de IA. Por favor, actualiza tu proveedor y API key.',
+        widgets: ['ai_provider_config'],
+      });
+    }
+
+    // Manejar errores de API key inválida
+    if (
+      error.message &&
+      (error.message.includes('API key') ||
+        error.message.includes('Invalid authentication') ||
+        error.message.includes('Unauthorized') ||
+        error.message.includes('403') ||
+        error.message.includes('401'))
+    ) {
+      return Response.json({
+        text: '🔑 **API Key inválida**\n\nTu API key no es válida o ha expirado. Por favor, actualiza tu configuración.',
+        widgets: ['ai_provider_config'],
+      });
+    }
+
     return new Response(
       JSON.stringify({ error: 'Error interno del servidor' }),
       {

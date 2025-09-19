@@ -17,6 +17,7 @@ async function fetchProfileStatusOnce(userId) {
   if (profileStatusInflight.has(userId)) {
     try {
       const res = await profileStatusInflight.get(userId);
+
       return res;
     } catch (e) {
       return { data: null, error: e };
@@ -31,10 +32,13 @@ async function fetchProfileStatusOnce(userId) {
       )
       .eq('id', userId)
       .maybeSingle();
+
     if (!error && data) profileStatusCache.set(userId, data);
     profileStatusInflight.delete(userId);
+
     return { data, error };
   })();
+
   profileStatusInflight.set(userId, p);
   try {
     return await p;
@@ -53,6 +57,7 @@ export const LogoutWidget = ({ onLogout }) => {
       setWorking(false);
     }
   };
+
   return (
     <div className='flex flex-col gap-2 items-center justify-between rounded-xl border border-gray-200 bg-white p-3'>
       <div className='flex items-center gap-2'>
@@ -92,6 +97,7 @@ export const ClearChatWidget = ({ onClear }) => {
       const ok = window.confirm(
         '¿Seguro que deseas borrar todos los mensajes del chat? Esta acción no se puede deshacer.'
       );
+
       if (!ok) return;
     }
     try {
@@ -101,6 +107,7 @@ export const ClearChatWidget = ({ onClear }) => {
       setDeleting(false);
     }
   };
+
   return (
     <div className='flex flex-col gap-2 items-center justify-between rounded-xl border border-red-200 bg-red-50 p-3'>
       <div className='flex items-center gap-2'>
@@ -153,12 +160,15 @@ export const PlatformsWidget = () => {
         }
         const { data: sessionData } = await window.__session_cache_once;
         const userId = sessionData?.session?.user?.id;
+
         if (!userId) {
           if (!cancelled) setLoading(false);
+
           return;
         }
 
         const { data, error } = await fetchProfileStatusOnce(userId);
+
         if (error) throw error;
 
         const instagramUsername = data?.instagram_username || null;
@@ -192,7 +202,9 @@ export const PlatformsWidget = () => {
         if (!cancelled) setLoading(false);
       }
     };
+
     fetchStatus();
+
     return () => {
       cancelled = true;
     };
@@ -346,11 +358,13 @@ export const PostPublishWidget = ({
       youtube: false,
       tiktok: false,
     };
+
     if (Array.isArray(arr)) {
       for (const k of arr) {
         if (k in base) base[k] = true;
       }
     }
+
     return base;
   };
 
@@ -367,14 +381,17 @@ export const PostPublishWidget = ({
   const toggle = k =>
     setTargets(prev => {
       const next = { ...prev, [k]: !prev[k] };
+
       if (typeof onChangeTargets === 'function') {
         const arr = ['instagram', 'facebook', 'youtube', 'tiktok'].filter(
           p => next[p]
         );
+
         try {
           onChangeTargets(arr);
         } catch {}
       }
+
       return next;
     });
 
@@ -583,18 +600,22 @@ export const ScheduleWidget = ({
     if (defaultValue) return defaultValue;
     // Default: next full half-hour in local time
     const now = new Date();
+
     now.setMinutes(now.getMinutes() + (30 - (now.getMinutes() % 30 || 30)));
     now.setSeconds(0, 0);
     const pad = n => String(n).padStart(2, '0');
     const local = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
+
     return local;
   });
   const [scheduleMode, setScheduleMode] = useState(false); // false: publicar ahora, true: programar
 
   const minValue = (() => {
     const now = new Date();
+
     now.setMinutes(now.getMinutes() - 1);
     const pad = n => String(n).padStart(2, '0');
+
     return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
   })();
 
@@ -632,8 +653,8 @@ export const ScheduleWidget = ({
           userId: session.user.id,
           content: publishData?.caption || 'Publicación programada',
           platforms: publishData?.platforms || ['Instagram'],
-          scheduledDate: scheduledDate,
-          scheduledTime: scheduledTime,
+          scheduledDate,
+          scheduledTime,
           mediaUrls:
             publishData?.imageUrl || publishData?.videoUrl
               ? [publishData.imageUrl || publishData.videoUrl]

@@ -4,6 +4,7 @@ import { useState } from 'react';
 
 export const AuthGateWidget = ({ onOpen }) => {
   const openForm = mode => onOpen && onOpen(mode);
+
   return (
     <div className='space-y-4'>
       <div className='flex items-center gap-2'>

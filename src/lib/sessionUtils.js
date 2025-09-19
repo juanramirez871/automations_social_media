@@ -9,10 +9,13 @@ export async function getSessionOnce() {
   if (__sessionInflight) return await __sessionInflight;
   __sessionInflight = (async () => {
     const res = await supabase.auth.getSession();
+
     __sessionCache = res?.data || null;
     __sessionInflight = null;
+
     return { data: __sessionCache };
   })();
+
   return await __sessionInflight;
 }
 

@@ -18,6 +18,7 @@ export async function GET(request) {
           }
         </script>
       </body></html>`;
+
       return new NextResponse(html, {
         headers: { 'Content-Type': 'text/html; charset=utf-8' },
       });
@@ -28,6 +29,7 @@ export async function GET(request) {
     const clientSecret =
       process.env.INSTAGRAM_APP_SECRET || process.env.FACEBOOK_APP_SECRET;
     let redirectUri = process.env.INSTAGRAM_REDIRECT_URI;
+
     if (!redirectUri) redirectUri = `${origin}/api/instagram/callback`;
 
     if (!clientId || !clientSecret) {
@@ -40,6 +42,7 @@ export async function GET(request) {
           }
         </script>
       </body></html>`;
+
       return new NextResponse(html, {
         headers: { 'Content-Type': 'text/html; charset=utf-8' },
       });
@@ -55,6 +58,7 @@ export async function GET(request) {
           }
         </script>
       </body></html>`;
+
       return new NextResponse(html, {
         headers: { 'Content-Type': 'text/html; charset=utf-8' },
       });
@@ -67,6 +71,7 @@ export async function GET(request) {
       const cookieState = cookieMatch
         ? decodeURIComponent(cookieMatch[1])
         : null;
+
       console.log('state', state);
       console.log('cookieState', cookieState);
       console.log('state === cookieState', state === cookieState);
@@ -80,6 +85,7 @@ export async function GET(request) {
             }
           </script>
         </body></html>`;
+
         return new NextResponse(html, {
           headers: { 'Content-Type': 'text/html; charset=utf-8' },
         });
@@ -94,6 +100,7 @@ export async function GET(request) {
     const tokenUrl = new URL(
       'https://graph.facebook.com/v18.0/oauth/access_token'
     );
+
     tokenUrl.searchParams.set('client_id', clientId);
     tokenUrl.searchParams.set('client_secret', clientSecret);
     tokenUrl.searchParams.set('grant_type', 'authorization_code');
@@ -104,6 +111,7 @@ export async function GET(request) {
 
     const tokenRes2 = await fetch(tokenUrl.toString());
     const tokenJson = await tokenRes2.json();
+
     if (!tokenRes2.ok || tokenJson.error_type || tokenJson.error_message) {
       const msg =
         tokenJson?.error_message ||
@@ -117,6 +125,7 @@ export async function GET(request) {
           }
         </script>
       </body></html>`;
+
       return new NextResponse(html, {
         headers: { 'Content-Type': 'text/html; charset=utf-8' },
       });
@@ -150,6 +159,7 @@ export async function GET(request) {
           }
         </script>
       </body></html>`;
+
       return new NextResponse(html, {
         headers: { 'Content-Type': 'text/html; charset=utf-8' },
       });
@@ -157,6 +167,7 @@ export async function GET(request) {
 
     const longLivedToken = longLivedJson.access_token;
     const longLivedExpiresIn = longLivedJson.expires_in;
+
     console.log(
       '✅ Long-lived token obtenido, expira en:',
       longLivedExpiresIn,
@@ -183,12 +194,14 @@ export async function GET(request) {
           }
         </script>
       </body></html>`;
+
       return new NextResponse(html, {
         headers: { 'Content-Type': 'text/html; charset=utf-8' },
       });
     }
 
     const pages = pagesJson.data || [];
+
     console.log(
       '📄 Respuesta completa de páginas:',
       JSON.stringify(pagesJson, null, 2)
@@ -220,6 +233,7 @@ export async function GET(request) {
 
       if (businessRes.ok && businessJson.data && businessJson.data.length > 0) {
         const businessId = businessJson.data[0].id;
+
         console.log('🏢 Usando Business Manager ID:', businessId);
 
         // Obtener páginas del Business Manager
@@ -260,6 +274,7 @@ export async function GET(request) {
             }
           </script>
         </body></html>`;
+
         return new NextResponse(html, {
           headers: { 'Content-Type': 'text/html; charset=utf-8' },
         });
@@ -295,12 +310,14 @@ export async function GET(request) {
           }
         </script>
       </body></html>`;
+
       return new NextResponse(html, {
         headers: { 'Content-Type': 'text/html; charset=utf-8' },
       });
     }
 
     const igBusinessAccount = igAccountJson.instagram_business_account;
+
     if (!igBusinessAccount) {
       const msg =
         'Esta página de Facebook no tiene una cuenta de Instagram Business conectada.';
@@ -313,21 +330,25 @@ export async function GET(request) {
           }
         </script>
       </body></html>`;
+
       return new NextResponse(html, {
         headers: { 'Content-Type': 'text/html; charset=utf-8' },
       });
     }
 
     const igUserId = igBusinessAccount.id;
+
     console.log('✅ Instagram Business Account ID:', igUserId);
 
     // Obtener información del perfil de Instagram
     let igUsername = null;
+
     try {
       const igProfileRes = await fetch(
         `https://graph.facebook.com/v18.0/${igUserId}?fields=username&access_token=${encodeURIComponent(pageAccessToken)}`
       );
       const igProfileJson = await igProfileRes.json();
+
       if (igProfileRes.ok && igProfileJson && !igProfileJson.error) {
         igUsername = igProfileJson.username;
       }
@@ -353,9 +374,9 @@ export async function GET(request) {
           id: igUserId, // Usar Instagram Business Account ID
           username: igUsername,
         },
-        pageId: pageId,
-        pageName: pageName,
-        longLivedToken: longLivedToken, // Guardar también el long-lived token del usuario
+        pageId,
+        pageName,
+        longLivedToken, // Guardar también el long-lived token del usuario
       },
     };
 
@@ -388,9 +409,11 @@ export async function GET(request) {
     const res = new NextResponse(html, {
       headers: { 'Content-Type': 'text/html; charset=utf-8' },
     });
+
     // clear state cookie y widget cookie
     res.cookies.set('ig_oauth_state', '', { path: '/', maxAge: 0 });
     res.cookies.set('ig_oauth_widget', '', { path: '/', maxAge: 0 });
+
     return res;
   } catch (e) {
     const html = `<!DOCTYPE html><html><body>
@@ -402,6 +425,7 @@ export async function GET(request) {
         }
       </script>
     </body></html>`;
+
     return new NextResponse(html, {
       headers: { 'Content-Type': 'text/html; charset=utf-8' },
     });

@@ -37,6 +37,7 @@ export default function CalendarModal({ isOpen, onClose }) {
 
   const getPostsForDay = day => {
     const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+
     return getPostsByDate(dateStr) || [];
   };
 
@@ -47,6 +48,7 @@ export default function CalendarModal({ isOpen, onClose }) {
       YouTube: 'bg-red-500',
       TikTok: 'bg-black',
     };
+
     return colors[platform] || 'bg-gray-500';
   };
 
@@ -67,12 +69,13 @@ export default function CalendarModal({ isOpen, onClose }) {
   const startEdit = (day, postIndex) => {
     const postsForDay = getPostsForDay(day);
     const post = postsForDay[postIndex];
+
     if (post) {
       setEditingPost({
         id: post.id,
         originalDay: day,
         originalIndex: postIndex,
-        day: day,
+        day,
         time: post.scheduled_time,
         platforms: [...post.platforms],
         content: post.content,
@@ -89,7 +92,7 @@ export default function CalendarModal({ isOpen, onClose }) {
       await updateScheduledPost(editingPost.id, {
         content: editingPost.content,
         platforms: editingPost.platforms,
-        scheduledDate: scheduledDate,
+        scheduledDate,
         scheduledTime: editingPost.time,
       });
 
@@ -132,6 +135,7 @@ export default function CalendarModal({ isOpen, onClose }) {
       if (!response.ok) throw new Error('Error al mejorar el texto');
 
       const data = await response.json();
+
       if (data.text) {
         setEditingPost(prev => ({ ...prev, content: data.text }));
       }
@@ -224,6 +228,7 @@ export default function CalendarModal({ isOpen, onClose }) {
       if (!response.ok) throw new Error('Error al mejorar el texto');
 
       const data = await response.json();
+
       if (data.text) {
         setNewPost(prev => ({ ...prev, content: data.text }));
       }
@@ -243,7 +248,7 @@ export default function CalendarModal({ isOpen, onClose }) {
     const hasYouTube = platforms.includes('YouTube');
     const hasTikTok = platforms.includes('TikTok');
 
-    let acceptedTypes = [];
+    const acceptedTypes = [];
 
     // Instagram: imágenes y videos cortos
     if (hasInstagram) {
@@ -283,19 +288,23 @@ export default function CalendarModal({ isOpen, onClose }) {
   // Función para manejar selección de archivos
   const handleFileSelect = event => {
     const files = Array.from(event.target.files);
+
     setSelectedFiles(files);
 
     // Actualizar newPost con las URLs de los archivos (simuladas por ahora)
     const fileUrls = files.map(file => URL.createObjectURL(file));
+
     setNewPost(prev => ({ ...prev, mediaUrls: fileUrls }));
   };
 
   // Función para remover archivo
   const removeFile = index => {
     const newFiles = selectedFiles.filter((_, i) => i !== index);
+
     setSelectedFiles(newFiles);
 
     const newUrls = newFiles.map(file => URL.createObjectURL(file));
+
     setNewPost(prev => ({ ...prev, mediaUrls: newUrls }));
   };
 
@@ -309,7 +318,7 @@ export default function CalendarModal({ isOpen, onClose }) {
     const hasYouTube = platforms.includes('YouTube');
     const hasTikTok = platforms.includes('TikTok');
 
-    let recommendations = [];
+    const recommendations = [];
 
     if (hasInstagram)
       recommendations.push('📸 Instagram: Fotos (1:1) o videos (máx. 60s)');

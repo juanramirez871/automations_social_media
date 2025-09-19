@@ -17,6 +17,7 @@ export const FacebookAuthWidget = ({ widgetId, onConnected, onError }) => {
         if (!ev.data.ok) {
           onError && onError(ev.data.error || 'oauth_error');
           setConnecting(false);
+
           return;
         }
 
@@ -30,6 +31,7 @@ export const FacebookAuthWidget = ({ widgetId, onConnected, onError }) => {
           pageName: d.pageName || null,
           userToken: d.userToken || null,
         };
+
         onConnected && onConnected(payload);
       } catch (err) {
         onError && onError(err?.message || 'unknown_error');
@@ -37,7 +39,9 @@ export const FacebookAuthWidget = ({ widgetId, onConnected, onError }) => {
         setConnecting(false);
       }
     };
+
     window.addEventListener('message', onMsg);
+
     return () => window.removeEventListener('message', onMsg);
   }, [widgetId, onConnected, onError]);
 
@@ -58,6 +62,7 @@ export const FacebookAuthWidget = ({ widgetId, onConnected, onError }) => {
       screen.height;
     const left = (width - w) / 2 + dualScreenLeft;
     const top = (height - h) / 2 + dualScreenTop;
+
     window.open(
       '/api/facebook/login',
       'fb_oauth',

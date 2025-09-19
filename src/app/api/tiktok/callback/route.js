@@ -17,6 +17,7 @@ export async function GET(request) {
           }
         </script>
       </body></html>`;
+
       return new NextResponse(html, {
         headers: { 'Content-Type': 'text/html; charset=utf-8' },
       });
@@ -25,6 +26,7 @@ export async function GET(request) {
     const clientKey = process.env.TIKTOK_CLIENT_KEY;
     const clientSecret = process.env.TIKTOK_CLIENT_SECRET;
     let redirectUri = process.env.TIKTOK_REDIRECT_URI;
+
     if (!redirectUri) redirectUri = `${origin}/api/tiktok/callback`;
 
     if (!clientKey || !clientSecret) {
@@ -37,6 +39,7 @@ export async function GET(request) {
           }
         </script>
       </body></html>`;
+
       return new NextResponse(html, {
         headers: { 'Content-Type': 'text/html; charset=utf-8' },
       });
@@ -52,6 +55,7 @@ export async function GET(request) {
           }
         </script>
       </body></html>`;
+
       return new NextResponse(html, {
         headers: { 'Content-Type': 'text/html; charset=utf-8' },
       });
@@ -60,6 +64,7 @@ export async function GET(request) {
     // Validar state (si existe cookie)
     const cookies = request.cookies;
     const expected = cookies.get?.('tt_oauth_state')?.value || null;
+
     if (expected && state && expected !== state) {
       const html = `<!DOCTYPE html><html><body>
         <p style=\"font-family: ui-sans-serif, system-ui; color:#111\">State inválido.</p>
@@ -70,6 +75,7 @@ export async function GET(request) {
           }
         </script>
       </body></html>`;
+
       return new NextResponse(html, {
         headers: { 'Content-Type': 'text/html; charset=utf-8' },
       });
@@ -106,6 +112,7 @@ export async function GET(request) {
           }
         </script>
       </body></html>`;
+
       return new NextResponse(html, {
         headers: { 'Content-Type': 'text/html; charset=utf-8' },
       });
@@ -146,10 +153,12 @@ export async function GET(request) {
     const res = new NextResponse(html, {
       headers: { 'Content-Type': 'text/html; charset=utf-8' },
     });
+
     // limpiar cookie state
     try {
       res.cookies.set('tt_oauth_state', '', { maxAge: 0, path: '/' });
     } catch {}
+
     return res;
   } catch (e) {
     const html = `<!DOCTYPE html><html><body>
@@ -161,6 +170,7 @@ export async function GET(request) {
         }
       </script>
     </body></html>`;
+
     return new NextResponse(html, {
       headers: { 'Content-Type': 'text/html; charset=utf-8' },
     });

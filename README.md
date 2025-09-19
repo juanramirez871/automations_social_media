@@ -81,24 +81,6 @@ cp .env.example .env.local
 
 Edita `.env.local` con tus credenciales:
 
-```env
-# Supabase
-NEXT_PUBLIC_SUPABASE_URL=tu_supabase_url
-NEXT_PUBLIC_SUPABASE_ANON_KEY=tu_supabase_anon_key
-SUPABASE_SERVICE_ROLE_KEY=tu_service_role_key
-
-# Cron Job Security
-CRON_SECRET=tu_clave_secreta_aleatoria
-
-# Google AI
-GOOGLE_GENERATIVE_AI_API_KEY=tu_gemini_api_key
-
-# Cloudinary
-CLOUDINARY_CLOUD_NAME=tu_cloud_name
-CLOUDINARY_API_KEY=tu_api_key
-CLOUDINARY_API_SECRET=tu_api_secret
-```
-
 ### **4. Configurar base de datos**
 
 ```bash

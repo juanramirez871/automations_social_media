@@ -4,8 +4,10 @@ function randomState(len = 32) {
   const chars =
     'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
   let out = '';
+
   for (let i = 0; i < len; i++)
     out += chars[Math.floor(Math.random() * chars.length)];
+
   return out;
 }
 
@@ -33,6 +35,7 @@ export async function GET(request) {
   const state = randomState();
 
   const authorizeUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
+
   authorizeUrl.searchParams.set('client_id', clientId);
   authorizeUrl.searchParams.set('redirect_uri', redirectUri);
   authorizeUrl.searchParams.set('response_type', 'code');
@@ -43,6 +46,7 @@ export async function GET(request) {
   authorizeUrl.searchParams.set('state', state);
 
   const res = NextResponse.redirect(authorizeUrl.toString());
+
   res.cookies.set('yt_oauth_state', state, {
     httpOnly: true,
     sameSite: 'lax',
@@ -50,5 +54,6 @@ export async function GET(request) {
     path: '/',
     maxAge: 10 * 60, // 10 minutes
   });
+
   return res;
 }

@@ -69,6 +69,7 @@ export function generatePublishConfirmMessage(results) {
     }
 
     message += ` Errores: ${errStr}.`;
+
     return message;
   }
 

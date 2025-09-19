@@ -2,6 +2,7 @@ export async function POST(req) {
   try {
     const body = await req.json().catch(() => ({}));
     const userId = body?.userId;
+
     if (!userId) {
       return new Response(JSON.stringify({ error: 'Missing userId' }), {
         status: 400,
@@ -16,6 +17,7 @@ export async function POST(req) {
       .from('messages')
       .delete()
       .eq('user_id', userId);
+
     if (error) throw error;
 
     return Response.json({ ok: true });

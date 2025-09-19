@@ -17,5 +17,6 @@ export function validateUserId(userId) {
   if (!userId) {
     throw new Error('Usuario no especificado');
   }
+
   return true;
 }

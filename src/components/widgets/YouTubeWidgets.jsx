@@ -17,6 +17,7 @@ export const YouTubeAuthWidget = ({ widgetId, onConnected, onError }) => {
         if (!ev.data.ok) {
           setConnecting(false);
           onError && onError(ev.data?.reason || 'oauth_error');
+
           return;
         }
 
@@ -37,7 +38,9 @@ export const YouTubeAuthWidget = ({ widgetId, onConnected, onError }) => {
         setConnecting(false);
       }
     };
+
     window.addEventListener('message', onMsg);
+
     return () => window.removeEventListener('message', onMsg);
   }, [widgetId, onConnected, onError]);
 
@@ -60,6 +63,7 @@ export const YouTubeAuthWidget = ({ widgetId, onConnected, onError }) => {
       screen.height;
     const left = (width - w) / 2 + dualScreenLeft;
     const top = (height - h) / 2 + dualScreenTop;
+
     window.open(
       '/api/youtube/login',
       'yt_oauth',

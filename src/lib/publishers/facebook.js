@@ -87,6 +87,7 @@ export async function publishToFacebook({
     if (!response.ok) {
       const errorMsg =
         responseData?.error?.message || 'Error publicando en Facebook';
+
       throw new Error(errorMsg);
     }
 

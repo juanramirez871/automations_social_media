@@ -37,6 +37,7 @@ import {
   CaptionSuggestWidget as CaptionSuggestWidgetExt,
   ScheduleWidget as ScheduleWidgetExt,
 } from '@/components/widgets/ControlWidgets';
+import AIProviderConfigWidget from '@/components/widgets/AIProviderConfigWidget';
 import {
   upsertInstagramToken,
   upsertFacebookToken,
@@ -47,7 +48,7 @@ import {
   saveMessageToDB,
   loadHistoryForCurrentUser,
 } from '@/lib/databaseUtils';
-import { getSessionOnce } from '@/lib/sessionUtils';
+import { getSessionOnce, clearSessionCache } from '@/lib/sessionUtils';
 import {
   detectNewPublishIntent,
   detectCancelIntent,
@@ -189,7 +190,7 @@ export default function Home() {
                   draftsByWidget[key] = t;
                 }
                 if (t) restoreTargets = t; // Mantener la última selección
-              } catch (_) {}
+              } catch (_) { }
               return null; // No renderizar en UI
             }
             if (rType === 'internal-schedule') {
@@ -445,9 +446,32 @@ export default function Home() {
           restoreTargets;
       }
 
-      // Restaurar estado del flujo SOLO si no hay resultado de publicación exitosa
-      if (hasPublishResult) {
-        // Si ya se publicó exitosamente, mantener el flujo en idle (completado)
+      // Detectar si hubo una cancelación después del último widget de flujo activo
+      let wasCancelled = false;
+      const lastFlowWidgetIndex = Math.max(
+        normalized.findLastIndex(m => m.role === 'assistant' && m.type === 'widget-await-media'),
+        lastAskDescIndex
+      );
+      
+      if (lastFlowWidgetIndex >= 0) {
+        // Buscar mensaje de cancelación después del último widget de flujo
+        for (let i = lastFlowWidgetIndex + 1; i < normalized.length; i++) {
+          const m = normalized[i];
+          if (
+            m.role === 'assistant' &&
+            m.type === 'text' &&
+            typeof m.content === 'string' &&
+            m.content.includes('cancelé el flujo de publicación')
+          ) {
+            wasCancelled = true;
+            break;
+          }
+        }
+      }
+
+      // Restaurar estado del flujo SOLO si no hay resultado de publicación exitosa y no fue cancelado
+      if (hasPublishResult || wasCancelled) {
+        // Si ya se publicó exitosamente o fue cancelado, mantener el flujo en idle
         setPublishStage('idle');
       } else if (lastAskDescIndex >= 0 && !finalSummaryAfter) {
         setPublishStage('await-description');
@@ -459,11 +483,12 @@ export default function Home() {
       if (
         restoreTargets &&
         Array.isArray(restoreTargets) &&
-        !hasPublishResult
+        !hasPublishResult &&
+        !wasCancelled
       ) {
         setPublishTargets(restoreTargets);
       } else {
-        setPublishTargets([]); // Limpiar targets si ya se completó el flujo
+        setPublishTargets([]); // Limpiar targets si ya se completó el flujo o fue cancelado
       }
       setWidgetTargetDrafts(draftsByWidget);
       setIsLoggedIn(true);
@@ -735,12 +760,15 @@ export default function Home() {
         const prompt = `Genera una descripción profesional y atractiva en español para redes sociales, con base en este texto del usuario. Requisitos: 2-4 líneas, tono natural y claro, 2-5 hashtags relevantes (sin exceso), 0-2 emojis discretos, incluir un CTA sutil si aplica. Devuelve solo el texto final del caption. Contexto de plataformas: ${targets || 'generales'}. Texto base: ${trimmed}`;
         try {
           setLoading(true);
+          const { data: sessionData } = await getSessionOnce();
+          const userId = sessionData?.session?.user?.id;
           const res = await fetch('/api/chat', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               mode: 'caption',
               prompt: `${trimmed}\nPlataformas destino: ${targets || 'generales'}`,
+              userId: userId,
             }),
           });
           const data = await res.json();
@@ -844,11 +872,14 @@ export default function Home() {
     if (trimmed) {
       setLoading(true);
       try {
+        const { data: sessionData } = await getSessionOnce();
+        const userId = sessionData?.session?.user?.id;
         const res = await fetch('/api/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             messages: [{ role: 'user', content: trimmed }],
+            userId: userId,
           }),
         });
         const data = await res.json();
@@ -881,6 +912,7 @@ export default function Home() {
           logout: 'widget-logout',
           'clear-chat': 'widget-clear-chat',
           calendar: 'widget-calendar',
+          'ai_provider_config': 'widget-ai-provider-config',
         };
 
         const widgetAdditionsMeta = [];
@@ -1095,15 +1127,14 @@ export default function Home() {
                               if (error) throw error;
                             }
                             // Refrescar caché de sesión para evitar sesiones nulas cacheadas
-                            __sessionCache = null;
-                            __sessionInflight = null;
+                            clearSessionCache();
                             if (
                               typeof window !== 'undefined' &&
                               window.__session_cache_once
                             ) {
                               try {
                                 delete window.__session_cache_once;
-                              } catch {}
+                              } catch { }
                             }
                             const { data: freshSession } =
                               await getSessionOnce();
@@ -1175,8 +1206,8 @@ export default function Home() {
 
                           const expiresAt = expires_in
                             ? new Date(
-                                Date.now() + Number(expires_in) * 1000
-                              ).toISOString()
+                              Date.now() + Number(expires_in) * 1000
+                            ).toISOString()
                             : null;
                           const { data: sessionData } = await getSessionOnce();
                           const userId = sessionData?.session?.user?.id;
@@ -1218,7 +1249,7 @@ export default function Home() {
                               .delete()
                               .eq('user_id', userId)
                               .eq('type', 'widget-instagram-connected');
-                          } catch (_) {}
+                          } catch (_) { }
 
                           const dbResult = await saveMessageToDB({
                             userId,
@@ -1295,8 +1326,8 @@ export default function Home() {
 
                           const expiresAt = expires_in
                             ? new Date(
-                                Date.now() + Number(expires_in) * 1000
-                              ).toISOString()
+                              Date.now() + Number(expires_in) * 1000
+                            ).toISOString()
                             : null;
 
                           const { data: sessionData } = await getSessionOnce();
@@ -1387,15 +1418,14 @@ export default function Home() {
                         try {
                           await supabase.auth.signOut();
                           // clear session cache
-                          __sessionCache = null;
-                          __sessionInflight = null;
+                          clearSessionCache();
                           if (
                             typeof window !== 'undefined' &&
                             window.__session_cache_once
                           ) {
                             try {
                               delete window.__session_cache_once;
-                            } catch {}
+                            } catch { }
                           }
                           setIsLoggedIn(false);
                           // Mostrar inmediatamente el gate de autenticación y limpiar el chat SOLO en UI
@@ -1475,6 +1505,22 @@ export default function Home() {
                         </p>
                       </div>
                     </div>
+                  </AssistantMessage>
+                );
+              }
+              if (m.type === 'widget-ai-provider-config') {
+                return (
+                  <AssistantMessage key={m.id}>
+                    <AIProviderConfigWidget
+                      onConfigUpdate={(config) => {
+                        console.log('AI config updated:', config);
+                        // Opcional: mostrar mensaje de éxito
+                      }}
+                      onClose={() => {
+                        // Opcional: ocultar widget después de configurar
+                      }}
+                      showError={m.showError || false}
+                    />
                   </AssistantMessage>
                 );
               }
@@ -1561,7 +1607,7 @@ export default function Home() {
                             attachments: null,
                             type: 'internal-targets',
                           });
-                        } catch (_) {}
+                        } catch (_) { }
                       }}
                     />
                   </AssistantMessage>
@@ -1696,7 +1742,7 @@ export default function Home() {
                           }
                           setPublishStage('idle');
                           setCustomCaptionMode(false);
-                        } catch (_) {}
+                        } catch (_) { }
                       }}
                       onRegenerate={async () => {
                         try {
@@ -1713,6 +1759,7 @@ export default function Home() {
                             body: JSON.stringify({
                               mode: 'caption',
                               prompt: `${base || caption || ''}\nPlataformas destino: ${t}`,
+                              userId: userId,
                             }),
                           });
                           const data = await res.json();
@@ -1753,7 +1800,7 @@ export default function Home() {
                               meta: capMeta,
                             });
                           }
-                        } catch (_) {}
+                        } catch (_) { }
                       }}
                       onCustom={() => {
                         setCustomCaptionMode(true);
@@ -2068,8 +2115,8 @@ export default function Home() {
                             expires_at ||
                             (expires_in
                               ? new Date(
-                                  Date.now() + Number(expires_in) * 1000
-                                ).toISOString()
+                                Date.now() + Number(expires_in) * 1000
+                              ).toISOString()
                               : null);
                           const { data: sessionData } = await getSessionOnce();
                           const userId = sessionData?.session?.user?.id;
@@ -2173,8 +2220,8 @@ export default function Home() {
                           const granted_scopes = payload?.granted_scopes || [];
                           const expiresAt = expires_in
                             ? new Date(
-                                Date.now() + Number(expires_in) * 1000
-                              ).toISOString()
+                              Date.now() + Number(expires_in) * 1000
+                            ).toISOString()
                             : null;
                           const { data: sessionData } = await getSessionOnce();
                           const userId = sessionData?.session?.user?.id;

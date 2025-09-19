@@ -7,6 +7,7 @@ export async function POST(req) {
   try {
     const formData = await req.formData();
     const file = formData.get('file');
+
     if (!file) {
       return new Response(JSON.stringify({ error: 'file is required' }), {
         status: 400,
@@ -35,6 +36,7 @@ export async function POST(req) {
           resolve(uploadResult);
         }
       );
+
       stream.end(buffer);
     });
 

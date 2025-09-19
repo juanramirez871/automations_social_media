@@ -117,8 +117,9 @@ export async function publishToYouTube({
       } catch (refreshError) {
         console.error('Error refrescando token:', refreshError.message);
         throw new Error(
-          'Token de YouTube expirado y no se pudo refrescar: ' +
+          `Token de YouTube expirado y no se pudo refrescar: ${
             refreshError.message
+          }`
         );
       }
     } else if (shouldRefresh && !refreshToken) {
@@ -131,9 +132,10 @@ export async function publishToYouTube({
       .trim()
       .replace(/\s+/g, '')
       .replace(/[\r\n\t]/g, '');
+
     console.log(
       'Token limpio (primeros 20 chars):',
-      cleanToken.substring(0, 20) + '...'
+      `${cleanToken.substring(0, 20)}...`
     );
 
     // Verificar que el token sea válido haciendo una petición de prueba
@@ -149,6 +151,7 @@ export async function publishToYouTube({
 
       if (!testResponse.ok) {
         const testError = await testResponse.json().catch(() => ({}));
+
         console.error('Token validation failed:', testError);
         throw new Error(
           `Token inválido: ${testError?.error?.message || testResponse.statusText}`
@@ -158,7 +161,7 @@ export async function publishToYouTube({
       console.log('Token validado exitosamente');
     } catch (validationError) {
       console.error('Error validando token:', validationError.message);
-      throw new Error('Token de YouTube inválido: ' + validationError.message);
+      throw new Error(`Token de YouTube inválido: ${validationError.message}`);
     }
 
     const videoMetadata = {
@@ -174,6 +177,7 @@ export async function publishToYouTube({
     };
 
     const videoResponse = await fetch(videoUrl);
+
     if (!videoResponse.ok) {
       throw new Error('Error descargando el video');
     }
@@ -181,6 +185,7 @@ export async function publishToYouTube({
     const videoBlob = await videoResponse.blob();
 
     const formData = new FormData();
+
     formData.append('metadata', JSON.stringify(videoMetadata));
     formData.append('media', videoBlob, 'video.mp4');
 
@@ -207,6 +212,7 @@ export async function publishToYouTube({
       const errorMsg =
         uploadData?.error?.message ||
         `Error ${uploadResponse.status}: ${uploadResponse.statusText}`;
+
       throw new Error(errorMsg);
     }
 

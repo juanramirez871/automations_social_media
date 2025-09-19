@@ -4,6 +4,7 @@
 export const detectInstagramIntent = message => {
   if (!message) return false;
   const text = message.toLowerCase();
+
   return (
     text.includes('instagram') ||
     text.includes('ig') ||
@@ -16,6 +17,7 @@ export const detectInstagramIntent = message => {
 export const detectUpdateCredentialsIntent = message => {
   if (!message) return false;
   const text = message.toLowerCase();
+
   return (
     (text.includes('actualizar') || text.includes('cambiar')) &&
     (text.includes('credenciales') ||
@@ -29,6 +31,7 @@ export const detectUpdateCredentialsIntent = message => {
 export const detectFacebookIntent = message => {
   if (!message) return false;
   const text = message.toLowerCase();
+
   return (
     text.includes('facebook') ||
     text.includes('fb') ||
@@ -41,6 +44,7 @@ export const detectFacebookIntent = message => {
 export const detectYouTubeIntent = message => {
   if (!message) return false;
   const text = message.toLowerCase();
+
   return (
     text.includes('youtube') ||
     text.includes('yt') ||
@@ -53,6 +57,7 @@ export const detectYouTubeIntent = message => {
 export const showPlatformsWidgetHeuristic = message => {
   if (!message) return false;
   const text = message.toLowerCase();
+
   return (
     text.includes('plataformas') ||
     text.includes('redes sociales') ||
@@ -68,5 +73,6 @@ export const showPlatformsWidgetHeuristic = message => {
 export const showPlatformsWidgetByTool = message => {
   if (!message) return false;
   const text = message.toLowerCase();
+
   return text.includes('widget-platforms');
 };

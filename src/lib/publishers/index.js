@@ -5,18 +5,22 @@ export { publishToTikTok } from './tiktok.js';
 export const PUBLISHERS = {
   instagram: async params => {
     const { publishToInstagram } = await import('./instagram.js');
+
     return publishToInstagram(params);
   },
   facebook: async params => {
     const { publishToFacebook } = await import('./facebook.js');
+
     return publishToFacebook(params);
   },
   youtube: async params => {
     const { publishToYouTube } = await import('./youtube.js');
+
     return publishToYouTube(params);
   },
   tiktok: async params => {
     const { publishToTikTok } = await import('./tiktok.js');
+
     return publishToTikTok(params);
   },
 };

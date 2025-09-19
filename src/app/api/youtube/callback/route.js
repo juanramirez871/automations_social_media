@@ -12,6 +12,7 @@ export async function GET(request) {
     }
 
     const storedState = request.cookies.get('yt_oauth_state')?.value;
+
     if (!state || !storedState || state !== storedState) {
       return htmlClose({ ok: false, reason: 'invalid_state' });
     }
@@ -23,6 +24,7 @@ export async function GET(request) {
     const clientId = process.env.GOOGLE_CLIENT_ID;
     const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
     const redirectUri = process.env.GOOGLE_OAUTH_REDIRECT_URI;
+
     if (!clientId || !clientSecret || !redirectUri) {
       return htmlClose({ ok: false, reason: 'missing_env' });
     }
@@ -40,6 +42,7 @@ export async function GET(request) {
     });
 
     const tokenJson = await tokenRes.json();
+
     if (!tokenRes.ok) {
       return htmlClose({ ok: false, reason: 'token_error', data: tokenJson });
     }
@@ -54,6 +57,7 @@ export async function GET(request) {
     // Obtener información del canal del usuario autenticado
     let channel_id = null;
     let channel_title = null;
+
     try {
       const chRes = await fetch(
         'https://www.googleapis.com/youtube/v3/channels?part=snippet&mine=true',
@@ -63,6 +67,7 @@ export async function GET(request) {
       );
       const chJson = await chRes.json();
       const item = chJson?.items?.[0];
+
       channel_id = item?.id || null;
       channel_title = item?.snippet?.title || null;
     } catch (e) {
@@ -113,6 +118,7 @@ function htmlClose(payload) {
     Cierra esta ventana.
   </body>
 </html>`;
+
   return new Response(body, {
     headers: { 'Content-Type': 'text/html; charset=utf-8' },
   });

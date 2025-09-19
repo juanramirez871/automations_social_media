@@ -18,6 +18,7 @@ export async function GET(request) {
           }
         </script>
       </body></html>`;
+
       return new NextResponse(html, {
         headers: { 'Content-Type': 'text/html; charset=utf-8' },
       });
@@ -26,6 +27,7 @@ export async function GET(request) {
     const clientId = process.env.FACEBOOK_APP_ID;
     const clientSecret = process.env.FACEBOOK_APP_SECRET;
     let redirectUri = process.env.FACEBOOK_REDIRECT_URI;
+
     if (!redirectUri) redirectUri = `${origin}/api/facebook/callback`;
 
     if (!clientId || !clientSecret) {
@@ -38,6 +40,7 @@ export async function GET(request) {
           }
         </script>
       </body></html>`;
+
       return new NextResponse(html, {
         headers: { 'Content-Type': 'text/html; charset=utf-8' },
       });
@@ -53,6 +56,7 @@ export async function GET(request) {
           }
         </script>
       </body></html>`;
+
       return new NextResponse(html, {
         headers: { 'Content-Type': 'text/html; charset=utf-8' },
       });
@@ -62,6 +66,7 @@ export async function GET(request) {
     const tokenUrl = new URL(
       'https://graph.facebook.com/v19.0/oauth/access_token'
     );
+
     tokenUrl.searchParams.set('client_id', clientId);
     tokenUrl.searchParams.set('client_secret', clientSecret);
     tokenUrl.searchParams.set('redirect_uri', redirectUri);
@@ -85,6 +90,7 @@ export async function GET(request) {
           }
         </script>
       </body></html>`;
+
       return new NextResponse(html, {
         headers: { 'Content-Type': 'text/html; charset=utf-8' },
       });
@@ -122,6 +128,7 @@ export async function GET(request) {
     );
     const permsJson = await permsRes.json();
     let granted_scopes = null;
+
     if (Array.isArray(permsJson?.data)) {
       granted_scopes = permsJson.data
         .filter(p => p.status === 'granted')
@@ -146,6 +153,7 @@ export async function GET(request) {
     if (pagesRes.ok && pagesJson.data && pagesJson.data.length > 0) {
       // Usar la primera página encontrada
       const page = pagesJson.data[0];
+
       pageId = page.id;
       pageName = page.name;
       pageAccessToken = page.access_token || access_token; // Usar PAGE_ACCESS_TOKEN si está disponible
@@ -182,8 +190,8 @@ export async function GET(request) {
         expires_in,
         fb_user: meJson,
         granted_scopes,
-        pageId: pageId, // ✅ Incluir pageId en data
-        pageName: pageName, // ✅ Incluir pageName en data
+        pageId, // ✅ Incluir pageId en data
+        pageName, // ✅ Incluir pageName en data
         userToken: access_token, // Guardar también el token del usuario
       },
     };
@@ -220,6 +228,7 @@ export async function GET(request) {
         }
       </script>
     </body></html>`;
+
     return new NextResponse(html, {
       headers: { 'Content-Type': 'text/html; charset=utf-8' },
     });
@@ -235,6 +244,7 @@ export async function GET(request) {
         }
       </script>
     </body></html>`;
+
     return new NextResponse(html, {
       headers: { 'Content-Type': 'text/html; charset=utf-8' },
     });

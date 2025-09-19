@@ -12,10 +12,12 @@ export const getInstagramCreds = async userId => {
       )
       .eq('id', userId)
       .maybeSingle();
+
     if (error) throw error;
     const username = data?.instagram_username || data?.userinstagram || null;
     const password =
       data?.instagram_password || data?.passwordinstagram || null;
+
     return { username, password };
   } catch (e) {
     return { username: null, password: null };
@@ -30,11 +32,14 @@ export const upsertInstagramCreds = async ({ userId, username, password }) => {
     instagram_password: password,
     updated_at: new Date().toISOString(),
   };
+
   try {
     const { error } = await supabase
       .from('profiles')
       .upsert(row, { onConflict: 'id' });
+
     if (error) throw error;
+
     return true;
   } catch (e1) {
     // Fallback: columnas alternativas
@@ -48,10 +53,13 @@ export const upsertInstagramCreds = async ({ userId, username, password }) => {
         },
         { onConflict: 'id' }
       );
+
       if (error) throw error;
+
       return true;
     } catch (e2) {
       console.error('Error guardando credenciales IG:', e2?.message || e2);
+
       return false;
     }
   }
@@ -67,15 +75,18 @@ export const getInstagramToken = async userId => {
       )
       .eq('id', userId)
       .maybeSingle();
+
     if (error) throw error;
     const token = data?.instagram_access_token || null;
     const expiresAt = data?.instagram_expires_at || null;
     const igUserId = data?.instagram_user_id || null;
     const igUsername = data?.instagram_username || null;
     const grantedScopes = data?.instagram_granted_scopes || null;
+
     return { token, expiresAt, igUserId, igUsername, grantedScopes };
   } catch (e) {
     console.warn('No se pudo obtener token de Instagram:', e?.message || e);
+
     return {
       token: null,
       expiresAt: null,
@@ -108,10 +119,13 @@ export const upsertInstagramToken = async ({
     const { error } = await supabase
       .from('profiles')
       .upsert(row, { onConflict: 'id' });
+
     if (error) throw error;
+
     return true;
   } catch (e) {
     console.error('Error guardando token de Instagram:', e?.message || e);
+
     return false;
   }
 };
@@ -126,14 +140,17 @@ export const getFacebookToken = async userId => {
       )
       .eq('id', userId)
       .maybeSingle();
+
     if (error) throw error;
     const token = data?.facebook_access_token || null;
     const expiresAt = data?.facebook_expires_at || null;
     const fbUserId = data?.facebook_user_id || null;
     const grantedScopes = data?.facebook_granted_scopes || null;
+
     return { token, expiresAt, fbUserId, grantedScopes };
   } catch (e) {
     console.warn('No se pudo obtener token de Facebook:', e?.message || e);
+
     return {
       token: null,
       expiresAt: null,
@@ -169,10 +186,13 @@ export const upsertFacebookToken = async ({
     const { error } = await supabase
       .from('profiles')
       .upsert(row, { onConflict: 'id' });
+
     if (error) throw error;
+
     return true;
   } catch (e) {
     console.error('Error guardando token de Facebook:', e?.message || e);
+
     return false;
   }
 };
@@ -187,6 +207,7 @@ export const getYouTubeToken = async userId => {
       )
       .eq('id', userId)
       .maybeSingle();
+
     if (error) throw error;
     const token = data?.youtube_access_token || null;
     const refreshToken = data?.youtube_refresh_token || null;
@@ -194,6 +215,7 @@ export const getYouTubeToken = async userId => {
     const channelId = data?.youtube_channel_id || null;
     const channelTitle = data?.youtube_channel_title || null;
     const grantedScopes = data?.youtube_granted_scopes || null;
+
     return {
       token,
       refreshToken,
@@ -204,6 +226,7 @@ export const getYouTubeToken = async userId => {
     };
   } catch (e) {
     console.warn('No se pudo obtener token de YouTube:', e?.message || e);
+
     return {
       token: null,
       refreshToken: null,
@@ -239,10 +262,13 @@ export const upsertYouTubeToken = async ({
     const { error } = await supabase
       .from('profiles')
       .upsert(row, { onConflict: 'id' });
+
     if (error) throw error;
+
     return true;
   } catch (e) {
     console.error('Error guardando token de YouTube:', e?.message || e);
+
     return false;
   }
 };
@@ -257,15 +283,18 @@ export const getTikTokToken = async userId => {
       )
       .eq('id', userId)
       .maybeSingle();
+
     if (error) throw error;
     const token = data?.tiktok_access_token || null;
     const refreshToken = data?.tiktok_refresh_token || null;
     const expiresAt = data?.tiktok_expires_at || null;
     const openId = data?.tiktok_open_id || null;
     const grantedScopes = data?.tiktok_granted_scopes || null;
+
     return { token, refreshToken, expiresAt, openId, grantedScopes };
   } catch (e) {
     console.warn('No se pudo obtener token de TikTok:', e?.message || e);
+
     return {
       token: null,
       refreshToken: null,
@@ -298,10 +327,13 @@ export const upsertTikTokToken = async ({
     const { error } = await supabase
       .from('profiles')
       .upsert(row, { onConflict: 'id' });
+
     if (error) throw error;
+
     return true;
   } catch (e) {
     console.error('Error guardando token de TikTok:', e?.message || e);
+
     return false;
   }
 };

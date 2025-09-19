@@ -21,6 +21,7 @@ export function transformMessagesFromDB(rawMessages) {
 
       if (rType === 'internal-publish-result') {
         hasPublishResult = true;
+
         return null;
       }
 
@@ -44,6 +45,7 @@ export function transformMessagesFromDB(rawMessages) {
       if (rType === 'widget-instagram-configured') {
         const name = r?.meta?.name || null;
         const id = r?.meta?.id || null;
+
         return {
           id: r.id,
           role: 'assistant',
@@ -57,6 +59,7 @@ export function transformMessagesFromDB(rawMessages) {
         const username = r?.meta?.username || r?.meta?.name || null;
         const igId = r?.meta?.igId || r?.meta?.id || null;
         const expiresAt = r?.meta?.expiresAt || null;
+
         return {
           id: r.id,
           role: 'assistant',
@@ -76,6 +79,7 @@ export function transformMessagesFromDB(rawMessages) {
         const fbId = r?.meta?.fbId || null;
         const name = r?.meta?.name || null;
         const scopes = r?.meta?.scopes || null;
+
         return {
           id: r.id,
           role: 'assistant',
@@ -95,6 +99,7 @@ export function transformMessagesFromDB(rawMessages) {
         const channelId = r?.meta?.channelId || null;
         const channelTitle = r?.meta?.channelTitle || null;
         const grantedScopes = r?.meta?.grantedScopes || null;
+
         return {
           id: r.id,
           role: 'assistant',
@@ -114,6 +119,7 @@ export function transformMessagesFromDB(rawMessages) {
         const displayName = r?.meta?.displayName || null;
         const username = r?.meta?.username || null;
         const avatarUrl = r?.meta?.avatarUrl || null;
+
         return {
           id: r.id,
           role: 'assistant',
@@ -131,6 +137,7 @@ export function transformMessagesFromDB(rawMessages) {
 
       if (rType === 'widget-await-media') {
         const targets = r?.meta?.targets || [];
+
         return {
           id: r.id,
           role: 'assistant',
@@ -141,6 +148,7 @@ export function transformMessagesFromDB(rawMessages) {
 
       if (rType === 'widget-caption-suggest') {
         const caption = r?.meta?.caption || '';
+
         return {
           id: r.id,
           role: 'assistant',
@@ -151,6 +159,7 @@ export function transformMessagesFromDB(rawMessages) {
 
       if (rType === 'widget-schedule') {
         const defaultValue = r?.meta?.defaultValue || null;
+
         return {
           id: r.id,
           role: 'assistant',
@@ -162,6 +171,7 @@ export function transformMessagesFromDB(rawMessages) {
       // Mensajes de texto normales
       if (rType === 'text' || !rType) {
         const attachments = r.attachments || [];
+
         if (r.role === 'user') {
           return { id: r.id, role: 'user', text: r.content, attachments };
         } else {
@@ -172,6 +182,7 @@ export function transformMessagesFromDB(rawMessages) {
       // Mensajes con media
       if (rType === 'text+media') {
         const attachments = r.attachments || [];
+
         return { id: r.id, role: 'user', text: r.content, attachments };
       }
 

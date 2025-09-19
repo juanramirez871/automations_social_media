@@ -4,8 +4,10 @@ function randomState(len = 32) {
   const chars =
     'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
   let out = '';
+
   for (let i = 0; i < len; i++)
     out += chars[Math.floor(Math.random() * chars.length)];
+
   return out;
 }
 
@@ -16,6 +18,7 @@ export async function GET(request) {
     const clientKey = process.env.TIKTOK_CLIENT_KEY;
     const clientSecret = process.env.TIKTOK_CLIENT_SECRET; // validar presencia
     let redirectUri = process.env.TIKTOK_REDIRECT_URI;
+
     if (!redirectUri) redirectUri = `${origin}/api/tiktok/callback`;
 
     if (!clientKey || !clientSecret) {
@@ -28,6 +31,7 @@ export async function GET(request) {
           }
         </script>
       </body></html>`;
+
       return new NextResponse(html, {
         headers: { 'Content-Type': 'text/html; charset=utf-8' },
       });
@@ -45,6 +49,7 @@ export async function GET(request) {
     console.log(authorizeUrl.toString());
 
     const res = NextResponse.redirect(authorizeUrl.toString(), { status: 302 });
+
     res.cookies.set('tt_oauth_state', state, {
       httpOnly: true,
       sameSite: 'lax',
@@ -52,6 +57,7 @@ export async function GET(request) {
       path: '/',
       maxAge: 10 * 60,
     });
+
     return res;
   } catch (e) {
     const html = `<!DOCTYPE html><html><body>
@@ -63,6 +69,7 @@ export async function GET(request) {
         }
       </script>
     </body></html>`;
+
     return new NextResponse(html, {
       headers: { 'Content-Type': 'text/html; charset=utf-8' },
     });

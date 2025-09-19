@@ -7,6 +7,7 @@ export async function GET(request) {
     const clientId = process.env.FACEBOOK_APP_ID;
     const clientSecret = process.env.FACEBOOK_APP_SECRET; // just to validate presence here
     let redirectUri = process.env.FACEBOOK_REDIRECT_URI;
+
     if (!redirectUri) redirectUri = `${origin}/api/facebook/callback`;
 
     if (!clientId || !clientSecret) {
@@ -19,6 +20,7 @@ export async function GET(request) {
           }
         </script>
       </body></html>`;
+
       return new NextResponse(html, {
         headers: { 'Content-Type': 'text/html; charset=utf-8' },
       });
@@ -29,6 +31,7 @@ export async function GET(request) {
     const state = Math.random().toString(36).slice(2);
 
     const fbAuthUrl = new URL('https://www.facebook.com/v23.0/dialog/oauth');
+
     fbAuthUrl.searchParams.set('client_id', clientId);
     fbAuthUrl.searchParams.set('redirect_uri', redirectUri);
     fbAuthUrl.searchParams.set('response_type', 'code');
@@ -46,6 +49,7 @@ export async function GET(request) {
         }
       </script>
     </body></html>`;
+
     return new NextResponse(html, {
       headers: { 'Content-Type': 'text/html; charset=utf-8' },
     });

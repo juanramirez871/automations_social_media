@@ -9,6 +9,7 @@
  */
 export function detectNewPublishIntent(text) {
   const trimmed = text.trim();
+
   return (
     (/\b(publicar|postear|subir|programar)\b/i.test(trimmed) &&
       /(post|publicaci\u00F3n|video|reel|contenido)/i.test(trimmed)) ||
@@ -43,6 +44,7 @@ export function detectCancelIntent(text) {
     'no sigas',
     'stop',
   ];
+
   return cancelPhrases.some(p => lower.includes(p));
 }
 
