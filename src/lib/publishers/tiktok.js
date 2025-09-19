@@ -28,18 +28,23 @@ export async function getTikTokToken(supabase, userId) {
 }
 
 export function normalizeVerifiedTikTokUrl(inputUrl) {
+  console.log('🔄 ENTRADA normalizeVerifiedTikTokUrl:', inputUrl);
+  
   if (!inputUrl || typeof inputUrl !== 'string') {
+    console.log('❌ URL inválida o no es string:', inputUrl);
     return inputUrl;
   }
 
+  // TEMPORALMENTE DESHABILITADO: La normalización a media.kaioficial.com devuelve 404
+  // Mantenemos la URL original de Cloudinary que funciona correctamente
   if (inputUrl.includes('res.cloudinary.com')) {
-    return inputUrl.replace(
-      /https:\/\/res\.cloudinary\.com\/[^/]+\//,
-      'https://media.kaioficial.com/tiktok/cdn/'
-    );
+    console.log('⚠️ NORMALIZACIÓN DESHABILITADA: Usando URL original de Cloudinary que funciona');
+    console.log('🔄 URL de Cloudinary (sin normalizar):', inputUrl);
+    return inputUrl; // Devolver la URL original sin normalizar
   }
 
   console.log(inputUrl, "inputUrl")
+  console.log('✅ URL no requiere normalización:', inputUrl);
   return inputUrl;
 }
 
@@ -246,7 +251,7 @@ export async function publishToTikTok({
   supabase,
 }) {
   try {
-    console.log('Iniciando publicación en TikTok:', {
+    console.log('🎯 INICIO publishToTikTok - Iniciando publicación en TikTok:', {
       userId,
       hasVideoUrl: !!videoUrl,
       captionLength: caption?.length || 0,
@@ -254,15 +259,16 @@ export async function publishToTikTok({
     });
 
     if (!videoUrl) {
+      console.log('❌ ERROR: TikTok requiere un video');
       throw new Error('TikTok requiere un video');
     }
 
     // Validar la URL del video antes de proceder
-    console.log('Validando accesibilidad de la URL del video...');
+    console.log('🔍 VALIDACIÓN: Validando accesibilidad de la URL del video...');
     const urlValidation = await validateVideoUrl(videoUrl);
     
     if (!urlValidation.isValid) {
-      console.error('URL del video no válida:', {
+      console.error('❌ URL del video no válida:', {
         url: videoUrl,
         error: urlValidation.error,
         details: urlValidation.details
@@ -272,10 +278,11 @@ export async function publishToTikTok({
     }
 
     // Verificar compatibilidad específica con TikTok
+    console.log('🔍 COMPATIBILIDAD: Verificando compatibilidad con TikTok...');
     const compatibility = await checkTikTokCompatibility(videoUrl);
     
     if (!compatibility.compatible) {
-      console.error('URL no compatible con TikTok:', {
+      console.error('❌ URL no compatible con TikTok:', {
         url: videoUrl,
         issues: compatibility.issues,
         recommendations: compatibility.recommendations
@@ -284,12 +291,13 @@ export async function publishToTikTok({
       throw new Error(`Video no compatible con TikTok: ${compatibility.issues.join(', ')}`);
     }
 
-    console.log('URL del video validada exitosamente:', {
+    console.log('✅ URL del video validada exitosamente:', {
       url: videoUrl,
       details: urlValidation.details
     });
 
     // Usar la nueva función que maneja el refresh automático
+    console.log('🔑 TOKEN: Obteniendo token de TikTok...');
     const {
       token: ttToken,
       expiresAt: ttExpiresAt,
@@ -298,13 +306,16 @@ export async function publishToTikTok({
     } = await getValidTikTokToken(supabase, userId);
 
     if (!ttToken) {
+      console.log('❌ ERROR: No hay token de TikTok configurado');
       throw new Error('No hay token de TikTok configurado');
     }
 
     if (ttExpiresAt && new Date(ttExpiresAt) < new Date()) {
+      console.log('❌ ERROR: Token de TikTok expirado');
       throw new Error('Token de TikTok expirado');
     }
 
+    console.log('🔐 PERMISOS: Verificando permisos...');
     const scopes = Array.isArray(grantedScopes)
       ? grantedScopes
       : typeof grantedScopes === 'string'
@@ -313,10 +324,14 @@ export async function publishToTikTok({
     const hasDirectPost = scopes.includes('video.publish');
     const hasUpload = scopes.includes('video.upload');
 
+    console.log('📋 PERMISOS DETECTADOS:', { hasDirectPost, hasUpload, scopes });
+
     let publishId = null;
     let status = null;
 
+    console.log('🔄 NORMALIZANDO URL: Llamando a normalizeVerifiedTikTokUrl...');
     const pullUrl = normalizeVerifiedTikTokUrl(videoUrl);
+    console.log('✅ URL NORMALIZADA RESULTADO:', pullUrl);
 
     if (hasDirectPost) {
       let creatorInfo = null;
@@ -393,12 +408,12 @@ export async function publishToTikTok({
               mode: 'direct',
               title,
               privacyLevel: effectivePrivacy,
-              videoUrl,
+              videoUrl: pullUrl, // Usar la URL normalizada
             });
 
             await tiktokUploadFromUrl({
               uploadUrl,
-              videoUrl,
+              videoUrl: pullUrl, // Usar la URL normalizada
               videoSize,
               chunkSize,
               totalChunks,
@@ -417,12 +432,12 @@ export async function publishToTikTok({
               } = await tiktokInitFileUpload({
                 token: ttToken,
                 mode: 'inbox',
-                videoUrl,
+                videoUrl: pullUrl, // Usar la URL normalizada
               });
 
               await tiktokUploadFromUrl({
                 uploadUrl,
-                videoUrl,
+                videoUrl: pullUrl, // Usar la URL normalizada
                 videoSize,
                 chunkSize,
                 totalChunks,
@@ -445,12 +460,12 @@ export async function publishToTikTok({
             } = await tiktokInitFileUpload({
               token: ttToken,
               mode: 'inbox',
-              videoUrl,
+              videoUrl: pullUrl, // Usar la URL normalizada
             });
 
             await tiktokUploadFromUrl({
               uploadUrl,
-              videoUrl,
+              videoUrl: pullUrl, // Usar la URL normalizada
               videoSize,
               chunkSize,
               totalChunks,
@@ -505,12 +520,12 @@ export async function publishToTikTok({
           } = await tiktokInitFileUpload({
             token: ttToken,
             mode: 'inbox',
-            videoUrl,
+            videoUrl: pullUrl, // Usar la URL normalizada
           });
 
           await tiktokUploadFromUrl({
             uploadUrl,
-            videoUrl,
+            videoUrl: pullUrl, // Usar la URL normalizada
             videoSize,
             chunkSize,
             totalChunks,
