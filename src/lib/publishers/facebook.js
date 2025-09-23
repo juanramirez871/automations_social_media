@@ -103,11 +103,12 @@ export async function publishToFacebook({
       }
 
       // Detectar específicamente el error de publish_actions deprecado
-      if (responseData?.error?.message?.includes('publish_actions is deprecated') ||
-          responseData?.error?.message?.includes('publish_actions') ||
+      // Solo limpiar si es realmente un error de permisos deprecados, no cualquier mención
+      if ((responseData?.error?.message?.includes('publish_actions is deprecated') ||
+           responseData?.error?.message?.includes('publish_actions has been deprecated')) &&
           responseData?.error?.code === 200) {
         
-        console.log('🧹 Detectado token con permisos deprecados, limpiando de la base de datos...');
+        console.log('🧹 Detectado token con permisos deprecados (publish_actions), limpiando de la base de datos...');
         
         // Limpiar el token inválido de la base de datos
         try {

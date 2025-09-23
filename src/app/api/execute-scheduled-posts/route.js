@@ -71,31 +71,35 @@ async function publishToFacebook(content, accessToken, pageId, userId) {
       }
       
       // Detectar específicamente el error de publish_actions deprecado
-      if (data?.error?.message?.includes('publish_actions is deprecated') ||
-          data?.error?.message?.includes('publish_actions') ||
+      // Solo limpiar si es realmente un error de permisos deprecados, no cualquier mención
+      if ((data?.error?.message?.includes('publish_actions is deprecated') ||
+           data?.error?.message?.includes('publish_actions has been deprecated')) &&
           data?.error?.code === 200) {
         
-        console.log('🔄 Detectado token con publish_actions deprecado, limpiando token para userId:', userId);
+        console.log('🧹 Detectado token con permisos deprecados (publish_actions), limpiando de la base de datos...');
         
         // Limpiar el token inválido de la base de datos
-        if (userId) {
-          try {
-            await supabase
-              .from('profiles')
-              .update({
-                facebook_access_token: null,
-                facebook_expires_at: null,
-                facebook_granted_scopes: null
-              })
-              .eq('id', userId);
-            
-            console.log('✅ Token de Facebook limpiado exitosamente para userId:', userId);
-          } catch (cleanupError) {
+        try {
+          const { error: cleanupError } = await supabase
+            .from('profiles')
+            .update({
+              facebook_access_token: null,
+              facebook_token_expires_at: null,
+              facebook_granted_scopes: null,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', userId);
+
+          if (cleanupError) {
             console.error('❌ Error limpiando token de Facebook:', cleanupError);
+          } else {
+            console.log('✅ Token de Facebook con permisos deprecados eliminado de la base de datos');
           }
+        } catch (cleanupErr) {
+          console.error('❌ Error en limpieza de token:', cleanupErr);
         }
         
-        throw new Error('Tu token de Facebook fue generado con permisos deprecados. Por favor, reconecta tu cuenta de Facebook para obtener los nuevos permisos requeridos.');
+        throw new Error('El token de Facebook usa permisos deprecados (publish_actions). Necesitas reconectar tu cuenta de Facebook con los nuevos permisos para continuar publicando.');
       }
       
       throw new Error(errorMsg);
