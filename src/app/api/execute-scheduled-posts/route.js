@@ -34,7 +34,7 @@ async function publishToInstagram(content, accessToken, userId) {
 }
 
 // Función para publicar en Facebook
-async function publishToFacebook(content, accessToken, pageId) {
+async function publishToFacebook(content, accessToken, pageId, userId) {
   try {
     // Limpiar el token de cualquier espacio o caracteres especiales
     const cleanToken = accessToken
@@ -68,6 +68,34 @@ async function publishToFacebook(content, accessToken, pageId) {
           data?.error?.message?.includes('expired') ||
           data?.error?.message?.includes('revoked')) {
         throw new Error('El token de Facebook ha expirado. Necesitas reconectar tu cuenta de Facebook para continuar publicando.');
+      }
+      
+      // Detectar específicamente el error de publish_actions deprecado
+      if (data?.error?.message?.includes('publish_actions is deprecated') ||
+          data?.error?.message?.includes('publish_actions') ||
+          data?.error?.code === 200) {
+        
+        console.log('🔄 Detectado token con publish_actions deprecado, limpiando token para userId:', userId);
+        
+        // Limpiar el token inválido de la base de datos
+        if (userId) {
+          try {
+            await supabase
+              .from('profiles')
+              .update({
+                facebook_access_token: null,
+                facebook_expires_at: null,
+                facebook_granted_scopes: null
+              })
+              .eq('id', userId);
+            
+            console.log('✅ Token de Facebook limpiado exitosamente para userId:', userId);
+          } catch (cleanupError) {
+            console.error('❌ Error limpiando token de Facebook:', cleanupError);
+          }
+        }
+        
+        throw new Error('Tu token de Facebook fue generado con permisos deprecados. Por favor, reconecta tu cuenta de Facebook para obtener los nuevos permisos requeridos.');
       }
       
       throw new Error(errorMsg);
@@ -115,7 +143,7 @@ async function publishToTikTok(content, accessToken) {
 }
 
 // Función principal para publicar en una plataforma
-async function publishToPlatform(platform, content, userProfile) {
+async function publishToPlatform(platform, content, userProfile, userId) {
   switch (platform.toLowerCase()) {
     case 'instagram':
       return await publishToInstagram(
@@ -128,7 +156,8 @@ async function publishToPlatform(platform, content, userProfile) {
       return await publishToFacebook(
         content,
         userProfile.facebook_access_token,
-        userProfile.facebook_page_id
+        userProfile.facebook_page_id,
+        userId
       );
 
     case 'youtube':
@@ -213,7 +242,8 @@ export async function POST(request) {
           const result = await publishToPlatform(
             platform,
             post.content,
-            post.profiles
+            post.profiles,
+            post.user_id
           );
 
           platformResults[platform] = result;

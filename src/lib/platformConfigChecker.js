@@ -124,6 +124,15 @@ export async function checkFacebookConfiguration(userId) {
       };
     }
     
+    // Detectar errores de permisos deprecados (publish_actions)
+    if (e.message.includes('permisos deprecados') || 
+        e.message.includes('publish_actions') ||
+        e.message.includes('nuevos permisos requeridos')) {
+      return {
+        error: 'Tu token de Facebook fue generado con permisos deprecados. Necesitas reconectar tu cuenta de Facebook para obtener los nuevos permisos requeridos.'
+      };
+    }
+    
     return {
       error: `Error verificando configuración de Facebook: ${e.message}`
     };
@@ -209,7 +218,12 @@ export function createConfigurationErrorMessage(errors) {
   // Verificar si hay errores específicos de Facebook que requieren reconexión
   const facebookTokenError = errors.find(err => 
     err.platform === 'Facebook' && 
-    (err.error.includes('expirado') || err.error.includes('expired') || err.error.includes('reconectar'))
+    (err.error.includes('expirado') || 
+     err.error.includes('expired') || 
+     err.error.includes('reconectar') ||
+     err.error.includes('permisos deprecados') ||
+     err.error.includes('publish_actions') ||
+     err.error.includes('nuevos permisos requeridos'))
   );
 
   if (facebookTokenError) {

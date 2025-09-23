@@ -32,7 +32,7 @@ export async function GET(request) {
     );
     authUrl.searchParams.set(
       'scope',
-      'instagram_basic,instagram_content_publish,pages_read_engagement,business_management'
+      'instagram_basic,instagram_content_publish,business_management'
     );
     authUrl.searchParams.set('response_type', 'code');
     authUrl.searchParams.set('state', state);
