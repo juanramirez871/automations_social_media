@@ -36,23 +36,51 @@ async function publishToInstagram(content, accessToken, userId) {
 // Función para publicar en Facebook
 async function publishToFacebook(content, accessToken, pageId) {
   try {
-    const response = await fetch(
-      `https://graph.facebook.com/v18.0/${pageId}/feed`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          message: content,
-          access_token: accessToken,
-        }),
-      }
-    );
+    // Limpiar el token de cualquier espacio o caracteres especiales
+    const cleanToken = accessToken
+      .trim()
+      .replace(/\s+/g, '')
+      .replace(/[\r\n\t]/g, '');
+
+    // Usar la versión más reciente de la API de Facebook
+    const endpoint = `https://graph.facebook.com/v21.0/${pageId}/feed`;
+    
+    const postData = {
+      message: content || '',
+      access_token: cleanToken,
+    };
+
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(postData),
+    });
 
     const data = await response.json();
 
-    return { success: response.ok, data, error: data.error };
+    if (!response.ok) {
+      const errorMsg = data?.error?.message || 'Error publicando en Facebook';
+      
+      // Detectar errores específicos de token expirado
+      if (data?.error?.code === 190 || 
+          data?.error?.message?.includes('expired') ||
+          data?.error?.message?.includes('revoked')) {
+        throw new Error('El token de Facebook ha expirado. Necesitas reconectar tu cuenta de Facebook para continuar publicando.');
+      }
+      
+      throw new Error(errorMsg);
+    }
+
+    return { 
+      success: true, 
+      data: {
+        id: data.id || data.post_id,
+        url: `https://www.facebook.com/${data.id || data.post_id}`
+      }, 
+      error: null 
+    };
   } catch (error) {
     return { success: false, error: error.message };
   }
