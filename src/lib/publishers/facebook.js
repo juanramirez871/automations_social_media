@@ -49,24 +49,27 @@ export async function publishToFacebook({
       .replace(/\s+/g, '')
       .replace(/[\r\n\t]/g, '');
 
+    // Construir endpoint y datos según el tipo de contenido
+    // IMPORTANTE: Usar /feed para todos los tipos de contenido con pages_manage_posts
+    // El endpoint /photos requiere publish_actions que está deprecado
     let postData;
     let endpoint;
 
     if (imageUrl || videoUrl) {
       const mediaUrl = imageUrl || videoUrl;
-      const mediaType = imageUrl ? 'photo' : 'video';
-
-      endpoint = `https://graph.facebook.com/v21.0/${pageId}/${mediaType}s`;
       
       if (imageUrl) {
-        // Para imágenes usar 'url'
+        // Para fotos, usar /feed con link en lugar de /photos
+        // Esto funciona con pages_manage_posts sin requerir publish_actions
+        endpoint = `https://graph.facebook.com/v21.0/${pageId}/feed`;
         postData = {
-          url: mediaUrl,
-          caption: caption || '',
+          message: caption || '',
+          link: mediaUrl,
           access_token: cleanToken,
         };
       } else {
-        // Para videos usar 'file_url'
+        // Para videos, usar el endpoint de videos
+        endpoint = `https://graph.facebook.com/v21.0/${pageId}/videos`;
         postData = {
           file_url: mediaUrl,
           description: caption || '',
@@ -81,6 +84,10 @@ export async function publishToFacebook({
       };
     }
 
+    console.log('📤 Publicando en Facebook...');
+    console.log('🔗 Endpoint:', endpoint);
+    console.log('📋 Datos:', { ...postData, access_token: '[HIDDEN]' });
+
     const response = await fetch(endpoint, {
       method: 'POST',
       headers: {
@@ -90,11 +97,20 @@ export async function publishToFacebook({
     });
 
     const responseData = await response.json();
+    
+    console.log('📥 Respuesta de Facebook:', responseData);
+    console.log('📊 Status:', response.status);
 
     if (!response.ok) {
-      const errorMsg =
-        responseData?.error?.message || 'Error publicando en Facebook';
-
+      const errorMsg = responseData?.error?.message || 'Error publicando en Facebook';
+      
+      console.log('❌ Error de Facebook:', {
+        code: responseData?.error?.code,
+        message: responseData?.error?.message,
+        type: responseData?.error?.type,
+        error_subcode: responseData?.error?.error_subcode
+      });
+      
       // Detectar errores específicos de token expirado
       if (responseData?.error?.code === 190 || 
           responseData?.error?.message?.includes('expired') ||

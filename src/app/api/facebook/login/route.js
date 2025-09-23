@@ -27,7 +27,7 @@ export async function GET(request) {
     }
 
     const scopeParam =
-      'public_profile,email,pages_manage_posts';
+      'public_profile,email,pages_manage_posts,pages_read_engagement';
     const state = Math.random().toString(36).slice(2);
 
     const fbAuthUrl = new URL('https://www.facebook.com/v23.0/dialog/oauth');
