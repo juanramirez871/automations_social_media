@@ -61,6 +61,7 @@ export const saveMessageToDB = async ({
 };
 
 // Cargar historial de mensajes para el usuario actual (proveer userId para evitar getSession adicional)
+// Limitado a los últimos 15 mensajes para mejorar el rendimiento
 export async function loadHistoryForCurrentUser(userId) {
   try {
     if (!userId) return [];
@@ -76,11 +77,13 @@ export async function loadHistoryForCurrentUser(userId) {
       .from('messages')
       .select('*')
       .eq('user_id', userId)
-      .order('created_at', { ascending: true });
+      .order('created_at', { ascending: false })
+      .limit(15);
 
     if (error) throw error;
 
-    return data || [];
+    // Revertir el orden para mostrar los mensajes más antiguos primero en la UI
+    return (data || []).reverse();
   } catch (e) {
     console.error('Error cargando historial:', e?.message || e);
 

@@ -445,7 +445,7 @@ export const PostPublishWidget = ({
           inactiveBorder: 'border-gray-200',
           dotInactive: 'bg-gray-300',
         })}
-        {chip('youtube', 'YouTube', {
+        {/* {chip('youtube', 'YouTube', {
           activeBg: 'bg-red-50',
           activeText: 'text-red-700',
           activeBorder: 'border-red-200',
@@ -454,7 +454,7 @@ export const PostPublishWidget = ({
           inactiveText: 'text-gray-700',
           inactiveBorder: 'border-gray-200',
           dotInactive: 'bg-gray-300',
-        })}
+        })} */}
         {chip('tiktok', 'TikTok', {
           activeBg: 'bg-gray-50',
           activeText: 'text-gray-900',

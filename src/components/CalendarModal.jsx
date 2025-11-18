@@ -806,7 +806,7 @@ export default function CalendarModal({ isOpen, onClose }) {
                   Plataformas
                 </label>
                 <div className='grid grid-cols-2 gap-2'>
-                  {['Instagram', 'Facebook', 'YouTube', 'TikTok'].map(
+                  {['Instagram', 'Facebook', 'TikTok'].map(
                     platform => (
                       <button
                         key={platform}
@@ -967,7 +967,7 @@ export default function CalendarModal({ isOpen, onClose }) {
                   Plataformas
                 </label>
                 <div className='grid grid-cols-2 gap-2'>
-                  {['Instagram', 'Facebook', 'YouTube', 'TikTok'].map(
+                  {['Instagram', 'Facebook', 'TikTok'].map(
                     platform => (
                       <button
                         key={platform}

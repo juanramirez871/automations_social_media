@@ -25,7 +25,7 @@ export const AuthGateWidget = ({ onOpen }) => {
         <button
           type='button'
           onClick={() => openForm('signup')}
-          className='px-3 py-1.5 rounded-full border border-pink-200 text-pink-700 bg-pink-50/60 hover:bg-pink-100 transition cursor-pointer'
+          className='px-3 py-1.5 rounded-full border border-[#b3deb1] text-gray-700 bg-[#d5e7d5] hover:bg-[#a3d4b1] transition cursor-pointer'
         >
           Crear cuenta
         </button>

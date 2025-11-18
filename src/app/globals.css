@@ -14,6 +14,20 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --color-blue-50: #e6f8fe;
+  --color-blue-300: #7fd9f0;
+  --color-blue-500: #20b8ed;
+  --color-blue-600: #1aa6d4;
+  --color-blue-700: #148fb9;
+  --color-blue-800: #10769b;
+  --color-green-50: #effaf0;
+  --color-green-200: #c7efc5;
+  --color-green-500: #4ccf46;
+  --color-green-600: #39b836;
+  --color-green-700: #2f9e2d;
+  --color-emerald-200: #c7efc5;
+  --color-emerald-600: #39b836;
+  --color-emerald-700: #2f9e2d;
 }
 
 @media (prefers-color-scheme: dark) {

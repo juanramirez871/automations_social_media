@@ -215,7 +215,7 @@ IMPORTANTE: Si tu respuesta es de tipo texto, devuélvela bonita y clara usando 
 
     const showSupportedNetworks = tool({
       description:
-        'Muestra un widget visual con las redes soportadas (Instagram, Facebook, YouTube y TikTok). Úsala cuando el usuario pregunte qué redes/plataformas soportas o manejas. Tambien si el usuario pide ver sus cuentas de redes sociales.',
+        'Muestra un widget visual con las redes soportadas (Instagram, Facebook y TikTok). Úsala cuando el usuario pregunte qué redes/plataformas soportas o manejas. Tambien si el usuario pide ver sus cuentas de redes sociales.',
       parameters: {
         type: 'object',
         properties: {},
@@ -226,14 +226,14 @@ IMPORTANTE: Si tu respuesta es de tipo texto, devuélvela bonita y clara usando 
 
         return {
           shown: true,
-          networks: ['instagram', 'facebook', 'youtube', 'tiktok'],
+          networks: ['instagram', 'facebook', 'tiktok'],
         };
       },
     });
 
     const showPostPublishSelection = tool({
       description:
-        'Muestra el widget para seleccionar en qué plataformas (Instagram, Facebook, YouTube, TikTok) publicar/subir un post. Úsala cuando el usuario quiera publicar, subir, postear o programar contenido en redes sociales.',
+        'Muestra el widget para seleccionar en qué plataformas (Instagram, Facebook, TikTok) publicar/subir un post. Úsala cuando el usuario quiera publicar, subir, postear o programar contenido en redes sociales.',
       parameters: {
         type: 'object',
         properties: {},

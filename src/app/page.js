@@ -1986,7 +1986,7 @@ export default function Home() {
                         <div className='mb-1'>
                           Para continuar, adjunta un <strong>video</strong>{' '}
                           usando el botón de adjuntos debajo del cuadro de texto
-                          (requerido por YouTube/TikTok). Formatos aceptados:{' '}
+                          (requerido por TikTok). Formatos aceptados:{' '}
                           <strong>MP4, MOV, WEBM</strong>.
                         </div>
                       ) : (

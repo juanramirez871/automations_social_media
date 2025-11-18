@@ -320,7 +320,7 @@ export default function Composer({ onSend, loading = false }) {
                 <button
                   type='button'
                   onClick={handleSend}
-                  className='inline-flex shrink-0 justify-center items-center size-8 rounded-lg text-white bg-gradient-to-r from-blue-400 to-pink-400 hover:from-blue-400/90 hover:to-pink-400/90 focus:z-10 focus:outline-hidden disabled:opacity-50 disabled:pointer-events-none cursor-pointer'
+                  className='inline-flex shrink-0 justify-center bg-[#4ccf46] hover:bg-[#39b836] items-center size-8 rounded-lg text-white focus:z-10 focus:outline-hidden disabled:opacity-50 disabled:pointer-events-none cursor-pointer'
                   aria-label='Enviar mensaje'
                   disabled={loading}
                 >
