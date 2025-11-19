@@ -525,22 +525,7 @@ export default function Home() {
       // Mostrar todos los widgets sin desduplicación
       setMessages(normalized);
 
-      // Asegurar que el widget de Configuración de IA esté presente siempre
-      try {
-        const hasAIConfigWidget = normalized.some(
-          m => m.role === 'assistant' && m.type === 'widget-ai-provider-config'
-        );
-        if (!hasAIConfigWidget) {
-          setMessages(prev => [
-            ...prev,
-            {
-              id: newId('w-ai'),
-              role: 'assistant',
-              type: 'widget-ai-provider-config',
-            },
-          ]);
-        }
-      } catch (_) {}
+      
 
       // Fallback: si hay targets guardados pero no existe draft ligado por widgetId (p. ej. porque se guardó con un id temporal),
       // asignar esos targets al último widget-post-publish para que se restaure tras recargar.

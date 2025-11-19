@@ -28,13 +28,20 @@ export async function getUserAIConfig(userId) {
       error: error?.message
     });
 
-    if (error || !profile || !profile.ai_model || !profile.ai_api_key) {
+    if (error || !profile || !profile.ai_api_key) {
       console.log('❌ getUserAIConfig - Configuración incompleta, lanzando AI_CONFIG_REQUIRED');
       // Si no hay configuración, lanzar error para mostrar widget de configuración
       throw new Error('AI_CONFIG_REQUIRED');
     }
 
-    const provider = profile?.ai_model;
+    const inferProviderFromKey = key => {
+      if (typeof key !== 'string') return null;
+      if (key.startsWith('sk-')) return 'openai';
+      if (key.startsWith('AIza')) return 'gemini';
+      return null;
+    };
+
+    const provider = profile?.ai_model || inferProviderFromKey(profile?.ai_api_key) || 'gemini';
     const userApiKey = profile?.ai_api_key;
 
     console.log('✅ getUserAIConfig - Configuración válida encontrada:', {
