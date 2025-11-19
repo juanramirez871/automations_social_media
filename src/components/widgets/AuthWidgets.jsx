@@ -113,8 +113,21 @@ export const AuthFormWidget = ({ mode, onLogin, onError }) => {
         )}
         {mode === 'signup' && (
           <div>
-            <label className='block text-xs text-gray-600 mb-1'>
-              Modelo de IA
+            <label className='flex items-center justify-between text-xs text-gray-600 mb-1'>
+              <span>Modelo de IA</span>
+              {aiModel === 'gemini' ? (
+                <img
+                  src='https://registry.npmmirror.com/@lobehub/icons-static-png/latest/files/dark/gemini-color.png'
+                  alt='Gemini'
+                  className='h-7 w-7 rounded-sm'
+                />
+              ) : aiModel === 'chatgpt' ? (
+                <img
+                  src='https://static.vecteezy.com/system/resources/previews/022/227/364/non_2x/openai-chatgpt-logo-icon-free-png.png'
+                  alt='OpenAI'
+                  className='h-7 w-7 rounded-sm'
+                />
+              ) : null}
             </label>
             <select
               value={aiModel}
@@ -123,7 +136,6 @@ export const AuthFormWidget = ({ mode, onLogin, onError }) => {
             >
               <option value='gemini'>Gemini (Google)</option>
               <option value='chatgpt'>ChatGPT (OpenAI)</option>
-              <option value='deepseek'>DeepSeek</option>
             </select>
           </div>
         )}
