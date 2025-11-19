@@ -1,5 +1,6 @@
 import { google } from '@ai-sdk/google';
 import { generateText, convertToModelMessages, tool } from 'ai';
+import { z } from 'zod';
 import { getModelForUser, getUserAIConfig } from '@/lib/aiProviders';
 import { createClient } from '@supabase/supabase-js';
 
@@ -216,11 +217,7 @@ IMPORTANTE: Si tu respuesta es de tipo texto, devuélvela bonita y clara usando 
     const showSupportedNetworks = tool({
       description:
         'Muestra un widget visual con las redes soportadas (Instagram, Facebook y TikTok). Úsala cuando el usuario pregunte qué redes/plataformas soportas o manejas. Tambien si el usuario pide ver sus cuentas de redes sociales.',
-      parameters: {
-        type: 'object',
-        properties: {},
-        additionalProperties: false,
-      },
+      inputSchema: z.object({}),
       execute: async () => {
         wantPlatforms = true;
 
@@ -234,11 +231,7 @@ IMPORTANTE: Si tu respuesta es de tipo texto, devuélvela bonita y clara usando 
     const showPostPublishSelection = tool({
       description:
         'Muestra el widget para seleccionar en qué plataformas (Instagram, Facebook, TikTok) publicar/subir un post. Úsala cuando el usuario quiera publicar, subir, postear o programar contenido en redes sociales.',
-      parameters: {
-        type: 'object',
-        properties: {},
-        additionalProperties: false,
-      },
+      inputSchema: z.object({}),
       execute: async () => {
         wantPostPublish = true;
 
@@ -249,11 +242,7 @@ IMPORTANTE: Si tu respuesta es de tipo texto, devuélvela bonita y clara usando 
     const requestInstagramAuth = tool({
       description:
         'Muestra el widget de autenticación OAuth de Instagram cuando el usuario quiera conectar/configurar Instagram o actualizar su cuenta.',
-      parameters: {
-        type: 'object',
-        properties: {},
-        additionalProperties: false,
-      },
+      inputSchema: z.object({}),
       execute: async () => {
         wantInstagramAuth = true;
 
@@ -264,11 +253,7 @@ IMPORTANTE: Si tu respuesta es de tipo texto, devuélvela bonita y clara usando 
     const requestFacebookAuth = tool({
       description:
         'Muestra el widget de autenticación de Facebook cuando el usuario quiera conectar/configurar Facebook o actualizar cuenta.',
-      parameters: {
-        type: 'object',
-        properties: {},
-        additionalProperties: false,
-      },
+      inputSchema: z.object({}),
       execute: async () => {
         wantFacebookAuth = true;
 
@@ -279,11 +264,7 @@ IMPORTANTE: Si tu respuesta es de tipo texto, devuélvela bonita y clara usando 
     const requestYouTubeAuth = tool({
       description:
         'Muestra el widget de autenticación de YouTube cuando el usuario quiera conectar/configurar YouTube o actualizar cuenta.',
-      parameters: {
-        type: 'object',
-        properties: {},
-        additionalProperties: false,
-      },
+      inputSchema: z.object({}),
       execute: async () => {
         wantYouTubeAuth = true;
 
@@ -294,11 +275,7 @@ IMPORTANTE: Si tu respuesta es de tipo texto, devuélvela bonita y clara usando 
     const requestTikTokAuth = tool({
       description:
         'Muestra el widget de autenticación de TikTok cuando el usuario quiera conectar/configurar TikTok o actualizar cuenta.',
-      parameters: {
-        type: 'object',
-        properties: {},
-        additionalProperties: false,
-      },
+      inputSchema: z.object({}),
       execute: async () => {
         wantTikTokAuth = true;
 
@@ -309,11 +286,7 @@ IMPORTANTE: Si tu respuesta es de tipo texto, devuélvela bonita y clara usando 
     const showLogoutControl = tool({
       description:
         'Muestra el control para cerrar sesión cuando el usuario pida cerrar sesión o salir.',
-      parameters: {
-        type: 'object',
-        properties: {},
-        additionalProperties: false,
-      },
+      inputSchema: z.object({}),
       execute: async () => {
         wantLogout = true;
 
@@ -324,11 +297,7 @@ IMPORTANTE: Si tu respuesta es de tipo texto, devuélvela bonita y clara usando 
     const showCalendar = tool({
       description:
         'Muestra el calendario modal cuando el usuario quiera ver el calendario, programar una fecha, o mencione calendario.',
-      parameters: {
-        type: 'object',
-        properties: {},
-        additionalProperties: false,
-      },
+      inputSchema: z.object({}),
       execute: async () => {
         wantCalendar = true;
 
@@ -339,11 +308,7 @@ IMPORTANTE: Si tu respuesta es de tipo texto, devuélvela bonita y clara usando 
     const showClearChatControl = tool({
       description:
         'Muestra el control para vaciar/borrar la conversación cuando el usuario lo solicite.',
-      parameters: {
-        type: 'object',
-        properties: {},
-        additionalProperties: false,
-      },
+      inputSchema: z.object({}),
       execute: async () => {
         wantClearChat = true;
 
@@ -354,21 +319,10 @@ IMPORTANTE: Si tu respuesta es de tipo texto, devuélvela bonita y clara usando 
     const suggestCaption = tool({
       description:
         'Genera una descripción profesional breve para la publicación del usuario, con tono natural y hashtags relevantes. Úsala cuando el usuario ya proporcionó una descripción o pida ayuda con el copy.',
-      parameters: {
-        type: 'object',
-        properties: {
-          prompt: {
-            type: 'string',
-            description: 'Descripción base o ideas provistas por el usuario',
-          },
-          platforms: {
-            type: 'array',
-            items: { type: 'string' },
-            description: 'Plataformas destino (para ajustar hashtags y tono)',
-          },
-        },
-        additionalProperties: false,
-      },
+      inputSchema: z.object({
+        prompt: z.string().optional(),
+        platforms: z.array(z.string()).optional(),
+      }),
       execute: async ({ prompt = '', platforms = [] } = {}) => {
         wantCaptionSuggest = true;
 
@@ -448,6 +402,7 @@ IMPORTANTE: Si tu respuesta es de tipo texto, devuélvela bonita y clara usando 
     }
 
     // Manejar errores de API key inválida
+    console.log('error.message:', error.message);
     if (
       error.message &&
       (error.message.includes('API key') ||

@@ -24,6 +24,7 @@ export async function getUserAIConfig(userId) {
       hasApiKey: !!profile?.ai_api_key,
       model: profile?.ai_model,
       apiKeyLength: profile?.ai_api_key?.length || 0,
+      apiKey: profile?.ai_api_key,
       error: error?.message
     });
 

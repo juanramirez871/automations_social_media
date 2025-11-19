@@ -137,7 +137,7 @@ const AIProviderConfigWidget = ({
           {providers.map(prov => (
             <div
               key={prov.id}
-              className={`relative rounded-lg border p-3 cursor-pointer transition-all ${provider === prov.id
+              className={`relative rounded-lg border p-3 cursor-pointer w-[300px] transition-all ${provider === prov.id
                 ? 'border-blue-500 bg-blue-50'
                 : 'border-gray-200 hover:border-gray-300'
                 }`}
@@ -184,7 +184,6 @@ const AIProviderConfigWidget = ({
       {success && (
         <div className='mb-4 p-3 bg-green-50 border border-green-200 rounded-md'>
           <div className='flex items-center'>
-            <span className='text-green-500 mr-2'>✅</span>
             <p className='text-sm text-green-600'>
               Configuración actualizada correctamente
             </p>
