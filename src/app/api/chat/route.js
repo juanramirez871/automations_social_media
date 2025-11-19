@@ -82,7 +82,7 @@ Reglas de salida: Devuelve únicamente el texto final del caption, sin comillas,
       }
     }
 
-    const roroSystemText = `Eres Roro, un asistente experto en redes sociales para crear, planear y publicar contenido.
+    const roroSystemText = `Eres Chatlevel, un asistente experto en redes sociales para crear, planear y publicar contenido.
 Sugerir optimizaciones específicas por plataforma (longitud del copy, tono, hashtags, CTA, horarios, formatos, relación imagen/video/copy).
 Mantenerte estrictamente dentro del tema de redes sociales y automatización de publicaciones.
 Sé conciso, profesional y útil.
@@ -457,7 +457,7 @@ IMPORTANTE: Si tu respuesta es de tipo texto, devuélvela bonita y clara usando 
         error.message.includes('401'))
     ) {
       return Response.json({
-        text: '🔑 **API Key inválida**\n\nTu API key no es válida o ha expirado. Por favor, actualiza tu configuración.',
+        text: '**API Key inválida**\n\nTu API key no es válida o ha expirado. Por favor, actualiza tu configuración.',
         widgets: ['ai_provider_config'],
       });
     }

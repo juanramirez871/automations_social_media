@@ -25,13 +25,13 @@ export function AIConfigWidget({ onConfigUpdate }) {
 
       if (!userId) return;
 
-      const response = await fetch(`/api/ai-config?userId=${userId}`);
+      const response = await fetch(`/api/ai-config`);
 
       if (response.ok) {
         const data = await response.json();
 
         setCurrentProvider(data.provider || 'gemini');
-        setApiKey(data.apiKey || '');
+        setApiKey('');
       }
     } catch (error) {
       console.error('Error loading AI config:', error);
@@ -55,7 +55,7 @@ export function AIConfigWidget({ onConfigUpdate }) {
       }
 
       const response = await fetch('/api/ai-config', {
-        method: 'POST',
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           userId,
