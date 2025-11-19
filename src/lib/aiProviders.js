@@ -1,5 +1,5 @@
 import { google, createGoogleGenerativeAI } from '@ai-sdk/google';
-import { openai } from '@ai-sdk/openai';
+import { createOpenAI } from '@ai-sdk/openai';
 import { getSupabaseClient } from '@/lib/supabaseUniversal';
 
 /**
@@ -34,8 +34,8 @@ export async function getUserAIConfig(userId) {
       throw new Error('AI_CONFIG_REQUIRED');
     }
 
-    const provider = profile.ai_model;
-    const userApiKey = profile.ai_api_key;
+    const provider = profile?.ai_model;
+    const userApiKey = profile?.ai_api_key;
 
     console.log('✅ getUserAIConfig - Configuración válida encontrada:', {
       provider,
@@ -65,12 +65,14 @@ export function getAIModel(provider, userApiKey) {
 
   switch (provider) {
     case 'openai':
+      const openaiProvider = createOpenAI({
+        apiKey: userApiKey,
+      });
+
       return {
         provider: 'openai',
         apiKey: userApiKey,
-        model: openai('gpt-4o-mini', {
-          apiKey: userApiKey,
-        }),
+        model: openaiProvider('gpt-4o-mini'),
       };
 
     case 'gemini':

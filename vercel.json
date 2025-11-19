@@ -1,7 +1,10 @@
 {
   "functions": {
     "src/app/api/upload/route.js": {
-      "maxDuration": 60
+      "maxDuration": 120
+    },
+    "src/app/api/chat/route.js": {
+      "maxDuration": 120
     }
   }
 }
