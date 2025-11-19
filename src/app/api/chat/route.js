@@ -37,7 +37,7 @@ export async function POST(req) {
       if (error.message === 'AI_CONFIG_REQUIRED') {
         // Devolver widget de configuración de IA
         return Response.json({
-          text: '⚙️ **Configuración de IA requerida**\n\nPara continuar, necesitas configurar tu proveedor de IA y API key.',
+          text: '**Configuración de IA requerida**\n\nPara continuar, necesitas configurar tu proveedor de IA y API key.',
           widgets: ['ai_provider_config'],
         });
       }

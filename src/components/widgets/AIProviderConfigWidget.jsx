@@ -223,7 +223,7 @@ const AIProviderConfigWidget = ({
               Guardando...
             </div>
           ) : success ? (
-            '✅ Guardado'
+            'Guardado'
           ) : (
             'Actualizar Configuración'
           )}

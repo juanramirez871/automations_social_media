@@ -3,7 +3,7 @@
 export default function UserMessage({
   children,
   avatar = 'AZ',
-  bubbleClass = 'bg-pink-500',
+  bubbleClass = 'bg-[#d5e7d5] border border-[#d5e7d5]',
   attachments = [],
   onAttachmentClick,
 }) {
@@ -20,9 +20,9 @@ export default function UserMessage({
         >
           {hasText &&
             (typeof children === 'string' ? (
-              <p className='text-sm text-white'>{children}</p>
+              <p className='text-sm text-[#5c626b]'>{children}</p>
             ) : (
-              <div className='text-sm text-white'>{children}</div>
+              <div className='text-sm text-[#5c626b]'>{children}</div>
             ))}
 
           {attachments && attachments.length > 0 && (
