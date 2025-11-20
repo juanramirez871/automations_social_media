@@ -94,6 +94,21 @@ export default function Home() {
     closeLightbox,
   } = useChatState();
   const igConnectPersistingRef = useRef(false);
+  useEffect(() => {
+    try {
+      const sp = new URLSearchParams(window.location.search);
+      const code = sp.get('code');
+      const state = sp.get('state');
+      const error = sp.get('error');
+      if (code || error) {
+        const qp = new URLSearchParams();
+        if (code) qp.set('code', code);
+        if (state) qp.set('state', state);
+        if (error) qp.set('error', error);
+        window.location.replace(`/api/tiktok/callback?${qp.toString()}`);
+      }
+    } catch (_) {}
+  }, []);
   
   // Estado para las iniciales del usuario
   const [userInitials, setUserInitials] = useState('AZ');

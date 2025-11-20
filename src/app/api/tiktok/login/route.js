@@ -19,7 +19,7 @@ export async function GET(request) {
     const clientSecret = process.env.TIKTOK_CLIENT_SECRET; // validar presencia
     let redirectUri = process.env.TIKTOK_REDIRECT_URI;
 
-    if (!redirectUri) redirectUri = `${origin}/api/tiktok/callback`;
+    if (!redirectUri) redirectUri = `${origin}`;
 
     if (!clientKey || !clientSecret) {
       const html = `<!DOCTYPE html><html><body>
