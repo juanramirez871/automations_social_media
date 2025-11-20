@@ -45,30 +45,7 @@ export const YouTubeAuthWidget = ({ widgetId, onConnected, onError }) => {
   }, [widgetId, onConnected, onError]);
 
   const startLogin = () => {
-    setConnecting(true);
-    if (typeof window !== 'undefined') {
-      window.__yt_oauth_handled = false;
-    }
-    const w = 600,
-      h = 700;
-    const dualScreenLeft =
-      window.screenLeft !== undefined ? window.screenLeft : window.screenX;
-    const dualScreenTop =
-      window.screenTop !== undefined ? window.screenTop : window.screenY;
-    const width =
-      window.innerWidth || document.documentElement.clientWidth || screen.width;
-    const height =
-      window.innerHeight ||
-      document.documentElement.clientHeight ||
-      screen.height;
-    const left = (width - w) / 2 + dualScreenLeft;
-    const top = (height - h) / 2 + dualScreenTop;
-
-    window.open(
-      '/api/youtube/login',
-      'yt_oauth',
-      `scrollbars=yes,width=${w},height=${h},top=${top},left=${left}`
-    );
+    setConnecting(false);
   };
 
   return (
@@ -92,14 +69,14 @@ export const YouTubeAuthWidget = ({ widgetId, onConnected, onError }) => {
         </div>
         <div>
           <p className='text-sm font-medium text-gray-800'>YouTube</p>
-          <p className='text-xs text-gray-500'>Conectar con OAuth</p>
+          <p className='text-xs text-gray-500'>Próximamente</p>
         </div>
       </div>
       <button
         type='button'
         onClick={startLogin}
-        disabled={connecting}
-        className='inline-flex items-center gap-2 rounded-lg bg-[#FF0000] px-4 py-2 text-white text-sm disabled:opacity-50 cursor-pointer'
+        disabled={true}
+        className='inline-flex items-center gap-2 rounded-lg bg-[#FF0000] px-4 py-2 text-white text-sm disabled:opacity-50 cursor-not-allowed'
       >
         {connecting ? (
           <span
@@ -111,9 +88,9 @@ export const YouTubeAuthWidget = ({ widgetId, onConnected, onError }) => {
             <path fill='currentColor' d='M5 12l5 5L20 7' />
           </svg>
         )}
-        {connecting ? 'Conectando…' : 'Login con YouTube'}
+        Próximamente
       </button>
-    </div>
+  </div>
   );
 };
 

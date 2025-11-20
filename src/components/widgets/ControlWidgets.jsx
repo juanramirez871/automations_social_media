@@ -312,9 +312,7 @@ export const PlatformsWidget = () => {
               {!loading && <Badge ok={status.youtube.connected} />}
             </p>
             <p className='text-xs text-gray-500 truncate'>
-              {status.youtube.connected && status.youtube.channelTitle
-                ? status.youtube.channelTitle
-                : 'Videos y Shorts'}
+              Próximamente
             </p>
           </div>
         </div>
